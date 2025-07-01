@@ -1,0 +1,6 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* DaisyUI plugin (si lo usas) */
+@import "daisyui";

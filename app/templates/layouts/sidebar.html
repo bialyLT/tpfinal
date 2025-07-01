@@ -1,0 +1,55 @@
+{% load static %}
+
+{% load group_tags %}
+
+<ul class="menu bg-base-200 rounded-box w-56">
+  <h1 class="btn"><a href="{% url 'dashboard:dashboard' %}">Panel de control</a></h1>
+  <li>
+    <h2 class="menu-title">Parámetros del sistema</h2>
+  </li>
+  <li>
+    <ul>
+      <li><h2 class="menu-title">Ubicación Geográfica</h2></li>
+      <li>
+        <ul>
+          <li><a href="{% url 'dashboard:paises:index' %}">Paises</a></li>
+          <li><a href="{% url 'dashboard:provincias:index' %}">Provincias</a></li>
+          <li><a href="{% url 'dashboard:localidades:index' %}">Localidades</a></li>
+        </ul>
+      </li>
+      <li><h2 class="menu-title">Parámetros de productos</h2></li>
+      <li>
+        <ul>
+          <li><a href="{% url 'dashboard:categorias:index' %}">Categoria</a></li>
+          <li><a href="{% url 'dashboard:unidades:index' %}">Unidad</a></li>
+          <li><a href="{% url 'dashboard:marcas:index' %}">Marcas/Especies</a></li>
+        </ul>
+      </li>
+      {% if user.is_authenticated %}
+      <li>
+        <h2 class="menu-title">Otros parámetros</h2>
+      </li>
+      <li>
+        <ul>
+          <li><a href="{% url 'dashboard:tipos_documento:index' %}">Tipo de documento</a></li>	
+        </ul>
+      </li>
+      {% endif %}
+    </ul>
+
+  </li>
+  <li>
+    <h2 class="menu-title">Empleados</h2>
+  </li>
+  
+  <li>
+    <ul>
+        {% if user|has_group:"empleado_administrador" %}
+        <li><a href="{% url 'dashboard:empleados:index' %}">Gestionar Empleados</a></li>
+        {% endif %}
+        <li><a href="{% url 'dashboard:productos:index' %}">Gestionar Productos</a></li>
+        <li><a href="{% url 'dashboard:inventario:index' %}">Gestionar Inventario</a></li>
+    </ul>
+  </li>
+  
+</ul>

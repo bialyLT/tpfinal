@@ -1,0 +1,200 @@
+{% extends 'layouts/dashboard_base.html' %} 
+{% block title %}Empleados{% endblock %}
+
+{% block dashboard_content %}
+<div class="flex items-center justify-between"> 
+    <h1 class="text-3xl text-accent font-bold mb-5">Empleados</h1> 
+    <button class="btn btn-accent" onclick="crear_empleado_modal.showModal()">Crear Empleado</button> 
+    <button class="btn btn-accent" id="modificar-btn" disabled onclick="abrirModalModificarEmpleado()">Modificar Empleado</button>
+    <button class="btn btn-accent" id="eliminar-btn" disabled onclick="abrirModalEliminarEmpleado()">Eliminar Empleado</button> 
+</div>
+
+<!-- Modal para crear Empleado -->
+<dialog id="crear_empleado_modal" class="modal">
+  <div class="modal-box">
+    <h3 class="text-lg font-bold mb-4">Crear Empleado</h3>
+    <form method="post" action="{% url 'dashboard:empleados:index' %}">
+      {% csrf_token %}
+      {{ user_form_crear.as_p }}
+      {{ empleado_form_crear.as_p }}
+        <div id="errores-crear" class="m-2 text-red-500 text-xs"></div>
+        <div class="modal-action">
+            <button type="submit" class="btn btn-accent">Crear Empleado</button>
+            <button type="button" class="btn" onclick="crear_empleado_modal.close()">Cancelar</button>
+        </div>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="modificar_empleado_modal" class="modal">
+  <div class="modal-box">
+    <h3 class="text-lg font-bold mb-4">Modificar Empleado</h3>
+    <form method="post" id="modificar-form" action="">
+      {% csrf_token %}
+      {{ user_form_modificar.as_p }}
+      {{ empleado_form_modificar.as_p }}
+      <div id="errores-modificar" class="m-2 text-red-500 text-xs"></div>
+      <div class="modal-action">
+        <button type="submit" class="btn btn-accent">Guardar cambios</button>
+        <button type="button" class="btn" onclick="modificar_empleado_modal.close()">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<!-- Modal para confirmar eliminación -->
+<dialog id="eliminar_empleado_modal" class="modal">
+  <div class="modal-box">
+    <h3 class="text-lg font-bold mb-4">Confirmar Eliminación</h3>
+    <p id="confirmacion-eliminar">¿Estás seguro que deseas eliminar el empleado seleccionado?</p>
+    <form method="post" id="eliminar-form" action="">
+      {% csrf_token %}
+      <div class="modal-action">
+        <button type="submit" class="btn btn-error">Eliminar</button>
+        <button type="button" class="btn" onclick="eliminar_empleado_modal.close()">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<!-- Tabla de empleados -->
+<div class="overflow-x-auto">
+  <table class="table">
+    <thead>
+      <tr>
+        <th><input type="checkbox" class="checkbox" id="select-all" /></th>
+        <th>Nro</th>
+        <th>Nombre de usuario</th>
+        <th>Nombre</th>
+        <th>Apellido</th>
+        <th>DNI</th>
+        <th>Teléfono</th>
+        <th>Dirección</th>
+        <th>Email</th>
+        <th>Rol</th>
+        <th>Localidad</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for empleado in empleados %}
+      <tr data-id="{{ empleado.id }}">
+        <th><input type="checkbox" class="checkbox row-checkbox" value="{{ empleado.id }}" /></th>
+        <td>{{ empleado.id }}</td>
+        <td>{{ empleado.user.username }}</td>
+        <td>{{ empleado.user.first_name }}</td>
+        <td>{{ empleado.user.last_name }}</td>
+        <td>{{ empleado.dni }}</td>
+        <td>{{ empleado.telefono }}</td>
+        <td>{{ empleado.direccion }}</td>
+        <td>{{ empleado.user.email }}</td>
+        <td>
+            {% if empleado.user.groups.all %}
+            {{ empleado.user.groups.first.name }}
+            {% else %}
+            Sin rol
+            {% endif %}
+        </td>
+        <td>{{ empleado.localidad }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAll = document.getElementById('select-all');
+    const checkboxes = document.querySelectorAll('.row-checkbox');
+    const modificarBtn = document.getElementById('modificar-btn');
+    const eliminarBtn = document.getElementById('eliminar-btn');
+    
+    function verificarSeleccion() {
+        const seleccionados = document.querySelectorAll('.row-checkbox:checked');
+        modificarBtn.disabled = seleccionados.length !== 1;
+        eliminarBtn.disabled = seleccionados.length === 0;
+        selectAll.checked = seleccionados.length === checkboxes.length;
+    }
+    
+    selectAll.addEventListener('change', function() {
+        checkboxes.forEach(cb => cb.checked = selectAll.checked);
+        verificarSeleccion();
+    });
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', verificarSeleccion);
+    });
+});
+
+function abrirModalModificarEmpleado() {
+    const seleccionado = document.querySelector('.row-checkbox:checked');
+    if (!seleccionado) return;
+
+    const empleadoId = seleccionado.value;
+
+    fetch(`/dashboard/empleados/obtener/${empleadoId}/`, {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log(data);
+        // Rellenar los campos
+        document.getElementById('username').value = data.username;
+        document.getElementById('email').value = data.email;
+        document.getElementById('grupo').value = data.grupo;
+
+        document.getElementById('nombre').value = data.nombre;
+        document.getElementById('apellido').value = data.apellido;
+        document.getElementById('dni').value = data.dni;
+        document.getElementById('direccion').value = data.direccion;
+        document.getElementById('telefono').value = data.telefono;
+        document.getElementById('localidad').value = data.localidad;
+        document.getElementById('tipo_documento').value = data.tipo_documento;
+
+        document.getElementById('modificar-form').action = `/dashboard/empleados/modificar/${data.id}/`;
+
+        modificar_empleado_modal.showModal();
+    });
+}
+// Función para manejar el envío del formulario (opcional, si quieres hacerlo con AJAX)
+document.getElementById('modificar-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    
+    fetch(this.action, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.reload(); // Recargar si fue exitoso
+        } else {
+            // Mostrar errores
+            document.getElementById('errores-modificar').innerHTML = 
+                data.errors.join('<br>');
+        }
+    });
+});
+
+function abrirModalEliminarEmpleado() {
+    const seleccionado = document.querySelector('.row-checkbox:checked');
+    if (!seleccionado) return;
+
+    const empleadoId = seleccionado.value;
+    fetch(`/dashboard/empleados/eliminar/${empleadoId}/`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('confirmacion-eliminar').textContent =
+                `¿Estás seguro que deseas eliminar el empleado "${data.nombre}"?`;
+            document.getElementById('eliminar-form').action =
+                `/dashboard/empleados/eliminar/${data.id}/`;
+            document.getElementById('eliminar_empleado_modal').showModal();
+        });
+}
+</script>
+{% endblock %}

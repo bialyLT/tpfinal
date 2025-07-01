@@ -1,0 +1,40 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Iniciar sesión{% endblock %}
+
+{% block content %}
+      <div class="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
+        <h1 class="text-5xl font-bold m-5 text-accent text-center">Vivero El Edén</h1>
+    <form class="space-y-6" action="#" method="POST">
+        {% csrf_token %}
+      <div>
+        <label for="username" class="block text-sm/6 font-medium text-accent">Nombre de usuario</label>
+        <div class="mt-2">
+          <input type="text" name="username" id="username" autocomplete="username" required class="w-full block input input-accent">
+        </div>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between">
+          <label for="password" class="block text-sm/6 font-medium text-accent">Contraseña</label>
+          <div class="text-sm">
+            <a href="#" class="font-semibold text-indigo-600 hover:text-indigo-500">Olvidaste tu contraseña?</a>
+          </div>
+        </div>
+        <div class="mt-2">
+          <input type="password" name="password" id="password" autocomplete="current-password" required class=" w-full block input input-accent">
+        </div>
+      </div>
+
+      <div>
+        <button type="submit" class="btn btn-soft btn-accent">Iniciar sesión</button>
+      </div>
+    </form>
+
+    <p class="mt-10 text-center text-sm/6 text-gray-500">
+      No eres miembro?
+      <a href="#" class="font-semibold text-indigo-600 hover:text-indigo-500">Contáctate con el soporte</a>
+    </p>
+  </div>
+</div>
+{% endblock %}

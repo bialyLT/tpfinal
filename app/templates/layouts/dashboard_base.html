@@ -1,0 +1,21 @@
+{% extends 'layouts/base.html' %}
+
+{% load static %}
+
+{% block content %}
+<div class="flex flex-col md:flex-row min-h-screen">
+
+  <!-- Sidebar -->
+  <aside class="md:w-1/4 w-full p-4 bg-base-200">
+    {% include 'layouts/sidebar.html' %}
+  </aside>
+
+  <!-- Contenido dinámico -->
+  <main class="md:w-3/4 w-full p-4 overflow-x-auto">
+    {% block dashboard_content %}
+    <!-- Aquí se inyecta el contenido específico de cada vista -->
+    {% endblock %}
+  </main>
+
+</div>
+{% endblock %}
