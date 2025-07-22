@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth.models import Group
 from django.contrib.auth.models import User
 from app.core.models import (
-    Pais, Provincia, Localidad, TipoDocumento, Empleado, Categoria, Marca, Unidad, Producto, Stock,
+    Pais, Provincia, Localidad, TipoDocumento, Empleado, Categoria, Marca, Unidad, Producto, Stock, MetodoPago
 )
  
 class PaisForm(forms.ModelForm):
@@ -46,6 +46,7 @@ class ProvinciaForm(forms.ModelForm):
                 'id': 'pais',
             }),
         }
+
 class LocalidadForm(forms.ModelForm):
     class Meta:
         model = Localidad
@@ -83,7 +84,6 @@ class TipoDocumentoForm(forms.ModelForm):
                 'id': 'nombre',
             }),
         }
-
 
 class CategoriaForm(forms.ModelForm):
     class Meta:
@@ -132,8 +132,7 @@ class UnidadForm(forms.ModelForm):
                 'id': 'nombre',
             }),
         }
-        
-        
+              
 class UserForm(forms.ModelForm):
     password = forms.CharField(
         label="Contraseña",
@@ -370,5 +369,21 @@ class ModificarCantidadForm(forms.ModelForm):
                 'autocomplete': 'off',
                 'required': True,
                 'id': 'cantidad-modificar',
+            }),
+        }
+        
+class MetodoPagoForm(forms.ModelForm):
+    class Meta:
+        model = MetodoPago
+        fields = ['nombre']
+        labels = {
+            'nombre': 'Nombre del método de pago',
+        }
+        widgets = {
+            'nombre': forms.TextInput(attrs={
+                'class': 'w-full block input input-accent',
+                'autocomplete': 'off',
+                'required': True,
+                'id': 'nombre_metodo_pago',
             }),
         }

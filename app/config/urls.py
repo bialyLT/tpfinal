@@ -4,6 +4,7 @@ from django.contrib.auth import views as auth_views
 from app.core import views  # Import the register view
 
 
+# Rutas de Ubicación
 paises_patterns = [
     path('', views.paises, name='index'),  # Listar y crear
     path('modificar/<int:id>/', views.modificar_pais, name='modificar'),
@@ -22,6 +23,7 @@ localidades_patterns = [
     path('eliminar/<int:id>/', views.eliminar_localidad, name='eliminar'),
 ]
 
+# Rutas de productos
 categorias_patterns = [
     path('', views.categorias, name='index'),  # Listar y crear
     path('modificar/<int:id>/', views.modificar_categoria, name='modificar'),
@@ -40,10 +42,17 @@ unidades_patterns = [
     path('eliminar/<int:id>/', views.eliminar_unidad, name='eliminar'),
 ]
 
+# Rutas de otros parámetros
 tipos_documento_patterns = [
     path('', views.tipos_documento, name='index'),  # Listar y crear
     path('modificar/<int:id>/', views.modificar_tipo_documento, name='modificar'),
     path('eliminar/<int:id>/', views.eliminar_tipo_documento, name='eliminar'),
+]
+
+metodos_pago_patterns = [
+    path('', views.metodos_pago, name='index'),  # Listar y crear
+    path('modificar/<int:id>/', views.modificar_metodo_pago, name='modificar'),
+    path('eliminar/<int:id>/', views.eliminar_metodo_pago, name='eliminar'),
 ]
 
 empleados_patterns = [
@@ -78,6 +87,7 @@ dashboard_patterns = [
     path('empleados/', include((empleados_patterns, 'empleados'), namespace='empleados')),
     path('productos/', include((productos_patterns, 'productos'), namespace='productos')),
     path('inventario/', include((inventario_patterns, 'inventario'), namespace='inventario')),
+    path('metodos_pago/', include((metodos_pago_patterns, 'metodos_pago'), namespace='metodos_pago')),
 ]
 
 

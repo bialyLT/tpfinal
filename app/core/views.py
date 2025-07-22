@@ -6,10 +6,9 @@ from django.shortcuts import redirect
 from django.contrib.auth.views import LoginView
 from django.urls import reverse_lazy
 from django.contrib.auth.decorators import login_required
-from django.template.loader import render_to_string
 from django.contrib.auth.models import User  
-from app.core.models import Categoria, Empleado, Localidad, Marca, Pais, Producto, Provincia, Stock, TipoDocumento, Unidad
-from app.data.forms import CategoriaForm, EmpleadoForm, InventarioForm, LocalidadForm, MarcaForm, ModificarCantidadForm, ModificarPrecioForm, PaisForm, ProductoForm, ProductoModificarForm, ProvinciaForm, TipoDocumentoForm, UnidadForm, UserForm
+from app.core.models import Categoria, Empleado, Localidad, Marca, Pais, Producto, Provincia, Stock, TipoDocumento, Unidad, MetodoPago
+from app.data.forms import CategoriaForm, EmpleadoForm, InventarioForm, LocalidadForm, MarcaForm, ModificarCantidadForm, ModificarPrecioForm, PaisForm, ProductoForm, ProductoModificarForm, ProvinciaForm, TipoDocumentoForm, UnidadForm, UserForm, MetodoPagoForm
 from django.contrib.auth.decorators import user_passes_test
 
 def is_admin(user):
@@ -55,9 +54,9 @@ def servicios(request):
     return render(request, 'servicios/servicios.html')
 
 
-# rutas del panel de control
+# Rutas del panel de control
 
-# Vista para listar y crear paises
+# Vistas para paises
 @login_required
 def paises(request):
     paises = Pais.objects.all()
@@ -66,6 +65,7 @@ def paises(request):
         form = PaisForm(request.POST)
         if form.is_valid():
             form.save()
+            messages.success(request, 'País creado exitosamente')
             return redirect('dashboard:paises:index')
     else:
         form = PaisForm()
@@ -108,9 +108,7 @@ def eliminar_pais(request, id):
         'nombre': pais.nombre
     })
     
-
-# Vista para listar y crear provincias
-    
+# Vistas para provincias
 @login_required
 def provincias(request):
     paises = Pais.objects.all()
@@ -162,7 +160,7 @@ def eliminar_provincia(request, id):
         'nombre': provincia.nombre
     })
     
-
+# Vistas para localidades
 @login_required
 def localidades(request):
     provincias = Provincia.objects.all()
@@ -213,10 +211,8 @@ def eliminar_localidad(request, id):
         'id': localidad.id,
         'nombre': localidad.nombre
     })
-    
-    
-# Vista para listar y crear categorias
 
+# Vistas para categorias
 @login_required
 def categorias(request):
     categorias = Categoria.objects.all()
@@ -264,9 +260,8 @@ def eliminar_categoria(request, id):
         'id': categoria.id,
         'nombre': categoria.nombre
     })
-    
-# Vista para listar y crear marcas
 
+# Vistas para marcas
 @login_required
 def marcas(request):
     marcas = Marca.objects.all()
@@ -314,10 +309,9 @@ def eliminar_marca(request, id):
         'id': marca.id,
         'nombre': marca.nombre
     })
-    
-    
-# Vista para listar y crear unidades
 
+
+# Vistas para unidades
 @login_required
 def unidades(request):
     unidades = Unidad.objects.all()
@@ -365,9 +359,8 @@ def eliminar_unidad(request, id):
         'id': unidad.id,
         'nombre': unidad.nombre
     })
-    
-# Vista para listar y crear tipos de documento
-    
+
+# Vistas para tipos de documento
 @login_required
 def tipos_documento(request):
     tipos_documento = TipoDocumento.objects.all()
@@ -416,7 +409,56 @@ def eliminar_tipo_documento(request, id):
         'nombre': tipo_documento.nombre
     })
 
-# Vista para listar y crear empleados
+# Vistas para metodos de pago
+@login_required
+def metodos_pago(request):
+    metodos_pago = MetodoPago.objects.all()
+    form = MetodoPagoForm()
+    if request.method == 'POST':
+        form = MetodoPagoForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('dashboard:metodos_pago:index')
+    else:
+        form = MetodoPagoForm()
+    return render(request, 'dashboard/parametros/otros/metodos_pago.html', {'metodos_pago': metodos_pago, 'form': form})
+
+@login_required
+def modificar_metodo_pago(request, id):
+    metodo_pago = get_object_or_404(MetodoPago, id=id)
+    if request.method == 'POST':
+        form = MetodoPagoForm(request.POST, instance=metodo_pago)
+        if form.is_valid():
+            form.save()
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({'success': True})
+            messages.success(request, 'Método de pago modificado exitosamente')
+            return redirect('dashboard:metodos_pago:index')
+        else:
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                # Devuelve los errores como lista de strings
+                errors = [error for field in form.errors.values() for error in field]
+                return JsonResponse({'success': False, 'errors': errors})
+    else:
+        form = MetodoPagoForm(instance=metodo_pago)
+    return render(request, 'dashboard/parametros/otros/modificar_metodo_pago.html', {'form': form})
+
+@login_required
+@user_passes_test(is_admin)
+def eliminar_metodo_pago(request, id):
+    metodo_pago = get_object_or_404(MetodoPago, id=id)
+    if request.method == 'POST':
+        metodo_pago.delete()
+        messages.success(request, 'Método de pago eliminado exitosamente')
+        return redirect('dashboard:metodos_pago:index')
+
+    # Retornamos JSON para el modal de confirmación
+    return JsonResponse({
+        'id': metodo_pago.id,
+        'nombre': metodo_pago.nombre
+    })
+
+# Vistas para empleados
 @login_required
 @user_passes_test(is_admin)
 def empleados(request):
@@ -483,7 +525,6 @@ def modificar_empleado(request, id):
     # Para GET, si querés permitirlo (opcional)
     return JsonResponse({'error': 'Método no permitido'}, status=405)
 
-
 @login_required
 @user_passes_test(is_admin)
 def obtener_empleado(request, id):
@@ -520,9 +561,8 @@ def eliminar_empleado(request, id):
         'nombre': empleado.user.first_name,
         'apellido': empleado.user.last_name
     })
-    
-# Vista para listar y crear productos
 
+# Vistas para productos
 @login_required
 def productos(request):
     productos = Producto.objects.all()
@@ -591,8 +631,8 @@ def eliminar_producto(request, id):
 
     # Si no es AJAX, redirigir o mostrar algo por defecto
     return render(request, 'dashboard/productos.html', {'producto': producto})
-# Vista para listar y crear inventario
 
+# Vistas para inventario
 @login_required
 def inventario(request):
     stock = Stock.objects.all()
