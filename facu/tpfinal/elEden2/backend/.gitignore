@@ -1,0 +1,62 @@
+# Django
+*.pyc
+__pycache__/
+db.sqlite3
+*.sqlite3
+*.log
+
+# Media and static files
+/media/
+staticfiles/
+static/
+
+# Environment variables
+.env*
+!.env.example
+*.env
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node modules and dependencies
+node_modules/
+package-lock.json
+
+# Tailwind CSS compiled output
+static/css/output.css
+
+# Python virtual environment
+.venv/
+venv/
+env/
+
+# Migrations (optional, if you want to ignore them)
+*/migrations/*.pyc
+*/migrations/__pycache__/
+*/migrations/0*.py
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+
+# Build
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs
+logs/
+*.log
+
+# Others
+*.bak
+*.tmp
