@@ -1,0 +1,62 @@
+{% extends 'layouts/base.html' %} {% block title %}Productos{% endblock %} {%
+block content %}
+<ul class="menu bg-base-200 rounded-box w-56">
+  <li>
+    <h2 class="menu-title">Plantas</h2>
+  </li>
+  <li>
+    <ul>
+      <li><a>Submenu 1</a></li>
+      <li><a>Submenu 2</a></li>
+    </ul>
+  </li>
+  <li>
+    <h2 class="menu-title">Insumos</h2>
+  </li>
+  <li>
+    <ul>
+      <li><a>Submenu 1</a></li>
+      <li><a>Submenu 2</a></li>
+    </ul>
+  </li>
+</ul>
+
+<section>
+  {% comment %} titulo de la seccion {% endcomment %}
+  <h1 class="text-3xl font-bold text-center my-4">Productos</h1>
+  {% comment %} cards de productos destacados {% endcomment %}
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-2 p-4 justify-items-center">
+    <div class="card bg-base-100 image-full w-96 shadow-sm">
+      <figure>
+        <img
+          src="https://img.daisyui.com/images/stock/photo-1606107557195-0e29a4b5b4aa.webp"
+          alt="Shoes"
+        />
+      </figure>
+      <div class="card-body">
+        <h2 class="card-title">Productos</h2>
+        <p>Observa todos los productos que ofrecemos</p>
+        <div class="card-actions justify-end">
+          <button class="btn btn-primary">Ver Más</button>
+        </div>
+      </div>
+    </div>
+    <div class="card bg-base-100 image-full w-96 shadow-sm">
+      <figure>
+        <img
+          src="https://img.daisyui.com/images/stock/photo-1606107557195-0e29a4b5b4aa.webp"
+          alt="Shoes"
+        />
+      </figure>
+      <div class="card-body">
+        <h2 class="card-title">Servicios</h2>
+        <p>Observa todos los servicios que ofrecemos</p>
+        <div class="card-actions justify-end">
+          <button class="btn btn-primary">Ver Más</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+{% endblock %}

@@ -1,0 +1,200 @@
+{% extends 'layouts/dashboard_base.html' %} 
+{% block title %}Provincias{% endblock %}
+
+{% block dashboard_content %}
+<div class="flex items-center justify-between"> 
+    <h1 class="text-3xl text-accent font-bold mb-5">Provincias</h1> 
+    <button class="btn btn-accent" onclick="crear_provincia_modal.showModal()">Crear Provincia</button> 
+    <button class="btn btn-accent" id="modificar-btn" disabled onclick="abrirModalModificarProvincia()">Modificar Provincia</button> 
+    <button class="btn btn-accent" id="eliminar-btn" disabled onclick="abrirModalEliminarProvincia()">Eliminar Provincia</button> 
+</div>
+
+<!-- Modal para crear provincia -->
+<dialog id="crear_provincia_modal" class="modal">
+  <div class="modal-box">
+    <h3 class="text-lg font-bold mb-4">Crear Provincia</h3>
+    <form method="post" action="{% url 'dashboard:provincias:index' %}">
+      {% csrf_token %}
+      <label for="pais" class="block text-sm/6 font-medium text-accent">
+          {{ form.pais.label }}
+      </label>
+      <div class="mt-2">
+        {{ form.pais }}
+        {% if form.pais.errors %}
+        <div class="m-2 text-red-500 text-xs">{{ form.pais.errors }}</div>
+        {% endif %}
+      </label>
+      <label for="nombre" class="block text-sm/6 font-medium text-accent">
+          {{ form.nombre.label }}
+      </label>
+      <div class="mt-2">
+        {{ form.nombre }}
+        {% if form.nombre.errors %}
+        <div class="m-2 text-red-500 text-xs">{{ form.nombre.errors }}</div>
+        {% endif %}
+      </div>
+      <div class="modal-action">
+        <button type="submit" class="btn btn-accent">Crear provincia</button>
+        <button type="button" class="btn" onclick="crear_provincia_modal.close()">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<!-- Modal para modificar provincia -->
+<dialog id="modificar_provincia_modal" class="modal">
+  <div class="modal-box">
+    <h3 class="text-lg font-bold mb-4">Modificar Provincia</h3>
+    <form method="post" id="modificar-form" action="">
+      {% csrf_token %}
+      <div class="mb-4">
+        <label for="id_pais" class="block text-sm/6 font-medium text-accent">
+          País
+        </label>
+          <select id="pais-modificar" name="pais" class="select select-accent w-full">
+            {% for pais in paises %}
+              <option value="{{ pais.id }}">{{ pais.nombre }}</option>
+            {% endfor %}
+          </select>
+      </div>
+      <input type="hidden" id="provincia-id-modificar" name="provincia_id">
+
+      <!-- Formulario integrado directamente -->
+      <div class="mb-4">
+        <label for="id_nombre" class="block text-sm/6 font-medium text-accent">
+          Nombre de la provincia
+        </label>
+        <input type="text" id="nombre-modificar" name="nombre" class="input input-accent w-full">
+        <div id="errores-modificar" class="m-2 text-red-500 text-xs"></div>
+      </div>
+      
+      <div class="modal-action">
+        <button type="submit" class="btn btn-accent">Guardar cambios</button>
+        <button type="button" class="btn" onclick="modificar_provincia_modal.close()">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+
+<!-- Modal para confirmar eliminación -->
+<dialog id="eliminar_provincia_modal" class="modal">
+  <div class="modal-box">
+    <h3 class="text-lg font-bold mb-4">Confirmar Eliminación</h3>
+    <p id="confirmacion-eliminar">¿Estás seguro que deseas eliminar la provincia seleccionada?</p>
+    <form method="post" id="eliminar-form" action="">
+      {% csrf_token %}
+      <div class="modal-action">
+        <button type="submit" class="btn btn-error">Eliminar</button>
+        <button type="button" class="btn" onclick="eliminar_provincia_modal.close()">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<!-- Tabla de provincias -->
+<div class="overflow-x-auto">
+  <table class="table">
+    <thead>
+      <tr>
+        <th><input type="checkbox" class="checkbox" id="select-all" /></th>
+        <th>Número</th>
+        <th>País</th>
+        <th>Nombre</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for provincia in provincias %}
+      <tr data-id="{{ provincia.id }}">
+        <th><input type="checkbox" class="checkbox row-checkbox" value="{{ provincia.id }}" /></th>
+        <td>{{ provincia.id }}</td>
+        <td>{{ provincia.pais }}</td>
+        <td>{{ provincia.nombre }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAll = document.getElementById('select-all');
+    const checkboxes = document.querySelectorAll('.row-checkbox');
+    const modificarBtn = document.getElementById('modificar-btn');
+    const eliminarBtn = document.getElementById('eliminar-btn');
+    
+    function verificarSeleccion() {
+        const seleccionados = document.querySelectorAll('.row-checkbox:checked');
+        modificarBtn.disabled = seleccionados.length !== 1;
+        eliminarBtn.disabled = seleccionados.length === 0;
+        selectAll.checked = seleccionados.length === checkboxes.length;
+    }
+    
+    selectAll.addEventListener('change', function() {
+        checkboxes.forEach(cb => cb.checked = selectAll.checked);
+        verificarSeleccion();
+    });
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', verificarSeleccion);
+    });
+});
+
+// Función para abrir el modal de modificación
+function abrirModalModificarProvincia() {
+    const seleccionado = document.querySelector('.row-checkbox:checked');
+    if (!seleccionado) return;
+
+    const fila = seleccionado.closest('tr');
+    const provinciaId = seleccionado.value;
+    const nombreProvincia = fila.querySelector('td:nth-child(4)').textContent;
+
+    document.getElementById('provincia-id-modificar').value = provinciaId;
+    document.getElementById('nombre-modificar').value = nombreProvincia;
+    document.getElementById('errores-modificar').innerHTML = '';
+
+    document.getElementById('modificar-form').action = `/dashboard/provincias/modificar/${provinciaId}/`;
+    document.getElementById('modificar_provincia_modal').showModal();
+}
+
+// Función para manejar el envío del formulario (opcional, si quieres hacerlo con AJAX)
+document.getElementById('modificar-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    
+    fetch(this.action, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.reload(); // Recargar si fue exitoso
+        } else {
+            // Mostrar errores
+            document.getElementById('errores-modificar').innerHTML = 
+                data.errors.join('<br>');
+        }
+    });
+});
+
+function abrirModalEliminarProvincia() {
+    const seleccionado = document.querySelector('.row-checkbox:checked');
+    if (!seleccionado) return;
+    
+    const provinciaId = seleccionado.value;
+    fetch(`/dashboard/provincias/eliminar/${provinciaId}/`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('confirmacion-eliminar').textContent =
+                `¿Estás seguro que deseas eliminar la provincia "${data.nombre}"?`;
+            document.getElementById('eliminar-form').action =
+                `/dashboard/provincias/eliminar/${data.id}/`;
+            document.getElementById('eliminar_provincia_modal').showModal();
+        });
+}
+</script>
+{% endblock %}

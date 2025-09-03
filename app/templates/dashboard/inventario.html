@@ -1,0 +1,161 @@
+{% extends 'layouts/dashboard_base.html' %} 
+{% block title %}Inventario{% endblock %}
+
+{% block dashboard_content %}
+<div class="flex items-center justify-between"> 
+    <h1 class="text-3xl text-accent font-bold mb-5">Inventario</h1> 
+    <button class="btn btn-accent" onclick="agregar_lote_modal.showModal()">Agregar lote</button> 
+    <button class="btn btn-accent" id="modificar-btn" disabled onclick="abrirModalModificarCantidad()">Modificar Cantidad Manualmente</button>
+    <button class="btn btn-accent" id="modificar-btn" disabled onclick="abrirModalModificarPrecio()">Modificar Precio</button>
+</div>
+
+<!-- Modal para agregar lote -->
+<dialog id="agregar_lote_modal" class="modal">
+  <div class="modal-box">
+    <h3 class="text-lg font-bold mb-4">Agregar lote</h3>
+    <form method="post" action="{% url 'dashboard:inventario:index' %}">
+      {% csrf_token %}
+        {{ form.as_p }}
+        <div id="errores-crear" class="m-2 text-red-500 text-xs"></div>
+        <div class="modal-action">
+            <button type="submit" class="btn btn-accent">Agregar Lote</button>
+            <button type="button" class="btn" onclick="agregar_lote_modal.close()">Cancelar</button>
+        </div>
+    </form>
+  </div>
+</dialog>
+
+
+<dialog id="modificar_cantidad_modal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg mb-4">Modificar cantidad de stock</h3>
+
+    <form id="modificar-form" method="POST">
+      {% csrf_token %}
+      {{ modificar_cantidad_form.as_p }}
+      <div id="errores-modificar" class="text-red-500 text-sm mb-2"></div>
+
+      <div class="modal-action">
+        <button type="submit" class="btn btn-primary">Guardar</button>
+        <form method="dialog">
+          <button class="btn">Cancelar</button>
+        </form>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<!-- Modal para modificar precio -->
+<dialog id="modificar_precio_modal" class="modal">
+  <div class="modal-box">
+    <h3 class="text-lg font-bold mb-4">Modificar precio</h3>
+    <form method="post" id="modificar-precio-form" action="">
+      {% csrf_token %}
+      <input type="hidden" name="producto_id">
+      {{ modificar_precio_form.as_p }}
+        <div id="errores-modificar" class="m-2 text-red-500 text-xs"></div>
+        <div class="modal-action">
+            <button type="submit" class="btn btn-accent">Guardar cambios</button>
+            <button type="button" class="btn" onclick="modificar_precio_modal.close()">Cancelar</button>
+        </div>
+    </form>
+  </div>
+</dialog>
+
+<!-- Tabla de inventario -->
+<div class="overflow-x-auto">
+  <table class="table">
+    <thead>
+      <tr>
+        <th><input type="checkbox" class="checkbox" id="select-all" /></th>
+        <th>Nro</th>
+        <th>Nombre de Producto</th>
+        <th>Precio</th>
+        <th>Unidad</th>
+        <th>Cantidad disponible</th>
+        <th>Marca/Especie</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in stock %}
+      <tr data-id="{{ s.id }}">
+        <th><input type="checkbox" class="checkbox row-checkbox" value="{{ s.id }}" /></th>
+        <td>{{ s.id }}</td>
+        <td>{{ s.producto.nombre }}</td>
+        <td>{{ s.precio }}</td>
+        <td>{{ s.producto.unidad }}</td>
+        <td>{{ s.cantidad }}</td>
+        <td>{{ s.producto.marca }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAll = document.getElementById('select-all');
+    const checkboxes = document.querySelectorAll('.row-checkbox');
+    const modificarBtn = document.getElementById('modificar-btn');
+    const eliminarBtn = document.getElementById('eliminar-btn');
+    
+    function verificarSeleccion() {
+        const seleccionados = document.querySelectorAll('.row-checkbox:checked');
+        modificarBtn.disabled = seleccionados.length !== 1;
+        eliminarBtn.disabled = seleccionados.length === 0;
+        selectAll.checked = seleccionados.length === checkboxes.length;
+    }
+    
+    selectAll.addEventListener('change', function() {
+        checkboxes.forEach(cb => cb.checked = selectAll.checked);
+        verificarSeleccion();
+    });
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', verificarSeleccion);
+    });
+});
+
+function abrirModalModificarCantidad() {
+    const seleccionado = document.querySelector('.row-checkbox:checked');
+    if (!seleccionado) return;
+
+    const stockId = seleccionado.value;
+    // Limpiar errores
+    document.getElementById('errores-modificar').innerHTML = '';
+
+    // Setear action
+    document.getElementById('modificar-form').action = `/dashboard/inventario/modificar/${stockId}/`;
+
+    fetch(`/dashboard/inventario/obtener/${stockId}/`)
+        .then(response => response.json())
+        .then(data => {
+          
+            document.getElementById('nombre-producto-modificar').selected = data.nombre
+
+            // Asignar valor actual en el input
+            document.getElementById('cantidad-modificar').value = data.cantidad;
+
+            // Mostrar el modal
+            document.getElementById('modificar_cantidad_modal').showModal();
+        });
+}
+
+function abrirModalEliminarProducto() {
+    const seleccionado = document.querySelector('.row-checkbox:checked');
+    if (!seleccionado) return;
+    // Limpiar errores
+    document.getElementById('errores-eliminar').innerHTML = '';
+    const productoId = seleccionado.value;
+    fetch(`/dashboard/productos/eliminar/${productoId}/`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('confirmacion-eliminar').textContent =
+                `¿Estás seguro que deseas eliminar el producto "${data.nombre}"?`;
+            document.getElementById('eliminar-form').action =
+                `/dashboard/productos/eliminar/${data.id}/`;
+            document.getElementById('eliminar_producto_modal').showModal();
+        });
+}
+</script>
+{% endblock %}

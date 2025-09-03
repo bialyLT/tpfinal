@@ -1,0 +1,202 @@
+{% extends 'layouts/dashboard_base.html' %} 
+{% block title %}Productos{% endblock %}
+
+{% block dashboard_content %}
+<div class="flex items-center justify-between"> 
+    <h1 class="text-3xl text-accent font-bold mb-5">Productos</h1> 
+    <button class="btn btn-accent" onclick="crear_producto_modal.showModal()">Crear Producto</button> 
+    <button class="btn btn-accent" id="modificar-btn" disabled onclick="abrirModalModificarProducto()">Modificar Producto</button> 
+    <button class="btn btn-accent" id="eliminar-btn" disabled onclick="abrirModalEliminarProducto()">Eliminar Producto</button> 
+</div>
+
+<!-- Modal para crear Producto -->
+<dialog id="crear_producto_modal" class="modal">
+  <div class="modal-box">
+    <h3 class="text-lg font-bold mb-4">Crear Producto</h3>
+    <form method="post" action="{% url 'dashboard:productos:index' %}">
+      {% csrf_token %}
+      <label for="nombre" class="block text-sm/6 font-medium text-accent">
+          {{ form.nombre.label }}
+      </label>
+      {{ form.nombre }}
+      <label for="categoria" class="block text-sm/6 font-medium text-accent">
+          {{ form.categoria.label }}
+      </label>
+      {{ form.categoria }}
+      <label for="marca" class="block text-sm/6 font-medium text-accent">
+          {{ form.marca.label }}
+      </label>
+      {{ form.marca }}
+      <label for="unidad" class="block text-sm/6 font-medium text-accent">
+          {{ form.unidad.label }}
+      </label>
+      {{ form.unidad }}
+        <div id="errores-crear" class="m-2 text-red-500 text-xs"></div>
+        <div class="modal-action">
+            <button type="submit" class="btn btn-accent">Crear Producto</button>
+            <button type="button" class="btn" onclick="crear_producto_modal.close()">Cancelar</button>
+        </div>
+    </form>
+  </div>
+</dialog>
+
+<!-- Modal para modificar producto -->
+<dialog id="modificar_producto_modal" class="modal">
+  <div class="modal-box">
+    <h3 class="text-lg font-bold mb-4">Modificar Producto</h3>
+    <form method="post" id="modificar-form" action="">
+      {% csrf_token %}
+      <input type="hidden" name="producto_id">
+      {{ form_modificar.as_p }}
+        <div id="errores-modificar" class="m-2 text-red-500 text-xs"></div>
+        <div class="modal-action">
+            <button type="submit" class="btn btn-accent">Guardar cambios</button>
+            <button type="button" class="btn" onclick="modificar_producto_modal.close()">Cancelar</button>
+        </div>
+    </form>
+  </div>
+</dialog>
+
+<!-- Modal para confirmar eliminación -->
+<dialog id="eliminar_producto_modal" class="modal">
+  <div class="modal-box">
+    <h3 class="text-lg font-bold mb-4">Confirmar Eliminación</h3>
+    <p id="confirmacion-eliminar">¿Estás seguro que deseas eliminar el producto seleccionado?</p>
+    <form method="post" id="eliminar-form" >
+      {% csrf_token %}
+      <div class="modal-action">
+        <button type="submit" class="btn btn-error">Eliminar</button>
+        <button type="button" class="btn" onclick="eliminar_producto_modal.close()">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<!-- Tabla de productos -->
+<div class="overflow-x-auto">
+  <table class="table">
+    <thead>
+      <tr>
+        <th><input type="checkbox" class="checkbox" id="select-all" /></th>
+        <th>Nro</th>
+        <th>Nombre de Producto</th>
+        <th>Categoria</th>
+        <th>Unidad</th>
+        <th>Marca/Especie</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for producto in productos %}
+      <tr data-id="{{ producto.id }}">
+        <th><input type="checkbox" class="checkbox row-checkbox" value="{{ producto.id }}" /></th>
+        <td>{{ producto.id }}</td>
+        <td>{{ producto.nombre }}</td>
+        <td>{{ producto.categoria }}</td>
+        <td>{{ producto.unidad }}</td>
+        <td>{{ producto.marca }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAll = document.getElementById('select-all');
+    const checkboxes = document.querySelectorAll('.row-checkbox');
+    const modificarBtn = document.getElementById('modificar-btn');
+    const eliminarBtn = document.getElementById('eliminar-btn');
+    
+    function verificarSeleccion() {
+        const seleccionados = document.querySelectorAll('.row-checkbox:checked');
+        modificarBtn.disabled = seleccionados.length !== 1;
+        eliminarBtn.disabled = seleccionados.length === 0;
+        selectAll.checked = seleccionados.length === checkboxes.length;
+    }
+    
+    selectAll.addEventListener('change', function() {
+        checkboxes.forEach(cb => cb.checked = selectAll.checked);
+        verificarSeleccion();
+    });
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', verificarSeleccion);
+    });
+});
+
+function abrirModalModificarProducto() {
+    const seleccionado = document.querySelector('.row-checkbox:checked');
+    if (!seleccionado) return;
+
+    const productoId = seleccionado.value;
+
+    // Setear action
+    document.getElementById('modificar-form').action = `/dashboard/productos/modificar/${productoId}/`;
+
+    // Hacer fetch para traer los datos del producto
+    fetch(`/dashboard/productos/obtener/${productoId}/`)
+        .then(response => response.json())
+        .then(data => {
+            // Cargar los campos del formulario
+            document.getElementById('nombre_modificar').value = data.nombre;
+            document.getElementById('categoria_modificar').value = data.categoria;
+            document.getElementById('marca_modificar').value = data.marca;
+            document.getElementById('unidad_modificar').value = data.unidad;
+
+            // Mostrar el modal
+            document.getElementById('modificar_producto_modal').showModal();
+        });
+}
+// Función para manejar el envío del formulario (opcional, si quieres hacerlo con AJAX)
+document.getElementById('modificar-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    
+    fetch(this.action, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.reload(); // Recargar si fue exitoso
+        } else {
+            // Mostrar errores
+            document.getElementById('errores-modificar').innerHTML = 
+                data.errors.join('<br>');
+        }
+    });
+});
+
+function abrirModalEliminarProducto() {
+    const seleccionado = document.querySelector('.row-checkbox:checked');
+    if (!seleccionado) return;
+
+    const productoId = seleccionado.value;
+
+    fetch(`/dashboard/productos/eliminar/${productoId}/`, {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        if (!response.ok) throw new Error("Error al obtener los datos del producto");
+        return response.json();
+    })
+    .then(data => {
+        document.getElementById('confirmacion-eliminar').textContent =
+            `¿Estás seguro que deseas eliminar el producto "${data.nombre}"?`;
+        document.getElementById('eliminar-form').action =
+            `/dashboard/productos/eliminar/${data.id}/`;
+        document.getElementById('eliminar_producto_modal').showModal();
+    })
+    .catch(error => {
+        alert("No se pudo cargar el producto a eliminar.");
+        console.error(error);
+    });
+}
+</script>
+{% endblock %}
