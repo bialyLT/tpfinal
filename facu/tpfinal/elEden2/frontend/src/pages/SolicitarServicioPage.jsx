@@ -1,12 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { serviciosService } from '../services';
 import { toast } from 'react-hot-toast';
-import Loading from '../components/Loading';
+import { 
+  Calendar, 
+  MapPin, 
+  FileText, 
+  Send, 
+  Settings, 
+  CheckCircle,
+  AlertCircle,
+  Clock,
+  User
+} from 'lucide-react';
 
 const SolicitarServicioPage = () => {
   const [tiposServicio, setTiposServicio] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
     tipo_servicio: '',
     descripcion: '',
@@ -14,6 +25,13 @@ const SolicitarServicioPage = () => {
     direccion_servicio: '',
     notas_adicionales: ''
   });
+
+  const steps = [
+    { id: 1, title: 'Tipo de Servicio', icon: Settings },
+    { id: 2, title: 'Detalles', icon: FileText },
+    { id: 3, title: 'Programación', icon: Calendar },
+    { id: 4, title: 'Confirmación', icon: CheckCircle }
+  ];
 
   useEffect(() => {
     fetchTiposServicio();
@@ -39,10 +57,50 @@ const SolicitarServicioPage = () => {
     });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSubmitting(true);
+  const handleNext = () => {
+    if (validateStep()) {
+      setCurrentStep(prev => prev + 1);
+    }
+  };
 
+  const handlePrevious = () => {
+    setCurrentStep(prev => prev - 1);
+  };
+
+  const validateStep = () => {
+    switch (currentStep) {
+      case 1:
+        if (!formData.tipo_servicio) {
+          toast.error('Por favor selecciona un tipo de servicio');
+          return false;
+        }
+        break;
+      case 2:
+        if (!formData.descripcion.trim()) {
+          toast.error('Por favor ingresa una descripción del servicio');
+          return false;
+        }
+        if (!formData.direccion_servicio.trim()) {
+          toast.error('Por favor ingresa la dirección del servicio');
+          return false;
+        }
+        break;
+      case 3:
+        if (!formData.fecha_preferida) {
+          toast.error('Por favor selecciona una fecha preferida');
+          return false;
+        }
+        break;
+      default:
+        return true;
+    }
+    return true;
+  };
+
+  const handleSubmit = async () => {
+    if (!validateStep()) return;
+
+    setSubmitting(true);
     try {
       await serviciosService.createSolicitud(formData);
       toast.success('Solicitud de servicio enviada correctamente');
@@ -54,6 +112,7 @@ const SolicitarServicioPage = () => {
         direccion_servicio: '',
         notas_adicionales: ''
       });
+      setCurrentStep(1);
     } catch (error) {
       toast.error('Error al enviar la solicitud');
       console.error('Error submitting solicitud:', error);
@@ -62,200 +121,305 @@ const SolicitarServicioPage = () => {
     }
   };
 
-  const selectedTipo = tiposServicio.find(tipo => tipo.id.toString() === formData.tipo_servicio);
+  const getSelectedServiceType = () => {
+    return tiposServicio.find(tipo => tipo.id == formData.tipo_servicio);
+  };
 
   if (loading) {
-    return <Loading message="Cargando formulario..." />;
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-400"></div>
+          <p className="text-gray-300 mt-4">Cargando formulario...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-base-200 p-4">
+    <div className="min-h-screen bg-gray-900 text-gray-300 p-4 sm:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Solicitar Servicio</h1>
-          <p className="text-gray-600">Completa el formulario para solicitar un servicio de jardinería</p>
+          <h1 className="text-3xl font-bold text-white mb-2 flex items-center">
+            <Send className="w-8 h-8 mr-3 text-green-400" />
+            Solicitar Servicio
+          </h1>
+          <p className="text-gray-400">
+            Complete el formulario para solicitar un servicio de jardinería
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Formulario */}
-          <div className="lg:col-span-2">
-            <div className="card bg-base-100 shadow-xl">
-              <div className="card-body">
-                <h2 className="card-title text-xl mb-6">Detalles del Servicio</h2>
-
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  <div className="form-control">
-                    <label className="label">
-                      <span className="label-text font-medium">Tipo de Servicio *</span>
-                    </label>
-                    <select
-                      name="tipo_servicio"
-                      value={formData.tipo_servicio}
-                      onChange={handleChange}
-                      className="select select-bordered w-full"
-                      required
+        {/* Progress Steps */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            {steps.map((step, index) => {
+              const Icon = step.icon;
+              const isActive = currentStep === step.id;
+              const isCompleted = currentStep > step.id;
+              
+              return (
+                <React.Fragment key={step.id}>
+                  <div className="flex flex-col items-center">
+                    <div
+                      className={`w-12 h-12 rounded-full flex items-center justify-center mb-2 ${
+                        isCompleted
+                          ? 'bg-green-600 text-white'
+                          : isActive
+                          ? 'bg-green-600 text-white'
+                          : 'bg-gray-700 text-gray-400'
+                      }`}
                     >
-                      <option value="">Selecciona un tipo de servicio</option>
-                      {tiposServicio.map(tipo => (
-                        <option key={tipo.id} value={tipo.id}>
-                          {tipo.nombre} - ${tipo.precio_base}
-                        </option>
-                      ))}
-                    </select>
+                      <Icon className="w-6 h-6" />
+                    </div>
+                    <span className={`text-sm ${isActive ? 'text-white' : 'text-gray-400'}`}>
+                      {step.title}
+                    </span>
                   </div>
-
-                  <div className="form-control">
-                    <label className="label">
-                      <span className="label-text font-medium">Descripción del Trabajo *</span>
-                    </label>
-                    <textarea
-                      name="descripcion"
-                      value={formData.descripcion}
-                      onChange={handleChange}
-                      placeholder="Describe detalladamente el trabajo que necesitas..."
-                      className="textarea textarea-bordered w-full h-32"
-                      required
+                  {index < steps.length - 1 && (
+                    <div
+                      className={`flex-1 h-0.5 mx-4 ${
+                        currentStep > step.id ? 'bg-green-600' : 'bg-gray-700'
+                      }`}
                     />
-                  </div>
-
-                  <div className="form-control">
-                    <label className="label">
-                      <span className="label-text font-medium">Fecha Preferida</span>
-                    </label>
-                    <input
-                      type="date"
-                      name="fecha_preferida"
-                      value={formData.fecha_preferida}
-                      onChange={handleChange}
-                      className="input input-bordered w-full"
-                      min={new Date().toISOString().split('T')[0]}
-                    />
-                  </div>
-
-                  <div className="form-control">
-                    <label className="label">
-                      <span className="label-text font-medium">Dirección del Servicio *</span>
-                    </label>
-                    <textarea
-                      name="direccion_servicio"
-                      value={formData.direccion_servicio}
-                      onChange={handleChange}
-                      placeholder="Dirección completa donde se realizará el servicio..."
-                      className="textarea textarea-bordered w-full"
-                      rows="3"
-                      required
-                    />
-                  </div>
-
-                  <div className="form-control">
-                    <label className="label">
-                      <span className="label-text font-medium">Notas Adicionales</span>
-                    </label>
-                    <textarea
-                      name="notas_adicionales"
-                      value={formData.notas_adicionales}
-                      onChange={handleChange}
-                      placeholder="Información adicional, accesos especiales, mascotas, etc..."
-                      className="textarea textarea-bordered w-full"
-                      rows="3"
-                    />
-                  </div>
-
-                  <div className="form-control mt-8">
-                    <button 
-                      type="submit" 
-                      className={`btn btn-primary btn-lg w-full ${submitting ? 'loading' : ''}`}
-                      disabled={submitting}
-                    >
-                      {submitting ? 'Enviando solicitud...' : 'Enviar Solicitud'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
+                  )}
+                </React.Fragment>
+              );
+            })}
           </div>
+        </div>
 
-          {/* Sidebar con información */}
-          <div className="space-y-6">
-            {/* Información del servicio seleccionado */}
-            {selectedTipo && (
-              <div className="card bg-base-100 shadow-xl">
-                <div className="card-body">
-                  <h3 className="card-title text-lg">Servicio Seleccionado</h3>
-                  <div className="space-y-3">
-                    <h4 className="font-bold text-primary">{selectedTipo.nombre}</h4>
-                    <p className="text-gray-600">{selectedTipo.descripcion}</p>
-                    
-                    <div className="divider"></div>
-                    
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Precio base:</span>
-                      <span className="font-bold text-primary">${selectedTipo.precio_base}</span>
+        {/* Form */}
+        <div className="bg-gray-800 rounded-lg p-6">
+          {/* Step 1: Service Type */}
+          {currentStep === 1 && (
+            <div>
+              <h2 className="text-xl font-semibold text-white mb-4">Selecciona el tipo de servicio</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {tiposServicio.map(tipo => (
+                  <div
+                    key={tipo.id}
+                    className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                      formData.tipo_servicio == tipo.id
+                        ? 'border-green-500 bg-green-500/10'
+                        : 'border-gray-600 hover:border-gray-500'
+                    }`}
+                    onClick={() => setFormData({...formData, tipo_servicio: tipo.id})}
+                  >
+                    <div className="flex items-center">
+                      <input
+                        type="radio"
+                        name="tipo_servicio"
+                        value={tipo.id}
+                        checked={formData.tipo_servicio == tipo.id}
+                        onChange={handleChange}
+                        className="sr-only"
+                      />
+                      <Settings className="w-8 h-8 text-green-400 mr-4" />
+                      <div>
+                        <h3 className="text-lg font-medium text-white">{tipo.nombre}</h3>
+                        <p className="text-sm text-gray-400 mt-1">{tipo.descripcion}</p>
+                        {tipo.precio_base && (
+                          <p className="text-green-400 font-semibold mt-2">
+                            Desde ${tipo.precio_base}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Duración estimada:</span>
-                      <span className="font-bold">{selectedTipo.duracion_estimada}h</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Details */}
+          {currentStep === 2 && (
+            <div>
+              <h2 className="text-xl font-semibold text-white mb-4">Detalles del servicio</h2>
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <FileText className="w-4 h-4 inline mr-2" />
+                    Descripción del servicio
+                  </label>
+                  <textarea
+                    name="descripcion"
+                    value={formData.descripcion}
+                    onChange={handleChange}
+                    rows={4}
+                    placeholder="Describe detalladamente el servicio que necesitas..."
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <MapPin className="w-4 h-4 inline mr-2" />
+                    Dirección del servicio
+                  </label>
+                  <input
+                    type="text"
+                    name="direccion_servicio"
+                    value={formData.direccion_servicio}
+                    onChange={handleChange}
+                    placeholder="Ingresa la dirección donde se realizará el servicio"
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <FileText className="w-4 h-4 inline mr-2" />
+                    Notas adicionales (opcional)
+                  </label>
+                  <textarea
+                    name="notas_adicionales"
+                    value={formData.notas_adicionales}
+                    onChange={handleChange}
+                    rows={3}
+                    placeholder="Información adicional que consideres importante..."
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Scheduling */}
+          {currentStep === 3 && (
+            <div>
+              <h2 className="text-xl font-semibold text-white mb-4">Programación</h2>
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <Calendar className="w-4 h-4 inline mr-2" />
+                    Fecha preferida
+                  </label>
+                  <input
+                    type="date"
+                    name="fecha_preferida"
+                    value={formData.fecha_preferida}
+                    onChange={handleChange}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
+                  <p className="text-sm text-gray-400 mt-2">
+                    <Clock className="w-4 h-4 inline mr-1" />
+                    Nos pondremos en contacto contigo para confirmar la disponibilidad
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: Confirmation */}
+          {currentStep === 4 && (
+            <div>
+              <h2 className="text-xl font-semibold text-white mb-4">Confirmar solicitud</h2>
+              <div className="space-y-4 bg-gray-700 p-4 rounded-lg">
+                <div className="flex items-center">
+                  <Settings className="w-5 h-5 text-green-400 mr-3" />
+                  <div>
+                    <span className="text-gray-300">Servicio: </span>
+                    <span className="text-white font-medium">
+                      {getSelectedServiceType()?.nombre}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-start">
+                  <FileText className="w-5 h-5 text-green-400 mr-3 mt-0.5" />
+                  <div>
+                    <span className="text-gray-300">Descripción: </span>
+                    <span className="text-white">{formData.descripcion}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center">
+                  <MapPin className="w-5 h-5 text-green-400 mr-3" />
+                  <div>
+                    <span className="text-gray-300">Dirección: </span>
+                    <span className="text-white">{formData.direccion_servicio}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center">
+                  <Calendar className="w-5 h-5 text-green-400 mr-3" />
+                  <div>
+                    <span className="text-gray-300">Fecha preferida: </span>
+                    <span className="text-white">{formData.fecha_preferida}</span>
+                  </div>
+                </div>
+
+                {formData.notas_adicionales && (
+                  <div className="flex items-start">
+                    <FileText className="w-5 h-5 text-green-400 mr-3 mt-0.5" />
+                    <div>
+                      <span className="text-gray-300">Notas: </span>
+                      <span className="text-white">{formData.notas_adicionales}</span>
                     </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                <div className="flex items-center">
+                  <AlertCircle className="w-5 h-5 text-blue-400 mr-3" />
+                  <div>
+                    <h4 className="text-blue-300 font-medium">¿Qué sigue?</h4>
+                    <p className="text-sm text-gray-300 mt-1">
+                      Revisaremos tu solicitud y nos pondremos en contacto contigo dentro de las próximas 24 horas para confirmar los detalles y programar el servicio.
+                    </p>
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Navigation Buttons */}
+          <div className="flex justify-between mt-8">
+            <button
+              onClick={handlePrevious}
+              disabled={currentStep === 1}
+              className={`px-4 py-2 rounded-lg ${
+                currentStep === 1
+                  ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                  : 'bg-gray-600 text-white hover:bg-gray-500'
+              }`}
+            >
+              Anterior
+            </button>
+
+            {currentStep < 4 ? (
+              <button
+                onClick={handleNext}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                Siguiente
+              </button>
+            ) : (
+              <button
+                onClick={handleSubmit}
+                disabled={submitting}
+                className={`px-6 py-2 rounded-lg transition-colors flex items-center ${
+                  submitting
+                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                    : 'bg-green-600 text-white hover:bg-green-700'
+                }`}
+              >
+                {submitting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4 mr-2" />
+                    Enviar Solicitud
+                  </>
+                )}
+              </button>
             )}
-
-            {/* Información importante */}
-            <div className="card bg-base-100 shadow-xl">
-              <div className="card-body">
-                <h3 className="card-title text-lg">Información Importante</h3>
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-start gap-2">
-                    <svg className="w-5 h-5 text-info mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                    </svg>
-                    <p>Te contactaremos en 24-48 horas para confirmar los detalles.</p>
-                  </div>
-                  
-                  <div className="flex items-start gap-2">
-                    <svg className="w-5 h-5 text-success mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                    <p>El precio final puede variar según la complejidad del trabajo.</p>
-                  </div>
-                  
-                  <div className="flex items-start gap-2">
-                    <svg className="w-5 h-5 text-warning mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                    </svg>
-                    <p>Asegúrate de proporcionar acceso fácil al área de trabajo.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Contacto */}
-            <div className="card bg-base-100 shadow-xl">
-              <div className="card-body">
-                <h3 className="card-title text-lg">¿Necesitas Ayuda?</h3>
-                <p className="text-gray-600 text-sm mb-4">
-                  Si tienes dudas sobre qué servicio necesitas, contáctanos.
-                </p>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <svg className="w-4 h-4 text-primary" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
-                    </svg>
-                    <span>+54 11 1234-5678</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <svg className="w-4 h-4 text-primary" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
-                      <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
-                    </svg>
-                    <span>info@eleden.com</span>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>

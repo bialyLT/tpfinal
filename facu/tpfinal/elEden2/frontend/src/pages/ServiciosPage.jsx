@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { serviciosService } from '../services';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
-import Loading from '../components/Loading';
+import { Calendar, Clock, CheckCircle, XCircle, Users, Filter, Search, Eye } from 'lucide-react';
 
 const ServiciosPage = () => {
   const [servicios, setServicios] = useState([]);
@@ -10,6 +10,8 @@ const ServiciosPage = () => {
   const [tiposServicio, setTiposServicio] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('solicitudes');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const { user } = useAuth();
 
   const isAdmin = user?.groups?.includes('Administradores');
@@ -27,9 +29,9 @@ const ServiciosPage = () => {
         serviciosService.getSolicitudes(),
         serviciosService.getTiposServicio()
       ]);
-      setServicios(serviciosData);
-      setSolicitudes(solicitudesData);
-      setTiposServicio(tiposData);
+      setServicios(serviciosData.results || []);
+      setSolicitudes(solicitudesData.results || []);
+      setTiposServicio(tiposData.results || []);
     } catch (error) {
       toast.error('Error al cargar los datos');
       console.error('Error fetching data:', error);
@@ -42,263 +44,190 @@ const ServiciosPage = () => {
     try {
       await serviciosService.updateServicio(servicioId, { estado: nuevoEstado });
       toast.success('Estado actualizado correctamente');
-      fetchData(); // Refresh data
+      fetchData();
     } catch (error) {
       toast.error('Error al actualizar el estado');
     }
   };
 
-  const getEstadoBadge = (estado) => {
-    const badges = {
-      'pendiente': 'badge-warning',
-      'confirmado': 'badge-info',
-      'en_progreso': 'badge-primary',
-      'completado': 'badge-success',
-      'cancelado': 'badge-error'
+  const getStatusColor = (status) => {
+    const colors = {
+      'pendiente': 'bg-yellow-500',
+      'en_curso': 'bg-blue-500',
+      'completado': 'bg-green-500',
+      'cancelado': 'bg-red-500',
+      'programado': 'bg-purple-500'
     };
-    return badges[estado] || 'badge-neutral';
+    return colors[status] || 'bg-gray-500';
   };
 
-  const getEstadoText = (estado) => {
-    const estados = {
-      'pendiente': 'Pendiente',
-      'confirmado': 'Confirmado',
-      'en_progreso': 'En Progreso',
-      'completado': 'Completado',
-      'cancelado': 'Cancelado'
-    };
-    return estados[estado] || estado;
-  };
+  const filteredData = activeTab === 'solicitudes' 
+    ? solicitudes.filter(item => 
+        item.titulo?.toLowerCase().includes(searchTerm.toLowerCase()) &&
+        (!statusFilter || item.estado === statusFilter)
+      )
+    : servicios.filter(item => 
+        item.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) &&
+        (!statusFilter || item.estado === statusFilter)
+      );
 
   if (loading) {
-    return <Loading message="Cargando servicios..." />;
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-400"></div>
+          <p className="text-gray-300 mt-4">Cargando servicios...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-base-200 p-4">
+    <div className="min-h-screen bg-gray-900 text-gray-300 p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            {isAdmin ? 'Gestión de Servicios' : isEmpleado ? 'Mis Servicios Asignados' : 'Mis Servicios'}
+          <h1 className="text-3xl font-bold text-white mb-2">
+            Gestión de Servicios
           </h1>
-          <p className="text-gray-600">
-            {isAdmin ? 'Administra todas las solicitudes y servicios' : 
-             isEmpleado ? 'Servicios que tienes asignados para realizar' :
-             'Historial y estado de tus servicios solicitados'}
+          <p className="text-gray-400">
+            {isAdmin ? 'Vista completa de todos los servicios' : 'Mis servicios asignados'}
           </p>
         </div>
 
-        {/* Tabs */}
-        <div className="tabs tabs-boxed mb-6">
-          <button 
-            className={`tab ${activeTab === 'solicitudes' ? 'tab-active' : ''}`}
-            onClick={() => setActiveTab('solicitudes')}
-          >
-            {isAdmin ? 'Solicitudes' : isEmpleado ? 'Asignados' : 'Mis Solicitudes'}
-          </button>
-          <button 
-            className={`tab ${activeTab === 'servicios' ? 'tab-active' : ''}`}
-            onClick={() => setActiveTab('servicios')}
-          >
-            {isAdmin ? 'Servicios Activos' : 'Historial'}
-          </button>
-          {isAdmin && (
-            <button 
-              className={`tab ${activeTab === 'tipos' ? 'tab-active' : ''}`}
-              onClick={() => setActiveTab('tipos')}
+        {/* Filters and Tabs */}
+        <div className="mb-6">
+          <div className="flex flex-col sm:flex-row gap-4 mb-4">
+            {/* Search */}
+            <div className="relative flex-1">
+              <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Buscar servicios..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              />
+            </div>
+
+            {/* Status Filter */}
+            <div className="relative">
+              <Filter className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="pl-10 pr-8 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              >
+                <option value="">Todos los estados</option>
+                <option value="pendiente">Pendiente</option>
+                <option value="en_curso">En Curso</option>
+                <option value="completado">Completado</option>
+                <option value="cancelado">Cancelado</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex space-x-1 bg-gray-800 p-1 rounded-lg">
+            <button
+              onClick={() => setActiveTab('solicitudes')}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                activeTab === 'solicitudes'
+                  ? 'bg-green-600 text-white'
+                  : 'text-gray-400 hover:text-white'
+              }`}
             >
-              Tipos de Servicio
+              Solicitudes ({solicitudes.length})
             </button>
-          )}
+            <button
+              onClick={() => setActiveTab('servicios')}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                activeTab === 'servicios'
+                  ? 'bg-green-600 text-white'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Servicios ({servicios.length})
+            </button>
+          </div>
         </div>
 
-        {/* Solicitudes Tab */}
-        {activeTab === 'solicitudes' && (
-          <div className="card bg-base-100 shadow-xl">
-            <div className="card-body">
-              <h2 className="card-title text-xl mb-4">
-                {isAdmin ? 'Solicitudes de Servicio' : isEmpleado ? 'Servicios Asignados' : 'Mis Solicitudes'}
-              </h2>
-              
-              {solicitudes.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="text-6xl mb-4">📋</div>
-                  <h3 className="text-xl font-bold text-gray-800">No hay solicitudes</h3>
-                  <p className="text-gray-600">Aún no hay solicitudes de servicio registradas.</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="table table-zebra w-full">
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        <th>Cliente</th>
-                        <th>Tipo de Servicio</th>
-                        <th>Fecha Solicitud</th>
-                        <th>Estado</th>
-                        <th>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {solicitudes.map(solicitud => (
-                        <tr key={solicitud.id}>
-                          <td className="font-bold">#{solicitud.id}</td>
-                          <td>
-                            <div>
-                              <div className="font-bold">{solicitud.cliente_nombre}</div>
-                              <div className="text-sm opacity-50">{solicitud.cliente_email}</div>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="badge badge-outline">
-                              {solicitud.tipo_servicio_nombre}
-                            </div>
-                          </td>
-                          <td>{new Date(solicitud.fecha_solicitud).toLocaleDateString()}</td>
-                          <td>
-                            <div className={`badge ${getEstadoBadge(solicitud.estado)}`}>
-                              {getEstadoText(solicitud.estado)}
-                            </div>
-                          </td>
-                          <td>
-                            <div className="dropdown dropdown-end">
-                              <div tabIndex={0} role="button" className="btn btn-ghost btn-xs">
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                  <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                                </svg>
-                              </div>
-                              <ul tabIndex={0} className="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-52">
-                                <li><a>Ver Detalles</a></li>
-                                {(isAdmin || isEmpleado) && solicitud.estado === 'pendiente' && (
-                                  <li><a onClick={() => handleUpdateEstado(solicitud.id, 'confirmado')}>Confirmar</a></li>
-                                )}
-                                {(isAdmin || isEmpleado) && solicitud.estado === 'confirmado' && (
-                                  <li><a onClick={() => handleUpdateEstado(solicitud.id, 'en_progreso')}>Iniciar</a></li>
-                                )}
-                                {(isAdmin || isEmpleado) && solicitud.estado === 'en_progreso' && (
-                                  <li><a onClick={() => handleUpdateEstado(solicitud.id, 'completado')}>Completar</a></li>
-                                )}
-                              </ul>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Servicios Tab */}
-        {activeTab === 'servicios' && (
-          <div className="card bg-base-100 shadow-xl">
-            <div className="card-body">
-              <h2 className="card-title text-xl mb-4">
-                {isAdmin ? 'Servicios Activos' : 'Historial de Servicios'}
-              </h2>
-              
-              {servicios.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="text-6xl mb-4">🛠️</div>
-                  <h3 className="text-xl font-bold text-gray-800">No hay servicios</h3>
-                  <p className="text-gray-600">No se encontraron servicios en el sistema.</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="table table-zebra w-full">
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        <th>Cliente</th>
-                        <th>Empleado</th>
-                        <th>Tipo</th>
-                        <th>Fecha</th>
-                        <th>Estado</th>
-                        <th>Costo</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {servicios.map(servicio => (
-                        <tr key={servicio.id}>
-                          <td className="font-bold">#{servicio.id}</td>
-                          <td>
-                            <div>
-                              <div className="font-bold">{servicio.cliente_nombre}</div>
-                              <div className="text-sm opacity-50">{servicio.cliente_email}</div>
-                            </div>
-                          </td>
-                          <td>
-                            {servicio.empleado_nombre ? (
-                              <div className="badge badge-success">{servicio.empleado_nombre}</div>
-                            ) : (
-                              <div className="badge badge-warning">Sin asignar</div>
-                            )}
-                          </td>
-                          <td>
-                            <div className="badge badge-outline">
-                              {servicio.tipo_nombre}
-                            </div>
-                          </td>
-                          <td>{new Date(servicio.fecha_programada).toLocaleDateString()}</td>
-                          <td>
-                            <div className={`badge ${getEstadoBadge(servicio.estado)}`}>
-                              {getEstadoText(servicio.estado)}
-                            </div>
-                          </td>
-                          <td className="font-bold">
-                            {servicio.costo_total ? `$${servicio.costo_total}` : '-'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Tipos de Servicio Tab (Solo Admin) */}
-        {activeTab === 'tipos' && isAdmin && (
-          <div className="card bg-base-100 shadow-xl">
-            <div className="card-body">
-              <h2 className="card-title text-xl mb-4">Tipos de Servicio</h2>
-              
-              {tiposServicio.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="text-6xl mb-4">⚙️</div>
-                  <h3 className="text-xl font-bold text-gray-800">No hay tipos de servicio</h3>
-                  <p className="text-gray-600">Configura los tipos de servicio disponibles.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {tiposServicio.map(tipo => (
-                    <div key={tipo.id} className="card bg-base-200 shadow-lg">
-                      <div className="card-body">
-                        <h3 className="card-title">{tipo.nombre}</h3>
-                        <p className="text-gray-600">{tipo.descripcion}</p>
-                        <div className="flex justify-between items-center mt-4">
-                          <div className="text-lg font-bold text-primary">
-                            ${tipo.precio_base}
-                          </div>
-                          <div className="badge badge-outline">
-                            {tipo.duracion_estimada}h
-                          </div>
+        {/* Content Table */}
+        <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left text-gray-400">
+              <thead className="text-xs text-gray-400 uppercase bg-gray-700">
+                <tr>
+                  <th scope="col" className="px-6 py-3">
+                    {activeTab === 'solicitudes' ? 'Solicitud' : 'Servicio'}
+                  </th>
+                  <th scope="col" className="px-6 py-3">Cliente</th>
+                  <th scope="col" className="px-6 py-3">Fecha</th>
+                  <th scope="col" className="px-6 py-3">Estado</th>
+                  <th scope="col" className="px-6 py-3">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredData.length > 0 ? (
+                  filteredData.map((item) => (
+                    <tr key={item.id} className="bg-gray-800 border-b border-gray-700 hover:bg-gray-600">
+                      <td className="px-6 py-4">
+                        <div>
+                          <p className="font-medium text-white">
+                            {activeTab === 'solicitudes' ? item.titulo : item.descripcion}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            #{activeTab === 'solicitudes' ? item.numero_solicitud : item.numero_servicio}
+                          </p>
                         </div>
-                        <div className="card-actions justify-end mt-4">
-                          <button className="btn btn-primary btn-sm">Editar</button>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center">
+                          <Users className="w-4 h-4 mr-2 text-gray-400" />
+                          {item.cliente?.username || 'N/A'}
                         </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {new Date(activeTab === 'solicitudes' ? item.fecha_solicitud : item.fecha_programada).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center">
+                          <div className={`h-2.5 w-2.5 rounded-full ${getStatusColor(item.estado)} mr-2`}></div>
+                          <span className="capitalize">{item.estado?.replace('_', ' ')}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center space-x-2">
+                          <button className="p-1 text-gray-400 hover:text-white">
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          {(isAdmin || isEmpleado) && (
+                            <select
+                              value={item.estado}
+                              onChange={(e) => handleUpdateEstado(item.id, e.target.value)}
+                              className="text-xs bg-gray-700 border border-gray-600 rounded px-2 py-1"
+                            >
+                              <option value="pendiente">Pendiente</option>
+                              <option value="en_curso">En Curso</option>
+                              <option value="completado">Completado</option>
+                              <option value="cancelado">Cancelado</option>
+                            </select>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="5" className="px-6 py-8 text-center text-gray-400">
+                      No se encontraron {activeTab} para mostrar
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

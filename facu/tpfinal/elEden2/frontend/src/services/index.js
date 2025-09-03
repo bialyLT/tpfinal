@@ -34,6 +34,12 @@ export const productosService = {
     return response.data;
   },
   
+  // Alias para compatibilidad
+  getProductos: async (params = {}) => {
+    const response = await api.get('/productos/', { params });
+    return response.data;
+  },
+  
   getById: async (id) => {
     const response = await api.get(`/productos/${id}/`);
     return response.data;

@@ -71,19 +71,29 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (credentials) => {
+  const login = async (email, password) => {
     dispatch({ type: 'LOGIN_START' });
     try {
-      const response = await authService.login(credentials);
+      console.log('🔐 Iniciando login con email:', email);
+      
+      // Enviar email y password directamente
+      const response = await authService.login({ email, password });
+      console.log('✅ Login response:', response);
+      
       localStorage.setItem('accessToken', response.access);
       localStorage.setItem('refreshToken', response.refresh);
       
+      console.log('📱 Obteniendo datos del usuario...');
       const user = await authService.getCurrentUser();
+      console.log('👤 Usuario obtenido:', user);
+      
       dispatch({ type: 'LOGIN_SUCCESS', payload: user });
       toast.success('¡Bienvenido!');
       return { success: true };
     } catch (error) {
-      const message = error.response?.data?.message || 'Error al iniciar sesión';
+      console.error('❌ Error en login:', error);
+      console.error('❌ Error response:', error.response?.data);
+      const message = error.response?.data?.detail || error.response?.data?.message || 'Error al iniciar sesión';
       dispatch({ type: 'LOGIN_FAILURE', payload: message });
       toast.error(message);
       return { success: false, error: message };
@@ -106,10 +116,44 @@ export const AuthProvider = ({ children }) => {
     dispatch({ type: 'LOGIN_START' });
     try {
       const response = await authService.register(userData);
-      toast.success('Usuario registrado exitosamente. Ya puedes iniciar sesión.');
+      
+      // Si el registro incluye tokens, iniciar sesión automáticamente
+      if (response.access && response.refresh && response.user) {
+        localStorage.setItem('accessToken', response.access);
+        localStorage.setItem('refreshToken', response.refresh);
+        dispatch({ type: 'LOGIN_SUCCESS', payload: response.user });
+        toast.success('¡Registro exitoso! Bienvenido a El Edén.');
+      } else {
+        // Fallback si no se incluyen tokens
+        toast.success('Usuario registrado exitosamente. Ya puedes iniciar sesión.');
+        dispatch({ type: 'SET_LOADING', payload: false });
+      }
+      
       return { success: true };
     } catch (error) {
-      const message = error.response?.data?.message || 'Error al registrar usuario';
+      console.error('Error en registro:', error);
+      
+      // Mejorar el manejo de errores
+      let message = 'Error al registrar usuario';
+      if (error.response?.data) {
+        // Si hay errores específicos de campos
+        if (typeof error.response.data === 'object' && !error.response.data.message) {
+          const fieldErrors = [];
+          Object.entries(error.response.data).forEach(([field, errors]) => {
+            if (Array.isArray(errors)) {
+              fieldErrors.push(...errors);
+            } else {
+              fieldErrors.push(errors);
+            }
+          });
+          if (fieldErrors.length > 0) {
+            message = fieldErrors.join('. ');
+          }
+        } else {
+          message = error.response.data.message || error.response.data.detail || message;
+        }
+      }
+      
       dispatch({ type: 'LOGIN_FAILURE', payload: message });
       toast.error(message);
       return { success: false, error: message };

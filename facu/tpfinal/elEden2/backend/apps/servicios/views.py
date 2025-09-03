@@ -123,24 +123,25 @@ class PropuestaDiseñoViewSet(viewsets.ModelViewSet):
 
 
 class ServicioViewSet(viewsets.ModelViewSet):
-    queryset = Servicio.objects.select_related('solicitud__cliente', 'diseñador__perfil')
+    queryset = Servicio.objects.select_related('solicitud__cliente', 'propuesta_aprobada__diseñador', 'cliente')
     serializer_class = ServicioSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['estado', 'solicitud', 'diseñador']
-    search_fields = ['descripcion', 'solicitud__titulo']
-    ordering_fields = ['fecha_inicio', 'fecha_fin_estimada', 'costo_total']
-    ordering = ['-fecha_inicio']
+    filterset_fields = ['estado', 'solicitud', 'cliente']
+    search_fields = ['descripcion', 'solicitud__titulo', 'numero_servicio']
+    ordering_fields = ['fecha_programada', 'fecha_inicio_real', 'fecha_creacion']
+    ordering = ['-fecha_programada']
 
     def get_queryset(self):
         queryset = super().get_queryset()
         user = self.request.user
 
         # Si es cliente, solo ver sus propios servicios
-        if hasattr(user, 'perfil') and user.perfil.tipo_usuario == 'cliente':
-            return queryset.filter(solicitud__cliente=user)
-        # Si es diseñador, ver servicios asignados
-        elif hasattr(user, 'perfil') and user.perfil.tipo_usuario == 'diseñador':
-            return queryset.filter(diseñador=user)
+        if hasattr(user, 'perfilusuario') and user.perfilusuario.persona:
+            # Filtrar por cliente directamente
+            return queryset.filter(cliente=user)
+        # Si es diseñador, ver servicios donde sea el diseñador de la propuesta aprobada
+        elif user.groups.filter(name='Diseñadores').exists():
+            return queryset.filter(propuesta_aprobada__diseñador=user)
         return queryset
 
     @action(detail=True, methods=['post'])

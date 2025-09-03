@@ -1,169 +1,132 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { ArrowUp, ArrowDown, Users, Briefcase, DollarSign, FileText, Calendar, BarChart, Wrench, User, Star, CheckCircle, Clock, XCircle, Leaf } from 'lucide-react';
+
+const StatCard = ({ title, value, change, icon }) => {
+  const isPositive = change && change.startsWith('+');
+  const ChangeIcon = isPositive ? ArrowUp : ArrowDown;
+  const changeColor = isPositive ? 'text-green-400' : 'text-red-400';
+
+  return (
+    <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-sm font-medium text-gray-400">{title}</span>
+        {icon}
+      </div>
+      <div className="flex items-baseline">
+        <p className="text-3xl font-semibold text-white">{value}</p>
+      </div>
+      {change && (
+        <div className="flex items-center text-sm mt-2">
+          <ChangeIcon className={`w-4 h-4 mr-1 ${changeColor}`} />
+          <span className={changeColor}>{change.substring(1)}</span>
+          <span className="text-gray-500 ml-1">desde la semana pasada</span>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const DashboardPage = () => {
   const { user } = useAuth();
 
   const getWelcomeMessage = () => {
-    if (user?.groups?.includes('Administradores')) {
-      return 'Panel de Administración';
-    } else if (user?.groups?.includes('Empleados')) {
-      return 'Panel de Empleado';
-    } else {
-      return 'Mi Dashboard';
-    }
-  };
-
-  const getQuickActions = () => {
-    if (user?.groups?.includes('Administradores')) {
-      return [
-        { title: 'Gestionar Usuarios', description: 'Administrar cuentas de usuarios', icon: '👥', href: '/admin/users' },
-        { title: 'Tipos de Servicio', description: 'Configurar servicios disponibles', icon: '🛠️', href: '/admin/tipos-servicio' },
-        { title: 'Productos', description: 'Gestionar catálogo de productos', icon: '🌱', href: '/productos' },
-        { title: 'Reportes', description: 'Ver estadísticas y reportes', icon: '📊', href: '/admin/reportes' }
-      ];
-    } else if (user?.groups?.includes('Empleados')) {
-      return [
-        { title: 'Solicitudes de Servicio', description: 'Ver y gestionar solicitudes', icon: '📋', href: '/servicios' },
-        { title: 'Encuestas', description: 'Revisar encuestas completadas', icon: '📝', href: '/encuestas' },
-        { title: 'Mi Calendario', description: 'Servicios programados', icon: '📅', href: '/calendario' },
-        { title: 'Productos', description: 'Consultar catálogo', icon: '🌱', href: '/productos' }
-      ];
-    } else {
-      return [
-        { title: 'Solicitar Servicio', description: 'Pedir un nuevo servicio', icon: '🌿', href: '/solicitar-servicio' },
-        { title: 'Mis Servicios', description: 'Ver historial de servicios', icon: '📋', href: '/mis-servicios' },
-        { title: 'Productos', description: 'Explorar productos', icon: '🌱', href: '/productos' },
-        { title: 'Mi Perfil', description: 'Editar información personal', icon: '👤', href: '/perfil' }
-      ];
-    }
+    if (user?.groups?.includes('Administradores')) return 'Panel de Administración';
+    if (user?.groups?.includes('Empleados')) return 'Panel de Empleado';
+    return 'Mi Dashboard';
   };
 
   const getStats = () => {
     if (user?.groups?.includes('Administradores')) {
       return [
-        { title: 'Total Usuarios', value: '127', change: '+12%', color: 'text-primary' },
-        { title: 'Servicios Activos', value: '23', change: '+5%', color: 'text-success' },
-        { title: 'Ingresos del Mes', value: '$45,230', change: '+18%', color: 'text-accent' },
-        { title: 'Encuestas Completadas', value: '89', change: '+7%', color: 'text-info' }
-      ];
-    } else if (user?.groups?.includes('Empleados')) {
-      return [
-        { title: 'Servicios Asignados', value: '8', change: '+2', color: 'text-primary' },
-        { title: 'Completados Hoy', value: '3', change: '+1', color: 'text-success' },
-        { title: 'Pendientes', value: '5', change: '0', color: 'text-warning' },
-        { title: 'Calificación Promedio', value: '4.8', change: '+0.2', color: 'text-accent' }
-      ];
-    } else {
-      return [
-        { title: 'Servicios Solicitados', value: '12', change: '+2', color: 'text-primary' },
-        { title: 'Servicios Completados', value: '8', change: '+1', color: 'text-success' },
-        { title: 'En Progreso', value: '2', change: '0', color: 'text-info' },
-        { title: 'Próxima Visita', value: 'Mañana', change: '', color: 'text-accent' }
+        { title: 'Total Usuarios', value: '127', change: '+12%', icon: <Users className="w-5 h-5 text-gray-400" /> },
+        { title: 'Servicios Activos', value: '23', change: '+5%', icon: <Briefcase className="w-5 h-5 text-gray-400" /> },
+        { title: 'Ingresos del Mes', value: '$45,230', change: '+18%', icon: <DollarSign className="w-5 h-5 text-gray-400" /> },
+        { title: 'Encuestas Completadas', value: '89', change: '+7%', icon: <FileText className="w-5 h-5 text-gray-400" /> }
       ];
     }
+    if (user?.groups?.includes('Empleados')) {
+      return [
+        { title: 'Servicios Asignados', value: '8', change: '+2', icon: <Briefcase className="w-5 h-5 text-gray-400" /> },
+        { title: 'Completados Hoy', value: '3', change: '+1', icon: <CheckCircle className="w-5 h-5 text-gray-400" /> },
+        { title: 'Pendientes', value: '5', change: '0', icon: <Clock className="w-5 h-5 text-gray-400" /> },
+        { title: 'Calificación Promedio', value: '4.8', change: '+0.2', icon: <Star className="w-5 h-5 text-gray-400" /> }
+      ];
+    }
+    return [
+      { title: 'Servicios Solicitados', value: '12', change: '+2', icon: <Briefcase className="w-5 h-5 text-gray-400" /> },
+      { title: 'Servicios Completados', value: '8', change: '+1', icon: <CheckCircle className="w-5 h-5 text-gray-400" /> },
+      { title: 'En Progreso', value: '2', change: '0', icon: <Clock className="w-5 h-5 text-gray-400" /> },
+      { title: 'Próxima Visita', value: 'Mañana', change: '', icon: <Calendar className="w-5 h-5 text-gray-400" /> }
+    ];
   };
 
+  const recentActivity = [
+    { id: 'SER-001', date: '2025-09-03', customer: 'Leslie Alexander', service: 'Poda de árboles', status: 'Completado', statusColor: 'bg-green-500' },
+    { id: 'SER-002', date: '2025-09-02', customer: 'Michael Foster', service: 'Diseño de jardín', status: 'En Progreso', statusColor: 'bg-yellow-500' },
+    { id: 'SER-003', date: '2025-09-01', customer: 'Dries Vincent', service: 'Mantenimiento césped', status: 'Completado', statusColor: 'bg-green-500' },
+    { id: 'SER-004', date: '2025-08-30', customer: 'Lindsay Walton', service: 'Instalación de riego', status: 'Pendiente', statusColor: 'bg-blue-500' },
+    { id: 'SER-005', date: '2025-08-29', customer: 'Tom Cook', service: 'Control de plagas', status: 'Cancelado', statusColor: 'bg-red-500' },
+  ];
+
   return (
-    <div className="min-h-screen bg-base-200 p-4">
+    <div className="min-h-screen bg-gray-900 text-gray-300 p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            ¡Hola, {user?.first_name || user?.username}!
+        <header className="mb-8">
+          <h1 className="text-3xl font-bold text-white mb-2">
+            ¡Buenas tardes, {user?.first_name || user?.username}!
           </h1>
-          <p className="text-xl text-gray-600">{getWelcomeMessage()}</p>
-        </div>
+          <p className="text-xl text-gray-400">{getWelcomeMessage()}</p>
+        </header>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {getStats().map((stat, index) => (
-            <div key={index} className="card bg-base-100 shadow-xl">
-              <div className="card-body">
-                <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">
-                  {stat.title}
-                </h3>
-                <div className="flex items-baseline">
-                  <p className={`text-2xl font-semibold ${stat.color}`}>
-                    {stat.value}
-                  </p>
-                  {stat.change && (
-                    <p className={`ml-2 text-sm font-medium ${
-                      stat.change.startsWith('+') ? 'text-success' : 'text-error'
-                    }`}>
-                      {stat.change}
-                    </p>
-                  )}
-                </div>
-              </div>
+        <main>
+          <div className="mb-10">
+            <h2 className="text-lg font-semibold text-white mb-4">Resumen General</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {getStats().map((stat, index) => (
+                <StatCard key={index} {...stat} />
+              ))}
             </div>
-          ))}
-        </div>
-
-        {/* Quick Actions */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Acciones Rápidas</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {getQuickActions().map((action, index) => (
-              <div key={index} className="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow">
-                <div className="card-body">
-                  <div className="text-4xl mb-4">{action.icon}</div>
-                  <h3 className="card-title text-lg">{action.title}</h3>
-                  <p className="text-gray-600 flex-grow">{action.description}</p>
-                  <div className="card-actions justify-end">
-                    <Link to={action.href} className="btn btn-primary btn-sm">
-                      Ir
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            ))}
           </div>
-        </div>
 
-        {/* Recent Activity */}
-        <div className="card bg-base-100 shadow-xl">
-          <div className="card-body">
-            <h2 className="card-title text-xl mb-4">Actividad Reciente</h2>
-            <div className="space-y-4">
-              <div className="flex items-center gap-4 p-4 bg-base-200 rounded-lg">
-                <div className="w-10 h-10 bg-success rounded-full flex items-center justify-center">
-                  <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="flex-grow">
-                  <p className="font-medium">Servicio de poda completado</p>
-                  <p className="text-sm text-gray-500">Hace 2 horas</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4 p-4 bg-base-200 rounded-lg">
-                <div className="w-10 h-10 bg-info rounded-full flex items-center justify-center">
-                  <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
-                  </svg>
-                </div>
-                <div className="flex-grow">
-                  <p className="font-medium">Nueva solicitud de servicio</p>
-                  <p className="text-sm text-gray-500">Hace 1 día</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4 p-4 bg-base-200 rounded-lg">
-                <div className="w-10 h-10 bg-warning rounded-full flex items-center justify-center">
-                  <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="flex-grow">
-                  <p className="font-medium">Encuesta de satisfacción enviada</p>
-                  <p className="text-sm text-gray-500">Hace 2 días</p>
-                </div>
+          <div>
+            <h2 className="text-lg font-semibold text-white mb-4">Actividad Reciente</h2>
+            <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left text-gray-400">
+                  <thead className="text-xs text-gray-400 uppercase bg-gray-700">
+                    <tr>
+                      <th scope="col" className="px-6 py-3">Nro. Servicio</th>
+                      <th scope="col" className="px-6 py-3">Fecha</th>
+                      <th scope="col" className="px-6 py-3">Cliente</th>
+                      <th scope="col" className="px-6 py-3">Servicio</th>
+                      <th scope="col" className="px-6 py-3">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recentActivity.map((activity) => (
+                      <tr key={activity.id} className="bg-gray-800 border-b border-gray-700 hover:bg-gray-600">
+                        <th scope="row" className="px-6 py-4 font-medium text-white whitespace-nowrap">
+                          {activity.id}
+                        </th>
+                        <td className="px-6 py-4">{activity.date}</td>
+                        <td className="px-6 py-4">{activity.customer}</td>
+                        <td className="px-6 py-4">{activity.service}</td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center">
+                            <div className={`h-2.5 w-2.5 rounded-full ${activity.statusColor} mr-2`}></div>
+                            {activity.status}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
-        </div>
+        </main>
       </div>
     </div>
   );

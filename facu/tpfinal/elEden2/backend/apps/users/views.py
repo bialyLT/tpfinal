@@ -6,6 +6,11 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from django.db.models import Q, Sum, Count
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.views import APIView
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.tokens import RefreshToken
+import logging
 
 from .models import (
     Persona, Rol, Pago, DetallePago, 
@@ -15,7 +20,8 @@ from .serializers import (
     PersonaSerializer, UsuarioSerializer, UsuarioListSerializer,
     RolSerializer, PagoSerializer, PagoListSerializer,
     MetodoPagoSerializer, HistorialAccesoSerializer,
-    ConfiguracionUsuarioSerializer, CrearUsuarioSerializer
+    ConfiguracionUsuarioSerializer, CrearUsuarioSerializer,
+    PublicUserSerializer, PublicRegisterSerializer, EmailTokenObtainPairSerializer
 )
 
 
@@ -151,6 +157,91 @@ class MetodoPagoViewSet(viewsets.ModelViewSet):
         metodos = self.get_queryset().filter(activo=True)
         serializer = self.get_serializer(metodos, many=True)
         return Response(serializer.data)
+
+
+# =============================
+# Endpoints de Autenticación
+# =============================
+
+class LoginView(TokenObtainPairView):
+    permission_classes = [AllowAny]
+    serializer_class = EmailTokenObtainPairSerializer
+
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        if response.status_code == 200:
+            try:
+                # Adjuntar datos de usuario mínimos
+                email = request.data.get('email')
+                user = User.objects.get(email=email)
+                response.data['user'] = PublicUserSerializer(user).data
+            except User.DoesNotExist:
+                pass
+        return response
+
+
+class RegisterPublicView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        logger = logging.getLogger('apps.users')
+        # Copiar payload y ocultar contraseñas
+        payload = dict(request.data)
+        for k in ['password', 'password2']:
+            if k in payload:
+                payload[k] = '***'
+        logger.debug(f"/auth/register payload: {payload}")
+
+        serializer = PublicRegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                'message': 'Usuario creado exitosamente',
+                'user': PublicUserSerializer(user).data,
+                'access': str(refresh.access_token),
+                'refresh': str(refresh)
+            }, status=status.HTTP_201_CREATED)
+        logger.debug({ 'register_errors': serializer.errors })
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(PublicUserSerializer(request.user).data)
+
+    def put(self, request):
+        serializer = PublicUserSerializer(request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        refresh_token = request.data.get('refresh')
+        if not refresh_token:
+            return Response({'error': 'Refresh token es requerido'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            # Log para debugging
+            import logging
+            logger = logging.getLogger('apps.users')
+            logger.debug(f"/auth/logout refresh token length: {len(refresh_token) if refresh_token else 'None'}")
+            
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response({'message': 'Sesión cerrada exitosamente'})
+        except Exception as e:
+            # Log más específico del error
+            import logging
+            logger = logging.getLogger('apps.users')
+            logger.debug(f"/auth/logout error: {type(e).__name__}: {str(e)}")
+            return Response({'error': 'Token inválido'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class PagoViewSet(viewsets.ModelViewSet):

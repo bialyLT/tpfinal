@@ -6,9 +6,9 @@ import Navbar from './components/Navbar';
 import Loading from './components/Loading';
 
 // Pages
-import HomePage from './pages/HomePage';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
+import HomePage from './pages/home/HomePage';
+import LoginPage from './pages/registro/LoginPage';
+import RegisterPage from './pages/registro/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import ProductosPage from './pages/ProductosPage';
 import ServiciosPage from './pages/ServiciosPage';

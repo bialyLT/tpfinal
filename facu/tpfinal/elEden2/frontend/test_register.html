@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Registro</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #10b981;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #059669;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+        .success {
+            background-color: #d1fae5;
+            color: #047857;
+            border: 1px solid #10b981;
+        }
+        .error {
+            background-color: #fee2e2;
+            color: #dc2626;
+            border: 1px solid #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test de Registro - El Edén</h1>
+    
+    <form id="registerForm">
+        <div class="form-group">
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" value="usuarioprueba" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" id="email" name="email" value="usuario@prueba.com" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" value="contraseña123" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="password2">Confirmar Password:</label>
+            <input type="password" id="password2" name="password2" value="contraseña123" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="first_name">Nombre:</label>
+            <input type="text" id="first_name" name="first_name" value="Usuario" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="last_name">Apellido:</label>
+            <input type="text" id="last_name" name="last_name" value="Prueba" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="telefono">Teléfono (opcional):</label>
+            <input type="tel" id="telefono" name="telefono" value="+54 9 11 1234-5678">
+        </div>
+        
+        <div class="form-group">
+            <label for="direccion">Dirección (opcional):</label>
+            <textarea id="direccion" name="direccion">Calle Falsa 123, Buenos Aires</textarea>
+        </div>
+        
+        <button type="submit">Registrar</button>
+    </form>
+    
+    <div id="result"></div>
+
+    <script>
+        document.getElementById('registerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData.entries());
+            
+            const resultDiv = document.getElementById('result');
+            resultDiv.textContent = 'Enviando registro...';
+            resultDiv.className = '';
+            
+            try {
+                const response = await fetch('http://localhost:8000/api/v1/auth/register/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.textContent = `¡Éxito! Registro completado.\n\n` + 
+                        `Response: ${JSON.stringify(result, null, 2)}`;
+                    resultDiv.className = 'success';
+                    
+                    // Probar también el token
+                    if (result.access) {
+                        try {
+                            const userResponse = await fetch('http://localhost:8000/api/v1/auth/user/', {
+                                headers: {
+                                    'Authorization': `Bearer ${result.access}`,
+                                }
+                            });
+                            const userData = await userResponse.json();
+                            resultDiv.textContent += `\n\nDatos del usuario:\n${JSON.stringify(userData, null, 2)}`;
+                        } catch (userError) {
+                            resultDiv.textContent += `\n\nError al obtener datos del usuario: ${userError.message}`;
+                        }
+                    }
+                } else {
+                    resultDiv.textContent = `Error ${response.status}: ${response.statusText}\n\n` +
+                        `Response: ${JSON.stringify(result, null, 2)}`;
+                    resultDiv.className = 'error';
+                }
+            } catch (error) {
+                resultDiv.textContent = `Error de red: ${error.message}`;
+                resultDiv.className = 'error';
+            }
+        });
+    </script>
+</body>
+</html>

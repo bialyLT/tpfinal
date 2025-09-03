@@ -15,5 +15,4 @@ urlpatterns = [
     
     # Custom API endpoints
     path('health/', views.HealthCheckView.as_view(), name='health-check'),
-    
 ]

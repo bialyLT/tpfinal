@@ -1,0 +1,10 @@
+{
+  "username": "maria2024",
+  "email": "maria@example.com",
+  "password": "MiClaveSegura123",
+  "password2": "MiClaveSegura123", 
+  "first_name": "María",
+  "last_name": "García",
+  "telefono": "+54 9 11 5678-9012",
+  "direccion": "Avenida Corrientes 1234"
+}

@@ -1,5 +1,7 @@
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import Group, User
+from django.contrib.auth import authenticate
 from .models import (
     Persona, Rol, Pago, DetallePago, 
     MetodoPago, HistorialAcceso, ConfiguracionUsuario, PerfilUsuario
@@ -202,4 +204,91 @@ class CrearUsuarioSerializer(serializers.ModelSerializer):
         # Crear configuración por defecto
         ConfiguracionUsuario.objects.create(user=user)
         
+        return user
+
+# =============================
+# Serializers de Autenticación
+# =============================
+
+class PublicUserSerializer(serializers.ModelSerializer):
+    """Serializer compacto de usuario para respuestas de auth."""
+    groups = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'groups', 'date_joined']
+        read_only_fields = ['id', 'date_joined']
+
+    def get_groups(self, obj):
+        return list(obj.groups.values_list('name', flat=True))
+
+
+class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """Serializer personalizado para permitir login con email"""
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Cambiar el campo username por email
+        self.fields['email'] = serializers.EmailField()
+        del self.fields['username']
+    
+    def validate(self, attrs):
+        # Buscar usuario por email
+        email = attrs.get('email')
+        password = attrs.get('password')
+        
+        if email and password:
+            try:
+                user = User.objects.get(email=email)
+                # Verificar la contraseña
+                if user.check_password(password):
+                    # Simular que se envió el username para el serializer padre
+                    attrs['username'] = user.username
+                    del attrs['email']  # Remover email
+                    return super().validate(attrs)
+                else:
+                    raise serializers.ValidationError('No se puede iniciar sesión con las credenciales proporcionadas.')
+            except User.DoesNotExist:
+                raise serializers.ValidationError('No se puede iniciar sesión con las credenciales proporcionadas.')
+        
+        raise serializers.ValidationError('Email y contraseña son requeridos.')
+
+
+class PublicRegisterSerializer(serializers.ModelSerializer):
+    """Registro público básico sin requerir Persona."""
+    password2 = serializers.CharField(write_only=True)
+    # Campos extra que llegan del frontend; se ignoran por ahora
+    telefono = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    direccion = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'password', 'password2', 'first_name', 'last_name', 'telefono', 'direccion']
+        extra_kwargs = {
+            'password': { 'write_only': True }
+        }
+
+    def validate(self, attrs):
+        if attrs.get('password') != attrs.get('password2'):
+            raise serializers.ValidationError({ 'password': 'Las contraseñas no coinciden.' })
+        return attrs
+
+    def create(self, validated_data):
+        # Remover campos no pertenecientes al modelo o de validación
+        validated_data.pop('password2', None)
+        validated_data.pop('telefono', None)
+        validated_data.pop('direccion', None)
+
+        password = validated_data.pop('password')
+        user = User.objects.create_user(password=password, **validated_data)
+
+        # Agregar al grupo Clientes si existe
+        try:
+            clientes_group, _ = Group.objects.get_or_create(name='Clientes')
+            user.groups.add(clientes_group)
+        except Exception:
+            pass
+
+        # Crear configuración por defecto si aplica
+        ConfiguracionUsuario.objects.get_or_create(user=user)
         return user

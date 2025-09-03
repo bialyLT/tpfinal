@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { productosService } from '../services';
 import { toast } from 'react-hot-toast';
-import Loading from '../components/Loading';
+import { 
+  ShoppingCart, 
+  Search, 
+  Filter, 
+  Package, 
+  DollarSign, 
+  Star, 
+  Eye,
+  Heart,
+  Grid,
+  List
+} from 'lucide-react';
 
 const ProductosPage = () => {
   const [productos, setProductos] = useState([]);
@@ -9,6 +20,8 @@ const ProductosPage = () => {
   const [loading, setLoading] = useState(true);
   const [selectedCategoria, setSelectedCategoria] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState('grid');
+  const [priceRange, setPriceRange] = useState({ min: '', max: '' });
 
   useEffect(() => {
     fetchData();
@@ -35,150 +48,234 @@ const ProductosPage = () => {
     const matchesSearch = producto.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          producto.descripcion?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategoria = !selectedCategoria || producto.categoria === selectedCategoria;
-    return matchesSearch && matchesCategoria;
+    const matchesPrice = (!priceRange.min || producto.precio >= priceRange.min) &&
+                        (!priceRange.max || producto.precio <= priceRange.max);
+    return matchesSearch && matchesCategoria && matchesPrice;
   });
 
   if (loading) {
-    return <Loading message="Cargando productos..." />;
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-400"></div>
+          <p className="text-gray-300 mt-4">Cargando productos...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-base-200 p-4">
+    <div className="min-h-screen bg-gray-900 text-gray-300 p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Catálogo de Productos</h1>
-          <p className="text-gray-600">Encuentra productos para el cuidado de tu jardín</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-white mb-2 flex items-center">
+                <Package className="w-8 h-8 mr-3 text-green-400" />
+                Catálogo de Productos
+              </h1>
+              <p className="text-gray-400">Descubre nuestros productos de jardinería</p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-2 rounded-lg ${viewMode === 'grid' ? 'bg-green-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+              >
+                <Grid className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-2 rounded-lg ${viewMode === 'list' ? 'bg-green-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+              >
+                <List className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Filters */}
-        <div className="card bg-base-100 shadow-xl mb-8">
-          <div className="card-body">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text">Buscar productos</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Buscar por nombre o descripción..."
-                  className="input input-bordered w-full"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
+        <div className="mb-6 bg-gray-800 p-4 rounded-lg">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Search */}
+            <div className="relative">
+              <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Buscar productos..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              />
+            </div>
 
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text">Filtrar por categoría</span>
-                </label>
-                <select
-                  className="select select-bordered w-full"
-                  value={selectedCategoria}
-                  onChange={(e) => setSelectedCategoria(e.target.value)}
-                >
-                  <option value="">Todas las categorías</option>
-                  {categorias.map(categoria => (
-                    <option key={categoria.id} value={categoria.id}>
-                      {categoria.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {/* Category Filter */}
+            <div className="relative">
+              <Filter className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <select
+                value={selectedCategoria}
+                onChange={(e) => setSelectedCategoria(e.target.value)}
+                className="w-full pl-10 pr-8 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              >
+                <option value="">Todas las categorías</option>
+                {categorias.map(categoria => (
+                  <option key={categoria.id} value={categoria.id}>
+                    {categoria.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Price Range */}
+            <div className="flex space-x-2">
+              <input
+                type="number"
+                placeholder="Precio mín."
+                value={priceRange.min}
+                onChange={(e) => setPriceRange({...priceRange, min: e.target.value})}
+                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              />
+              <input
+                type="number"
+                placeholder="Precio máx."
+                value={priceRange.max}
+                onChange={(e) => setPriceRange({...priceRange, max: e.target.value})}
+                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              />
+            </div>
+
+            {/* Results Count */}
+            <div className="flex items-center justify-end">
+              <span className="text-sm text-gray-400">
+                {filteredProductos.length} producto{filteredProductos.length !== 1 ? 's' : ''} encontrado{filteredProductos.length !== 1 ? 's' : ''}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Products Grid */}
-        {filteredProductos.length === 0 ? (
-          <div className="card bg-base-100 shadow-xl">
-            <div className="card-body text-center">
-              <div className="text-6xl mb-4">🌱</div>
-              <h3 className="text-xl font-bold text-gray-800">No hay productos disponibles</h3>
-              <p className="text-gray-600">
-                {searchTerm || selectedCategoria 
-                  ? 'No se encontraron productos con los filtros aplicados.'
-                  : 'Aún no hay productos registrados en el sistema.'
-                }
-              </p>
-            </div>
-          </div>
-        ) : (
+        {/* Products Grid/List */}
+        {viewMode === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredProductos.map(producto => (
-              <div key={producto.id} className="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow">
-                <figure className="px-6 pt-6">
+              <div key={producto.id} className="bg-gray-800 rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
+                {/* Product Image */}
+                <div className="h-48 bg-gray-700 relative group">
                   {producto.imagen ? (
-                    <img 
-                      src={producto.imagen} 
+                    <img
+                      src={producto.imagen}
                       alt={producto.nombre}
-                      className="rounded-xl h-48 w-full object-cover"
+                      className="w-full h-full object-cover"
                     />
                   ) : (
-                    <div className="bg-base-200 rounded-xl h-48 w-full flex items-center justify-center">
-                      <svg className="w-16 h-16 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                      </svg>
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Package className="w-16 h-16 text-gray-500" />
                     </div>
                   )}
-                </figure>
-                
-                <div className="card-body">
-                  <h3 className="card-title text-lg">{producto.nombre}</h3>
-                  
-                  {producto.descripcion && (
-                    <p className="text-gray-600 text-sm line-clamp-3">
-                      {producto.descripcion}
-                    </p>
-                  )}
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button className="p-2 bg-black/50 rounded-full text-white hover:bg-black/70">
+                      <Heart className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
 
-                  <div className="flex justify-between items-center mt-2">
-                    <div className="badge badge-outline">
-                      {categorias.find(c => c.id === producto.categoria)?.nombre || 'Sin categoría'}
+                {/* Product Info */}
+                <div className="p-4">
+                  <h3 className="text-lg font-semibold text-white mb-2 line-clamp-2">
+                    {producto.nombre}
+                  </h3>
+                  
+                  <p className="text-gray-400 text-sm mb-3 line-clamp-2">
+                    {producto.descripcion}
+                  </p>
+
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center text-yellow-400">
+                      <Star className="w-4 h-4 fill-current" />
+                      <span className="ml-1 text-sm">4.5</span>
                     </div>
-                    
-                    {producto.precio && (
-                      <div className="text-lg font-bold text-primary">
-                        ${producto.precio}
-                      </div>
-                    )}
+                    <div className="text-sm text-gray-400">
+                      Stock: {producto.stock || 'N/A'}
+                    </div>
                   </div>
 
-                  {producto.stock !== null && (
-                    <div className="mt-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-500">Stock:</span>
-                        <span className={`badge ${
-                          producto.stock > 10 ? 'badge-success' : 
-                          producto.stock > 0 ? 'badge-warning' : 'badge-error'
-                        }`}>
-                          {producto.stock > 0 ? `${producto.stock} disponibles` : 'Sin stock'}
-                        </span>
-                      </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center text-green-400">
+                      <DollarSign className="w-5 h-5" />
+                      <span className="text-xl font-bold">${producto.precio}</span>
                     </div>
-                  )}
-
-                  <div className="card-actions justify-end mt-4">
-                    <button className="btn btn-primary btn-sm">
-                      Ver Detalles
+                    <button className="flex items-center px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                      <ShoppingCart className="w-4 h-4 mr-1" />
+                      <span className="text-sm">Agregar</span>
                     </button>
                   </div>
                 </div>
               </div>
             ))}
           </div>
+        ) : (
+          <div className="bg-gray-800 rounded-lg overflow-hidden">
+            <table className="w-full text-sm text-left text-gray-400">
+              <thead className="text-xs text-gray-400 uppercase bg-gray-700">
+                <tr>
+                  <th scope="col" className="px-6 py-3">Producto</th>
+                  <th scope="col" className="px-6 py-3">Categoría</th>
+                  <th scope="col" className="px-6 py-3">Precio</th>
+                  <th scope="col" className="px-6 py-3">Stock</th>
+                  <th scope="col" className="px-6 py-3">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProductos.map(producto => (
+                  <tr key={producto.id} className="bg-gray-800 border-b border-gray-700 hover:bg-gray-600">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center">
+                        <div className="w-10 h-10 bg-gray-700 rounded-lg flex items-center justify-center mr-3">
+                          <Package className="w-5 h-5 text-gray-400" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-white">{producto.nombre}</p>
+                          <p className="text-xs text-gray-400 line-clamp-1">{producto.descripcion}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">{producto.categoria_nombre || 'Sin categoría'}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center text-green-400">
+                        <DollarSign className="w-4 h-4 mr-1" />
+                        {producto.precio}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">{producto.stock || 'N/A'}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center space-x-2">
+                        <button className="p-1 text-gray-400 hover:text-white">
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button className="flex items-center px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700">
+                          <ShoppingCart className="w-3 h-3 mr-1" />
+                          Agregar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
-        {/* Floating Action Button para administradores */}
-        {/* {user?.groups?.includes('Administradores') && (
-          <div className="fixed bottom-6 right-6">
-            <button className="btn btn-primary btn-circle btn-lg shadow-lg">
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-              </svg>
-            </button>
+        {/* Empty State */}
+        {filteredProductos.length === 0 && (
+          <div className="text-center py-12">
+            <Package className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-400 mb-2">
+              No se encontraron productos
+            </h3>
+            <p className="text-gray-500">
+              Intenta ajustar los filtros de búsqueda
+            </p>
           </div>
-        )} */}
+        )}
       </div>
     </div>
   );
