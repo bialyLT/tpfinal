@@ -57,7 +57,7 @@ class ProductoListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Producto
         fields = ('id', 'codigo', 'nombre', 'categoria_nombre', 'marca_nombre', 
-                 'precio_venta', 'estado', 'stock_actual')
+                 'precio_cliente', 'estado', 'stock_actual')
 
 
 class MovimientoStockSerializer(serializers.ModelSerializer):

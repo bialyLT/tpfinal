@@ -34,8 +34,8 @@ const ProductosPage = () => {
         productosService.getProductos(),
         productosService.getCategorias()
       ]);
-      setProductos(productosData);
-      setCategorias(categoriasData);
+      setProductos(productosData.results || []);
+      setCategorias(categoriasData.results || []);
     } catch (error) {
       toast.error('Error al cargar los datos');
       console.error('Error fetching data:', error);
@@ -47,9 +47,9 @@ const ProductosPage = () => {
   const filteredProductos = productos.filter(producto => {
     const matchesSearch = producto.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          producto.descripcion?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategoria = !selectedCategoria || producto.categoria === selectedCategoria;
-    const matchesPrice = (!priceRange.min || producto.precio >= priceRange.min) &&
-                        (!priceRange.max || producto.precio <= priceRange.max);
+    const matchesCategoria = !selectedCategoria || producto.categoria_nombre === selectedCategoria;
+    const matchesPrice = (!priceRange.min || producto.precio_cliente >= priceRange.min) &&
+                        (!priceRange.max || producto.precio_cliente <= priceRange.max);
     return matchesSearch && matchesCategoria && matchesPrice;
   });
 
@@ -194,14 +194,14 @@ const ProductosPage = () => {
                       <span className="ml-1 text-sm">4.5</span>
                     </div>
                     <div className="text-sm text-gray-400">
-                      Stock: {producto.stock || 'N/A'}
+                      Stock: {producto.stock_actual || 'N/A'}
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <div className="flex items-center text-green-400">
                       <DollarSign className="w-5 h-5" />
-                      <span className="text-xl font-bold">${producto.precio}</span>
+                      <span className="text-xl font-bold">${producto.precio_cliente}</span>
                     </div>
                     <button className="flex items-center px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
                       <ShoppingCart className="w-4 h-4 mr-1" />
@@ -242,10 +242,10 @@ const ProductosPage = () => {
                     <td className="px-6 py-4">
                       <div className="flex items-center text-green-400">
                         <DollarSign className="w-4 h-4 mr-1" />
-                        {producto.precio}
+                        {producto.precio_cliente}
                       </div>
                     </td>
-                    <td className="px-6 py-4">{producto.stock || 'N/A'}</td>
+                    <td className="px-6 py-4">{producto.stock_actual || 'N/A'}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-2">
                         <button className="p-1 text-gray-400 hover:text-white">

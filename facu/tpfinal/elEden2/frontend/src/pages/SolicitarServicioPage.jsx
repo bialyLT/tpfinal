@@ -41,7 +41,7 @@ const SolicitarServicioPage = () => {
     try {
       setLoading(true);
       const data = await serviciosService.getTiposServicio();
-      setTiposServicio(data);
+      setTiposServicio(data.results || []);
     } catch (error) {
       toast.error('Error al cargar los tipos de servicio');
       console.error('Error fetching tipos servicio:', error);

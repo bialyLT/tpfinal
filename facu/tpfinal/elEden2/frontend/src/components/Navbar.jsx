@@ -34,7 +34,8 @@ const getNavLinks = () => {
     if (!user) {
       return [
         { name: 'Inicio', href: '/', icon: Home },
-        { name: 'Servicios', href: '/servicios', icon: Search },
+        { name: 'Servicios realizados', href: '/#', icon: Search },
+        { name: 'Sobre nosotros', href: '/#', icon: Search },
       ];
     }
 

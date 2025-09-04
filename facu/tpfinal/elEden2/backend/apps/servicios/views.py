@@ -31,9 +31,9 @@ class SolicitudServicioViewSet(viewsets.ModelViewSet):
     queryset = SolicitudServicio.objects.select_related('cliente__perfil', 'tipo_servicio')
     serializer_class = SolicitudServicioSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['estado', 'tipo_servicio', 'urgente']
+    filterset_fields = ['estado', 'tipo_servicio', 'prioridad']
     search_fields = ['titulo', 'descripcion', 'cliente__username', 'cliente__first_name']
-    ordering_fields = ['fecha_solicitud', 'fecha_deseada', 'presupuesto_maximo']
+    ordering_fields = ['fecha_solicitud', 'fecha_limite_diseño', 'presupuesto_maximo']
     ordering = ['-fecha_solicitud']
 
     def get_queryset(self):

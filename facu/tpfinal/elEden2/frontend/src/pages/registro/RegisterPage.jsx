@@ -41,16 +41,14 @@ const RegisterPage = () => {
     setIsLoading(true);
 
     try {
-      // Enviar todos los datos incluyendo password2 para validación en backend
+      // Enviar todos los datos para validación en backend
       const result = await register(formData);
       if (result?.success) {
         // El contexto ya muestra el toast; solo navegamos
-        navigate('/dashboard');
-      } else {
-        // El contexto ya mostró el error; no duplicamos
+        navigate('/');
       }
     } catch (error) {
-      // Silenciar aquí; el contexto maneja toasts de error
+      // el contexto maneja toasts de error
     } finally {
       setIsLoading(false);
     }

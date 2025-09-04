@@ -88,7 +88,7 @@ export const AuthProvider = ({ children }) => {
       console.log('👤 Usuario obtenido:', user);
       
       dispatch({ type: 'LOGIN_SUCCESS', payload: user });
-      toast.success('¡Bienvenido!');
+      toast.success(`¡Bienvenido de vuelta, ${user.first_name || user.username}!`);
       return { success: true };
     } catch (error) {
       console.error('❌ Error en login:', error);

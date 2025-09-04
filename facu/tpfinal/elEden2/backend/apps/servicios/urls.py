@@ -11,5 +11,5 @@ router.register(r'disponibilidad', views.EmpleadoDisponibilidadViewSet)
 router.register(r'actualizaciones', views.ActualizacionServicioViewSet)
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path('servicios/', include(router.urls)),
 ]

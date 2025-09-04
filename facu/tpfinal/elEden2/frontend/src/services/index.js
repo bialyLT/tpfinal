@@ -30,33 +30,33 @@ export const authService = {
 // Productos Services
 export const productosService = {
   getAll: async (params = {}) => {
-    const response = await api.get('/productos/', { params });
+    const response = await api.get('/productos/productos/', { params });
     return response.data;
   },
   
   // Alias para compatibilidad
   getProductos: async (params = {}) => {
-    const response = await api.get('/productos/', { params });
+    const response = await api.get('/productos/productos/', { params });
     return response.data;
   },
   
   getById: async (id) => {
-    const response = await api.get(`/productos/${id}/`);
+    const response = await api.get(`/productos/productos/${id}/`);
     return response.data;
   },
   
   create: async (data) => {
-    const response = await api.post('/productos/', data);
+    const response = await api.post('/productos/productos/', data);
     return response.data;
   },
   
   update: async (id, data) => {
-    const response = await api.put(`/productos/${id}/`, data);
+    const response = await api.put(`/productos/productos/${id}/`, data);
     return response.data;
   },
   
   delete: async (id) => {
-    await api.delete(`/productos/${id}/`);
+    await api.delete(`/productos/productos/${id}/`);
   },
   
   getCategorias: async () => {
@@ -70,7 +70,7 @@ export const productosService = {
   },
   
   getStock: async (productoId) => {
-    const response = await api.get(`/productos/${productoId}/stock/`);
+    const response = await api.get(`/productos/productos/${productoId}/stock/`);
     return response.data;
   }
 };
@@ -119,6 +119,11 @@ export const serviciosService = {
   
   getTiposServicio: async () => {
     const response = await api.get('/servicios/tipos-servicio/');
+    return response.data;
+  },
+
+  updateServicio: async (id, data) => {
+    const response = await api.put(`/servicios/servicios/${id}/`, data);
     return response.data;
   }
 };
