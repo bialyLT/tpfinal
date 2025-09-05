@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import Loading from './components/Loading';
+import ProtectedRoute from './components/ProtectedRoute';
 
 // Pages
 import HomePage from './pages/home/HomePage';
@@ -14,9 +15,10 @@ import ProductosPage from './pages/ProductosPage';
 import ServiciosPage from './pages/ServiciosPage';
 import EncuestasPage from './pages/EncuestasPage';
 import SolicitarServicioPage from './pages/SolicitarServicioPage';
+import MiPerfil from './pages/MiPerfil';
 
-// Protected Route Component
-const ProtectedRoute = ({ children }) => {
+// Basic Protected Route Component (solo requiere autenticación)
+const BasicProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
   
   if (loading) {
@@ -30,7 +32,7 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
-// Public Route Component (redirect to dashboard if authenticated)
+// Public Route Component (redirect to appropriate page if authenticated)
 const PublicRoute = ({ children }) => {
   const { user, loading } = useAuth();
   
@@ -39,7 +41,13 @@ const PublicRoute = ({ children }) => {
   }
   
   if (user) {
-    return <Navigate to="/dashboard" replace />;
+    // Redirigir según el tipo de usuario
+    const userRole = user.perfil?.tipo_usuario || 'cliente';
+    if (userRole === 'administrador') {
+      return <Navigate to="/dashboard" replace />;
+    } else {
+      return <Navigate to="/mis-servicios" replace />;
+    }
   }
   
   return children;
@@ -52,7 +60,7 @@ const AppLayout = ({ children }) => {
   return (
     <div className="min-h-screen bg-base-200">
       {user && <Navbar />}
-      <main className={user ? 'pt-16' : ''}>
+      <main>
         {children}
       </main>
     </div>
@@ -65,15 +73,13 @@ function App() {
       <Router>
         <AppLayout>
           <Routes>
-            {/* Public Routes */}
+            {/* Public Routes - Accesibles para todos */}
             <Route 
               path="/" 
-              element={
-                <PublicRoute>
-                  <HomePage />
-                </PublicRoute>
-              } 
+              element={<HomePage />} 
             />
+            
+            {/* Auth Routes - Solo para no autenticados */}
             <Route 
               path="/login" 
               element={
@@ -91,52 +97,74 @@ function App() {
               } 
             />
 
-            {/* Protected Routes */}
+            {/* Protected Routes with Role-based Access */}
+            
+            {/* Dashboard - Solo Administradores */}
             <Route 
               path="/dashboard" 
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['administrador']}>
                   <DashboardPage />
                 </ProtectedRoute>
               } 
             />
+            
+            {/* Productos - Solo Empleados y Administradores */}
             <Route 
               path="/productos" 
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['empleado', 'diseñador', 'administrador']}>
                   <ProductosPage />
                 </ProtectedRoute>
               } 
             />
+            
+            {/* Servicios (vista administrativa) - Solo Empleados y Administradores */}
             <Route 
               path="/servicios" 
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['empleado', 'diseñador', 'administrador']}>
                   <ServiciosPage />
                 </ProtectedRoute>
               } 
             />
+            
+            {/* Encuestas - Solo Empleados y Administradores */}
             <Route 
               path="/encuestas" 
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['empleado', 'diseñador', 'administrador']}>
                   <EncuestasPage />
                 </ProtectedRoute>
               } 
             />
+            
+            {/* Solicitar Servicio - Solo Clientes */}
             <Route 
               path="/solicitar-servicio" 
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['cliente']}>
                   <SolicitarServicioPage />
                 </ProtectedRoute>
               } 
             />
+            
+            {/* Mis Servicios - Solo Clientes (vista para ver sus solicitudes) */}
             <Route 
               path="/mis-servicios" 
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['cliente']}>
                   <ServiciosPage />
+                </ProtectedRoute>
+              } 
+            />
+
+            {/* Mi Perfil - Solo Clientes */}
+            <Route 
+              path="/mi-perfil" 
+              element={
+                <ProtectedRoute allowedRoles={['cliente']}>
+                  <MiPerfil />
                 </ProtectedRoute>
               } 
             />
@@ -153,26 +181,6 @@ function App() {
                           <h2 className="card-title justify-center text-2xl mb-4">Panel de Administración</h2>
                           <p className="text-gray-600">Esta sección está en desarrollo.</p>
                           <div className="text-6xl mb-4">🚧</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </ProtectedRoute>
-              } 
-            />
-
-            {/* Profile Route - TODO: Create Profile page */}
-            <Route 
-              path="/perfil" 
-              element={
-                <ProtectedRoute>
-                  <div className="min-h-screen bg-base-200 p-4">
-                    <div className="max-w-4xl mx-auto">
-                      <div className="card bg-base-100 shadow-xl">
-                        <div className="card-body text-center">
-                          <h2 className="card-title justify-center text-2xl mb-4">Mi Perfil</h2>
-                          <p className="text-gray-600">Esta sección está en desarrollo.</p>
-                          <div className="text-6xl mb-4">👤</div>
                         </div>
                       </div>
                     </div>

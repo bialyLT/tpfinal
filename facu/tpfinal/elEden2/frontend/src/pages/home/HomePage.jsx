@@ -1,9 +1,10 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
 import { Leaf, Users, MapPin, Smile } from 'lucide-react';
-import Navbar from '../../components/Navbar';
+import { useAuth } from '../../context/AuthContext';
 
 const HomePage = () => {
+  const { user } = useAuth();
+  
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans">
       {/* Fondo de Aurora */}
@@ -13,10 +14,8 @@ const HomePage = () => {
       </div>
 
       <div className="relative z-10 flex flex-col min-h-screen">
-        {/* Navbar */}
-        <Navbar />
-        {/* Main Content */}
-        <main className="flex-grow flex items-center pt-16">
+        {/* Main Content - El padding top se ajusta según si hay navbar */}
+        <main className={`flex-grow flex items-center ${user ? 'pt-16' : 'pt-0'}`}>
           <div className="container mx-auto px-6 text-center md:text-left">
             <div className="max-w-3xl">
               <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">
@@ -27,9 +26,25 @@ const HomePage = () => {
                 En El Edén, combinamos pasión y profesionalismo para ofrecerte servicios de mantenimiento y diseño de jardines. Convierte tu espacio verde en un paraíso personal.
               </p>
               <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
-                <Link to="/register" className="btn btn-primary btn-lg">
-                  Comenzar Ahora
-                </Link>
+                {!user ? (
+                  <>
+                    <Link to="/register" className="btn btn-primary btn-lg">
+                      Comienza Ahora
+                    </Link>
+                    <Link to="/login" className="btn btn-outline btn-lg">
+                      Iniciar Sesión
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <Link to="/solicitar-servicio" className="btn btn-primary btn-lg">
+                      Solicitar Servicio
+                    </Link>
+                    <Link to="/mis-servicios" className="btn btn-outline btn-lg">
+                      Mis Servicios
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           </div>

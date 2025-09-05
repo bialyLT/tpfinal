@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
-import { Leaf, Home, Mail, Lock } from 'lucide-react';
+import { Leaf, Home, Mail, Lock, ArrowLeft } from 'lucide-react';
 
 const LoginPage = () => {
   const [formData, setFormData] = useState({
@@ -38,6 +38,14 @@ const LoginPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white flex">
+      {/* Botón para volver al inicio */}
+      <Link
+        to="/"
+        className="absolute top-4 left-4 z-20 flex items-center gap-2 text-gray-300 hover:text-white transition-colors"
+      >
+        <ArrowLeft size={18} />
+        <span>Volver al Inicio</span>
+      </Link>
 
       {/* Columna Izquierda: Formulario */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 md:p-12 z-10">

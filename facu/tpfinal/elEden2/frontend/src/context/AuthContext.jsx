@@ -88,7 +88,17 @@ export const AuthProvider = ({ children }) => {
       console.log('👤 Usuario obtenido:', user);
       
       dispatch({ type: 'LOGIN_SUCCESS', payload: user });
-      toast.success(`¡Bienvenido de vuelta, ${user.first_name || user.username}!`);
+      
+      // Mensaje personalizado según el tipo de usuario
+      const userType = user.perfil?.tipo_usuario || 'cliente';
+      const welcomeMessages = {
+        'cliente': `¡Bienvenido, ${user.first_name || user.username}! Ya puedes solicitar nuestros servicios.`,
+        'empleado': `¡Bienvenido de vuelta, ${user.first_name || user.username}! Tienes acceso al panel de empleado.`,
+        'diseñador': `¡Bienvenido, ${user.first_name || user.username}! Tienes acceso al panel de diseño.`,
+        'administrador': `¡Bienvenido, ${user.first_name || user.username}! Acceso completo al sistema.`
+      };
+      
+      toast.success(welcomeMessages[userType] || welcomeMessages['cliente']);
       return { success: true };
     } catch (error) {
       console.error('❌ Error en login:', error);

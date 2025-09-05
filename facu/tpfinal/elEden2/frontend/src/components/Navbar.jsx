@@ -39,9 +39,13 @@ const getNavLinks = () => {
       ];
     }
 
-    // 2. Lógica para Administradores
-    if (user.groups?.includes('Administradores')) {
+    // 2. Lógica para Administradores (incluyendo superusers y staff)
+    if (user.perfil?.tipo_usuario === 'administrador' || 
+        user.groups?.includes('Administradores') || 
+        user.is_staff || 
+        user.is_superuser) {
       return [
+        { name: 'Inicio', href: '/', icon: Home },
         { name: 'Dashboard', href: '/dashboard', icon: Settings },
         { name: 'Productos', href: '/productos', icon: ShoppingCart },
         { name: 'Servicios', href: '/servicios', icon: Wrench },
@@ -49,20 +53,25 @@ const getNavLinks = () => {
       ];
     }
     
-    // 3. Lógica para Empleados
-    if (user.groups?.includes('Empleados')) {
+    // 3. Lógica para Empleados y Diseñadores (incluyendo staff)
+    if (user.perfil?.tipo_usuario === 'empleado' || 
+        user.perfil?.tipo_usuario === 'diseñador' || 
+        user.groups?.includes('Empleados') || 
+        user.is_staff) {
       return [
+        { name: 'Inicio', href: '/', icon: Home },
         { name: 'Mis Servicios', href: '/servicios', icon: Wrench },
         { name: 'Productos', href: '/productos', icon: ShoppingCart },
         { name: 'Encuestas', href: '/encuestas', icon: ClipboardList },
       ];
     }
 
-    // 4. Lógica para Clientes (si no es admin ni empleado, es cliente)
+    // 4. Lógica para Clientes (por defecto)
     return [
+      { name: 'Inicio', href: '/', icon: Home },
       { name: 'Mis Servicios', href: '/mis-servicios', icon: FileText },
       { name: 'Solicitar Servicio', href: '/solicitar-servicio', icon: Plus },
-      { name: 'Productos', href: '/productos', icon: ShoppingCart },
+      { name: 'Mi Perfil', href: '/mi-perfil', icon: User },
     ];
 };
 
@@ -93,7 +102,7 @@ const getNavLinks = () => {
         <div className="flex items-center justify-between h-16">
           {/* Logo y links principales */}
           <div className="flex items-center">
-            <Link to={user ? "/dashboard" : "/"} className="flex-shrink-0 flex items-center gap-2 text-white">
+            <Link to="/" className="flex-shrink-0 flex items-center gap-2 text-white">
               <Leaf className="text-emerald-400" size={24} />
               <span className="font-bold text-lg">El Edén</span>
             </Link>
@@ -135,9 +144,6 @@ const getNavLinks = () => {
                       <p className="font-bold">{user?.first_name} {user?.last_name}</p>
                       <p className="text-xs text-gray-500">{user?.email}</p>
                     </div>
-                    <Link to="/perfil" onClick={() => setIsProfileMenuOpen(false)} className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                      <User size={16} /> Mi Perfil
-                    </Link>
                     <button onClick={logout} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                       <LogOut size={16} /> Cerrar Sesión
                     </button>
@@ -193,7 +199,6 @@ const getNavLinks = () => {
               </button>
             </div>
             <div className="mt-3 px-2 space-y-1">
-              <Link to="/perfil" onClick={() => setIsMobileMenuOpen(false)} className="block px-3 py-2 rounded-md text-base font-medium text-gray-400 hover:text-white hover:bg-gray-700">Mi Perfil</Link>
               <button onClick={() => { logout(); setIsMobileMenuOpen(false); }} className="w-full text-left block px-3 py-2 rounded-md text-base font-medium text-gray-400 hover:text-white hover:bg-gray-700">Cerrar Sesión</button>
             </div>
           </div>

@@ -5,6 +5,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django.db.models import Q, Sum, Count
 from django.utils import timezone
+from apps.users.permissions import SoloSusRecursos, EsEmpleadoOAdministrador
 
 from .models import (
     TipoServicio, SolicitudServicio, PropuestaDiseño,
@@ -20,16 +21,28 @@ from .serializers import (
 class TipoServicioViewSet(viewsets.ModelViewSet):
     queryset = TipoServicio.objects.filter(activo=True)
     serializer_class = TipoServicioSerializer
+    permission_classes = [permissions.IsAuthenticated]  # Todos los usuarios autenticados pueden ver tipos de servicio
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['categoria', 'requiere_diseño', 'activo']
     search_fields = ['nombre', 'descripcion']
     ordering_fields = ['categoria', 'nombre', 'precio_base']
     ordering = ['categoria', 'nombre']
 
+    def get_permissions(self):
+        """
+        Los clientes pueden ver y crear, pero no editar/eliminar tipos de servicio
+        """
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [permissions.IsAuthenticated]
+        else:
+            permission_classes = [EsEmpleadoOAdministrador]
+        return [permission() for permission in permission_classes]
+
 
 class SolicitudServicioViewSet(viewsets.ModelViewSet):
     queryset = SolicitudServicio.objects.select_related('cliente__perfil', 'tipo_servicio')
     serializer_class = SolicitudServicioSerializer
+    permission_classes = [permissions.IsAuthenticated, SoloSusRecursos]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['estado', 'tipo_servicio', 'prioridad']
     search_fields = ['titulo', 'descripcion', 'cliente__username', 'cliente__first_name']

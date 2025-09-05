@@ -2,6 +2,67 @@ from rest_framework import permissions
 from django.contrib.auth.models import AnonymousUser
 
 
+class EsCliente(permissions.BasePermission):
+    """
+    Permiso que verifica que el usuario sea un cliente
+    """
+    
+    def has_permission(self, request, view):
+        if isinstance(request.user, AnonymousUser):
+            return False
+        
+        try:
+            perfil = request.user.perfil
+            return perfil.tipo_usuario == 'cliente'
+        except:
+            return False
+
+
+class EsEmpleadoOAdministrador(permissions.BasePermission):
+    """
+    Permiso que permite acceso solo a empleados, diseñadores o administradores
+    """
+    
+    def has_permission(self, request, view):
+        if isinstance(request.user, AnonymousUser):
+            return False
+        
+        try:
+            perfil = request.user.perfil
+            return perfil.tipo_usuario in ['empleado', 'diseñador', 'administrador']
+        except:
+            return request.user.is_staff or request.user.is_superuser
+
+
+class SoloSusRecursos(permissions.BasePermission):
+    """
+    Permiso que permite que los clientes solo vean sus propios recursos
+    """
+    
+    def has_permission(self, request, view):
+        return request.user.is_authenticated
+    
+    def has_object_permission(self, request, view, obj):
+        # Si es empleado/administrador, puede ver todo
+        try:
+            perfil = request.user.perfil
+            if perfil.tipo_usuario in ['empleado', 'diseñador', 'administrador']:
+                return True
+        except:
+            if request.user.is_staff or request.user.is_superuser:
+                return True
+        
+        # Si es cliente, solo puede ver sus propios recursos
+        if hasattr(obj, 'cliente'):
+            return obj.cliente == request.user
+        elif hasattr(obj, 'user'):
+            return obj.user == request.user
+        elif hasattr(obj, 'usuario'):
+            return obj.usuario == request.user
+        
+        return False
+
+
 class EsAdministradorOSoloLectura(permissions.BasePermission):
     """
     Permiso personalizado que permite acceso completo a administradores
@@ -15,7 +76,11 @@ class EsAdministradorOSoloLectura(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
         
-        return request.user.es_administrador
+        try:
+            perfil = request.user.perfil
+            return perfil.tipo_usuario == 'administrador'
+        except:
+            return request.user.is_staff or request.user.is_superuser
 
 
 class EsPropietarioOAdministrador(permissions.BasePermission):
@@ -29,13 +94,22 @@ class EsPropietarioOAdministrador(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
         
+        # Verificar si es administrador
+        try:
+            perfil = request.user.perfil
+            es_admin = perfil.tipo_usuario == 'administrador'
+        except:
+            es_admin = request.user.is_staff or request.user.is_superuser
+        
         # Permisos de escritura solo para el propietario o administrador
         if hasattr(obj, 'usuario'):
-            return obj.usuario == request.user or request.user.es_administrador
+            return obj.usuario == request.user or es_admin
         elif hasattr(obj, 'user'):
-            return obj.user == request.user or request.user.es_administrador
+            return obj.user == request.user or es_admin
+        elif hasattr(obj, 'cliente'):
+            return obj.cliente == request.user or es_admin
         
-        return request.user.es_administrador
+        return es_admin
 
 
 class PuedeGestionarUsuarios(permissions.BasePermission):
@@ -47,8 +121,11 @@ class PuedeGestionarUsuarios(permissions.BasePermission):
         if isinstance(request.user, AnonymousUser):
             return False
         
-        return (request.user.es_administrador or 
-                request.user.roles.filter(nivel_acceso__gte=8).exists())
+        try:
+            perfil = request.user.perfil
+            return perfil.tipo_usuario in ['administrador']
+        except:
+            return request.user.is_staff or request.user.is_superuser
 
 
 class PuedeVerPagos(permissions.BasePermission):

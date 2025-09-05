@@ -213,14 +213,55 @@ class CrearUsuarioSerializer(serializers.ModelSerializer):
 class PublicUserSerializer(serializers.ModelSerializer):
     """Serializer compacto de usuario para respuestas de auth."""
     groups = serializers.SerializerMethodField()
+    perfil = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'groups', 'date_joined']
-        read_only_fields = ['id', 'date_joined']
+        fields = [
+            'id', 'username', 'email', 'first_name', 'last_name', 
+            'groups', 'date_joined', 'is_staff', 'is_superuser', 'perfil'
+        ]
+        read_only_fields = ['id', 'date_joined', 'is_staff', 'is_superuser']
 
     def get_groups(self, obj):
         return list(obj.groups.values_list('name', flat=True))
+    
+    def get_perfil(self, obj):
+        """Obtener información del perfil del usuario"""
+        try:
+            # Usar hasattr para verificar si existe la relación
+            if hasattr(obj, 'perfilusuario'):
+                perfil = obj.perfilusuario
+                return {
+                    'tipo_usuario': perfil.tipo_usuario,
+                    'estado': perfil.estado,
+                }
+            else:
+                # Para superusers o usuarios sin perfil, crear un perfil virtual
+                if obj.is_superuser:
+                    return {
+                        'tipo_usuario': 'administrador',
+                        'estado': 'activo',
+                    }
+                elif obj.is_staff:
+                    return {
+                        'tipo_usuario': 'administrador', 
+                        'estado': 'activo',
+                    }
+                return None
+        except (PerfilUsuario.DoesNotExist, AttributeError):
+            # Fallback para usuarios sin perfil
+            if obj.is_superuser:
+                return {
+                    'tipo_usuario': 'administrador',
+                    'estado': 'activo',
+                }
+            elif obj.is_staff:
+                return {
+                    'tipo_usuario': 'administrador',
+                    'estado': 'activo',
+                }
+            return None
 
 
 class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -276,8 +317,8 @@ class PublicRegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         # Remover campos no pertenecientes al modelo o de validación
         validated_data.pop('password2', None)
-        validated_data.pop('telefono', None)
-        validated_data.pop('direccion', None)
+        telefono = validated_data.pop('telefono', None)
+        direccion = validated_data.pop('direccion', None)
 
         password = validated_data.pop('password')
         user = User.objects.create_user(password=password, **validated_data)
@@ -287,6 +328,30 @@ class PublicRegisterSerializer(serializers.ModelSerializer):
             clientes_group, _ = Group.objects.get_or_create(name='Clientes')
             user.groups.add(clientes_group)
         except Exception:
+            pass
+
+        # Crear PerfilUsuario como cliente automáticamente
+        try:
+            # Crear una Persona básica con los datos mínimos
+            persona = Persona.objects.create(
+                nombres=user.first_name or 'Usuario',
+                apellidos=user.last_name or 'Nuevo',
+                tipo_documento='dni',  # Por defecto
+                numero_documento=f'temp_{user.id}_{user.username}',  # Temporal
+                telefono=telefono or '',
+                direccion=direccion or ''
+            )
+            
+            # Crear el perfil de usuario como cliente
+            PerfilUsuario.objects.create(
+                user=user,
+                persona=persona,
+                tipo_usuario='cliente',
+                estado='activo'
+            )
+        except Exception as e:
+            # Si hay error creando el perfil, aún así permitir el registro
+            # El usuario puede completar su perfil después
             pass
 
         # Crear configuración por defecto si aplica

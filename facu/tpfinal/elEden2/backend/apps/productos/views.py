@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django.db.models import Q, F
+from apps.users.permissions import EsEmpleadoOAdministrador
 
 from .models import Categoria, Marca, Unidad, Producto, Stock, MovimientoStock
 from .serializers import (
@@ -16,6 +17,7 @@ from .serializers import (
 class CategoriaViewSet(viewsets.ModelViewSet):
     queryset = Categoria.objects.all()
     serializer_class = CategoriaSerializer
+    permission_classes = [EsEmpleadoOAdministrador]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['activo']
     search_fields = ['nombre', 'descripcion']
@@ -26,6 +28,7 @@ class CategoriaViewSet(viewsets.ModelViewSet):
 class MarcaViewSet(viewsets.ModelViewSet):
     queryset = Marca.objects.all()
     serializer_class = MarcaSerializer
+    permission_classes = [EsEmpleadoOAdministrador]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['activo']
     search_fields = ['nombre', 'descripcion']
@@ -36,6 +39,7 @@ class MarcaViewSet(viewsets.ModelViewSet):
 class UnidadViewSet(viewsets.ModelViewSet):
     queryset = Unidad.objects.all()
     serializer_class = UnidadSerializer
+    permission_classes = [EsEmpleadoOAdministrador]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['activo']
     search_fields = ['nombre', 'abreviatura', 'descripcion']
@@ -45,6 +49,7 @@ class UnidadViewSet(viewsets.ModelViewSet):
 
 class ProductoViewSet(viewsets.ModelViewSet):
     queryset = Producto.objects.select_related('categoria', 'marca', 'unidad', 'stock').all()
+    permission_classes = [EsEmpleadoOAdministrador]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['estado', 'categoria', 'marca', 'requiere_stock']
     search_fields = ['codigo', 'nombre', 'descripcion', 'codigo_barras']
