@@ -39,13 +39,9 @@ const getNavLinks = () => {
       ];
     }
 
-    // 2. Lógica para Administradores (incluyendo superusers y staff)
-    if (user.perfil?.tipo_usuario === 'administrador' || 
-        user.groups?.includes('Administradores') || 
-        user.is_staff || 
-        user.is_superuser) {
+    // 2. Lógica para Administradores
+    if (user.perfil?.tipo_usuario === 'administrador' || user.groups?.includes('Administradores')) {
       return [
-        { name: 'Inicio', href: '/', icon: Home },
         { name: 'Dashboard', href: '/dashboard', icon: Settings },
         { name: 'Productos', href: '/productos', icon: ShoppingCart },
         { name: 'Servicios', href: '/servicios', icon: Wrench },
@@ -53,13 +49,9 @@ const getNavLinks = () => {
       ];
     }
     
-    // 3. Lógica para Empleados y Diseñadores (incluyendo staff)
-    if (user.perfil?.tipo_usuario === 'empleado' || 
-        user.perfil?.tipo_usuario === 'diseñador' || 
-        user.groups?.includes('Empleados') || 
-        user.is_staff) {
+    // 3. Lógica para Empleados y Diseñadores
+    if (user.perfil?.tipo_usuario === 'empleado' || user.perfil?.tipo_usuario === 'diseñador' || user.groups?.includes('Empleados')) {
       return [
-        { name: 'Inicio', href: '/', icon: Home },
         { name: 'Mis Servicios', href: '/servicios', icon: Wrench },
         { name: 'Productos', href: '/productos', icon: ShoppingCart },
         { name: 'Encuestas', href: '/encuestas', icon: ClipboardList },
@@ -68,7 +60,6 @@ const getNavLinks = () => {
 
     // 4. Lógica para Clientes (por defecto)
     return [
-      { name: 'Inicio', href: '/', icon: Home },
       { name: 'Mis Servicios', href: '/mis-servicios', icon: FileText },
       { name: 'Solicitar Servicio', href: '/solicitar-servicio', icon: Plus },
       { name: 'Mi Perfil', href: '/mi-perfil', icon: User },

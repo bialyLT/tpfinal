@@ -32,13 +32,13 @@ const DashboardPage = () => {
   const { user } = useAuth();
 
   const getWelcomeMessage = () => {
-    if (user.is_staff && user.is_superuser) return 'Panel de Administración';
+    if (user?.groups?.includes('Administradores')) return 'Panel de Administración';
     if (user?.groups?.includes('Empleados')) return 'Panel de Empleado';
     return 'Mi Dashboard';
   };
 
   const getStats = () => {
-    if (user.is_staff && user.is_superuser) {
+    if (user?.groups?.includes('Administradores')) {
       return [
         { title: 'Total Usuarios', value: '127', change: '+12%', icon: <Users className="w-5 h-5 text-gray-400" /> },
         { title: 'Servicios Activos', value: '23', change: '+5%', icon: <Briefcase className="w-5 h-5 text-gray-400" /> },
@@ -73,7 +73,7 @@ const DashboardPage = () => {
   return (
     <div className="min-h-screen bg-gray-900 text-gray-300 p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
-        <header className="mb-8 pt-16">
+        <header className="mb-8">
           <h1 className="text-3xl font-bold text-white mb-2">
             ¡Buenas tardes, {user?.first_name || user?.username}!
           </h1>

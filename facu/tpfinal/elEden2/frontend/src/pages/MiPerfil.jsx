@@ -145,7 +145,7 @@ const MiPerfil = () => {
     <div className="min-h-screen bg-gray-900 text-gray-300 p-4 sm:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="mb-8 pt-16">
+        <div className="mb-8">
           <h1 className="text-3xl font-bold text-white mb-2 flex items-center">
             <User className="w-8 h-8 mr-3 text-green-400" />
             Mi Perfil

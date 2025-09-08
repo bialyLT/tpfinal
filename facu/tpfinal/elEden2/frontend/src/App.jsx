@@ -60,7 +60,7 @@ const AppLayout = ({ children }) => {
   return (
     <div className="min-h-screen bg-base-200">
       {user && <Navbar />}
-      <main>
+      <main className={user ? 'pt-16' : ''}>
         {children}
       </main>
     </div>
@@ -73,13 +73,15 @@ function App() {
       <Router>
         <AppLayout>
           <Routes>
-            {/* Public Routes - Accesibles para todos */}
+            {/* Public Routes */}
             <Route 
               path="/" 
-              element={<HomePage />} 
+              element={
+                <PublicRoute>
+                  <HomePage />
+                </PublicRoute>
+              } 
             />
-            
-            {/* Auth Routes - Solo para no autenticados */}
             <Route 
               path="/login" 
               element={
@@ -181,6 +183,26 @@ function App() {
                           <h2 className="card-title justify-center text-2xl mb-4">Panel de Administración</h2>
                           <p className="text-gray-600">Esta sección está en desarrollo.</p>
                           <div className="text-6xl mb-4">🚧</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </ProtectedRoute>
+              } 
+            />
+
+            {/* Profile Route - TODO: Create Profile page */}
+            <Route 
+              path="/perfil" 
+              element={
+                <ProtectedRoute>
+                  <div className="min-h-screen bg-base-200 p-4">
+                    <div className="max-w-4xl mx-auto">
+                      <div className="card bg-base-100 shadow-xl">
+                        <div className="card-body text-center">
+                          <h2 className="card-title justify-center text-2xl mb-4">Mi Perfil</h2>
+                          <p className="text-gray-600">Esta sección está en desarrollo.</p>
+                          <div className="text-6xl mb-4">👤</div>
                         </div>
                       </div>
                     </div>

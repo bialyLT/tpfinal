@@ -213,55 +213,14 @@ class CrearUsuarioSerializer(serializers.ModelSerializer):
 class PublicUserSerializer(serializers.ModelSerializer):
     """Serializer compacto de usuario para respuestas de auth."""
     groups = serializers.SerializerMethodField()
-    perfil = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = [
-            'id', 'username', 'email', 'first_name', 'last_name', 
-            'groups', 'date_joined', 'is_staff', 'is_superuser', 'perfil'
-        ]
-        read_only_fields = ['id', 'date_joined', 'is_staff', 'is_superuser']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'groups', 'date_joined']
+        read_only_fields = ['id', 'date_joined']
 
     def get_groups(self, obj):
         return list(obj.groups.values_list('name', flat=True))
-    
-    def get_perfil(self, obj):
-        """Obtener información del perfil del usuario"""
-        try:
-            # Usar hasattr para verificar si existe la relación
-            if hasattr(obj, 'perfilusuario'):
-                perfil = obj.perfilusuario
-                return {
-                    'tipo_usuario': perfil.tipo_usuario,
-                    'estado': perfil.estado,
-                }
-            else:
-                # Para superusers o usuarios sin perfil, crear un perfil virtual
-                if obj.is_superuser:
-                    return {
-                        'tipo_usuario': 'administrador',
-                        'estado': 'activo',
-                    }
-                elif obj.is_staff:
-                    return {
-                        'tipo_usuario': 'administrador', 
-                        'estado': 'activo',
-                    }
-                return None
-        except (PerfilUsuario.DoesNotExist, AttributeError):
-            # Fallback para usuarios sin perfil
-            if obj.is_superuser:
-                return {
-                    'tipo_usuario': 'administrador',
-                    'estado': 'activo',
-                }
-            elif obj.is_staff:
-                return {
-                    'tipo_usuario': 'administrador',
-                    'estado': 'activo',
-                }
-            return None
 
 
 class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
