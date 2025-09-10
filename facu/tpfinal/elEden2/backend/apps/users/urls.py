@@ -13,11 +13,13 @@ router.register(r'historial-acceso', views.HistorialAccesoViewSet)
 router.register(r'configuraciones', views.ConfiguracionUsuarioViewSet)
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path('users/', include(router.urls)),
     # Auth endpoints
     path('auth/login/', views.LoginView.as_view(), name='auth-login'),
     path('auth/register/', views.RegisterPublicView.as_view(), name='auth-register'),
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
     path('auth/user/', views.ProfileView.as_view(), name='auth-user'),
     path('auth/logout/', views.LogoutView.as_view(), name='auth-logout'),
+    # Admin endpoints
+    path('users/register-empleado/', views.RegisterEmpleadoView.as_view(), name='register-empleado'),
 ]

@@ -15,6 +15,9 @@ const Navbar = () => {
   const profileMenuRef = useRef(null);
   const mobileMenuRef = useRef(null);
 
+  const isAdmin = user && (user.is_staff || user.is_superuser || user.perfil?.tipo_usuario === 'administrador' || user.groups?.includes('Administradores'));
+  const isEmpleado = user.perfil?.tipo_usuario === 'empleado' || user.perfil?.tipo_usuario === 'diseñador' || user.groups?.includes('Empleados');
+
   // Cerrar menús al hacer clic fuera
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -40,7 +43,7 @@ const getNavLinks = () => {
     }
 
     // 2. Lógica para Administradores
-    if (user.is_staff || user.is_superuser || user.perfil?.tipo_usuario === 'administrador' || user.groups?.includes('Administradores')) {
+    if (isAdmin) {
       return [
         { name: 'Dashboard', href: '/dashboard', icon: Settings },
         { name: 'Productos', href: '/productos', icon: ShoppingCart },
@@ -51,7 +54,7 @@ const getNavLinks = () => {
     }
     
     // 3. Lógica para Empleados y Diseñadores
-    if (user.perfil?.tipo_usuario === 'empleado' || user.perfil?.tipo_usuario === 'diseñador' || user.groups?.includes('Empleados')) {
+    if (isEmpleado) {
       return [
         { name: 'Mis Servicios', href: '/servicios', icon: Wrench },
         { name: 'Productos', href: '/productos', icon: ShoppingCart },

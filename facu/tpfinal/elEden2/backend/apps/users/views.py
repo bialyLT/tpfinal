@@ -10,7 +10,6 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
-import logging
 
 from .models import (
     Persona, Rol, Pago, DetallePago, 
@@ -66,10 +65,10 @@ class RolViewSet(viewsets.ModelViewSet):
 
 
 class UsuarioViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.select_related('perfilusuario__persona').prefetch_related('groups', 'configuracionusuario').all()
+    queryset = User.objects.select_related('perfil__persona').prefetch_related('groups', 'configuracion').all()
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['is_active', 'is_staff', 'groups']
-    search_fields = ['username', 'email', 'first_name', 'last_name', 'perfilusuario__persona__nombres', 'perfilusuario__persona__apellidos', 'perfilusuario__persona__numero_documento']
+    search_fields = ['username', 'email', 'first_name', 'last_name', 'perfil__persona__nombres', 'perfil__persona__apellidos', 'perfil__persona__numero_documento']
     ordering_fields = ['username', 'date_joined', 'first_name', 'last_name']
     ordering = ['first_name', 'last_name']
 
@@ -83,7 +82,7 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def usuarios_activos(self, request):
         """Obtiene usuarios activos"""
-        usuarios = self.get_queryset().filter(perfilusuario__estado='activo', is_active=True)
+        usuarios = self.get_queryset().filter(perfil__estado='activo', is_active=True)
         serializer = self.get_serializer(usuarios, many=True)
         return Response(serializer.data)
 
@@ -100,7 +99,7 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     def empleados(self, request):
         """Obtiene usuarios empleados"""
         usuarios = self.get_queryset().filter(
-            Q(perfilusuario__tipo_usuario='empleado') | Q(groups__name='Empleados')
+            Q(perfil__tipo_usuario='empleado') | Q(groups__name='Empleados')
         ).distinct()
         serializer = self.get_serializer(usuarios, many=True)
         return Response(serializer.data)
@@ -109,7 +108,7 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     def clientes(self, request):
         """Obtiene usuarios clientes"""
         usuarios = self.get_queryset().filter(
-            Q(perfilusuario__tipo_usuario='cliente') | Q(groups__name='Clientes')
+            Q(perfil__tipo_usuario='cliente') | Q(groups__name='Clientes')
         ).distinct()
         serializer = self.get_serializer(usuarios, many=True)
         return Response(serializer.data)
@@ -202,14 +201,6 @@ class RegisterPublicView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        logger = logging.getLogger('apps.users')
-        # Copiar payload y ocultar contraseñas
-        payload = dict(request.data)
-        for k in ['password', 'password2']:
-            if k in payload:
-                payload[k] = '***'
-        logger.debug(f"/auth/register payload: {payload}")
-
         serializer = PublicRegisterSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
@@ -220,7 +211,44 @@ class RegisterPublicView(APIView):
                 'access': str(refresh.access_token),
                 'refresh': str(refresh)
             }, status=status.HTTP_201_CREATED)
-        logger.debug({ 'register_errors': serializer.errors })
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class RegisterEmpleadoView(APIView):
+    """Endpoint para que los administradores registren empleados"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        # Verificar que el usuario sea administrador
+        if not (request.user.is_superuser or request.user.groups.filter(name='Administradores').exists()):
+            return Response(
+                {'error': 'No tienes permisos para crear empleados'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Forzar tipo_usuario a empleado
+        data = request.data.copy()
+        data['tipo_usuario'] = 'empleado'
+
+        serializer = CrearUsuarioSerializer(data=data)
+        if serializer.is_valid():
+            user = serializer.save()
+            
+            # Verificación adicional: Asegurar que el usuario esté en el grupo Empleados
+            empleados_group, created = Group.objects.get_or_create(name='Empleados')
+            if empleados_group not in user.groups.all():
+                user.groups.add(empleados_group)
+                print(f"[DEBUG] Grupo Empleados agregado manualmente al usuario {user.username}")
+            
+            # Verificar grupos finales
+            grupos_finales = list(user.groups.values_list('name', flat=True))
+            print(f"[DEBUG] Grupos finales del usuario {user.username} después de verificación: {grupos_finales}")
+            
+            return Response({
+                'message': 'Empleado creado exitosamente',
+                'user': UsuarioListSerializer(user).data
+            }, status=status.HTTP_201_CREATED)
+        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -246,19 +274,10 @@ class LogoutView(APIView):
         if not refresh_token:
             return Response({'error': 'Refresh token es requerido'}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            # Log para debugging
-            import logging
-            logger = logging.getLogger('apps.users')
-            logger.debug(f"/auth/logout refresh token length: {len(refresh_token) if refresh_token else 'None'}")
-            
             token = RefreshToken(refresh_token)
             token.blacklist()
             return Response({'message': 'Sesión cerrada exitosamente'})
-        except Exception as e:
-            # Log más específico del error
-            import logging
-            logger = logging.getLogger('apps.users')
-            logger.debug(f"/auth/logout error: {type(e).__name__}: {str(e)}")
+        except Exception:
             return Response({'error': 'Token inválido'}, status=status.HTTP_400_BAD_REQUEST)
 
 

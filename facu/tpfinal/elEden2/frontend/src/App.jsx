@@ -44,8 +44,13 @@ const PublicRoute = ({ children }) => {
   if (user) {
     // Redirigir según el tipo de usuario
     const userRole = user.perfil?.tipo_usuario || 'cliente';
-    if (userRole === 'administrador') {
+    const isAdmin = user.is_staff || user.is_superuser || userRole === 'administrador' || user.groups?.includes('Administradores');
+    const isEmpleado = userRole === 'empleado' || userRole === 'diseñador' || user.groups?.includes('Empleados');
+    
+    if (isAdmin) {
       return <Navigate to="/dashboard" replace />;
+    } else if (isEmpleado) {
+      return <Navigate to="/servicios" replace />;
     } else {
       return <Navigate to="/mis-servicios" replace />;
     }
@@ -78,9 +83,7 @@ function App() {
             <Route 
               path="/" 
               element={
-                <PublicRoute>
                   <HomePage />
-                </PublicRoute>
               } 
             />
             <Route 
@@ -108,6 +111,16 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['administrador']}>
                   <DashboardPage />
+                </ProtectedRoute>
+              } 
+            />
+
+            {/* Empleados - Solo Administradores */}
+            <Route 
+              path="/empleados" 
+              element={
+                <ProtectedRoute allowedRoles={['administrador']}>
+                  <EmpleadosPage />
                 </ProtectedRoute>
               } 
             />
@@ -142,16 +155,6 @@ function App() {
               } 
             />
 
-            {/* Empleados - Solo Administradores */}
-            <Route 
-              path="/empleados" 
-              element={
-                <ProtectedRoute allowedRoles={['administrador']}>
-                  <EmpleadosPage />
-                </ProtectedRoute>
-              } 
-            />
-            
             {/* Solicitar Servicio - Solo Clientes */}
             <Route 
               path="/solicitar-servicio" 
@@ -178,46 +181,6 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['cliente']}>
                   <MiPerfil />
-                </ProtectedRoute>
-              } 
-            />
-
-            {/* Admin Routes - TODO: Add role-based protection */}
-            <Route 
-              path="/admin/*" 
-              element={
-                <ProtectedRoute>
-                  <div className="min-h-screen bg-base-200 p-4">
-                    <div className="max-w-7xl mx-auto">
-                      <div className="card bg-base-100 shadow-xl">
-                        <div className="card-body text-center">
-                          <h2 className="card-title justify-center text-2xl mb-4">Panel de Administración</h2>
-                          <p className="text-gray-600">Esta sección está en desarrollo.</p>
-                          <div className="text-6xl mb-4">🚧</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </ProtectedRoute>
-              } 
-            />
-
-            {/* Profile Route - TODO: Create Profile page */}
-            <Route 
-              path="/perfil" 
-              element={
-                <ProtectedRoute>
-                  <div className="min-h-screen bg-base-200 p-4">
-                    <div className="max-w-4xl mx-auto">
-                      <div className="card bg-base-100 shadow-xl">
-                        <div className="card-body text-center">
-                          <h2 className="card-title justify-center text-2xl mb-4">Mi Perfil</h2>
-                          <p className="text-gray-600">Esta sección está en desarrollo.</p>
-                          <div className="text-6xl mb-4">👤</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                 </ProtectedRoute>
               } 
             />

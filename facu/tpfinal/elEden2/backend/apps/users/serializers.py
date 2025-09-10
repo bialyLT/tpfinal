@@ -63,8 +63,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
                 'fecha_ultimo_acceso': perfil.fecha_ultimo_acceso,
                 'intentos_fallidos_login': perfil.intentos_fallidos_login,
                 'recibir_notificaciones_email': perfil.recibir_notificaciones_email,
-                'recibir_notificaciones_sistema': perfil.recibir_notificaciones_sistema,
-                'productos_favoritos': perfil.productos_favoritos
+                'recibir_notificaciones_sistema': perfil.recibir_notificaciones_sistema
             }
         except PerfilUsuario.DoesNotExist:
             return None
@@ -182,6 +181,8 @@ class CrearUsuarioSerializer(serializers.ModelSerializer):
         tipo_usuario = validated_data.pop('tipo_usuario', 'cliente')
         groups = validated_data.pop('groups', [])
         
+        print(f"[DEBUG] Creando usuario con tipo_usuario: {tipo_usuario}")
+        
         # Crear persona
         persona = Persona.objects.create(**persona_data)
         
@@ -191,18 +192,44 @@ class CrearUsuarioSerializer(serializers.ModelSerializer):
             **validated_data
         )
         
-        # Crear perfil de usuario
-        PerfilUsuario.objects.create(
+        # Actualizar o crear perfil de usuario (el signal ya puede haber creado uno)
+        perfil, created = PerfilUsuario.objects.get_or_create(
             user=user,
-            persona=persona,
-            tipo_usuario=tipo_usuario
+            defaults={
+                'persona': persona,
+                'tipo_usuario': tipo_usuario
+            }
         )
         
-        # Asignar grupos
-        user.groups.set(groups)
+        # Si el perfil ya existía (creado por signal), actualizarlo
+        if not created:
+            perfil.persona = persona
+            perfil.tipo_usuario = tipo_usuario
+            perfil.save()
         
-        # Crear configuración por defecto
-        ConfiguracionUsuario.objects.create(user=user)
+        print(f"[DEBUG] Usuario {user.username} creado con perfil tipo: {tipo_usuario} (perfil creado: {created})")
+        
+        # Asignar al grupo correspondiente según el tipo de usuario
+        if tipo_usuario == 'empleado':
+            empleados_group, group_created = Group.objects.get_or_create(name='Empleados')
+            user.groups.add(empleados_group)
+            print(f"[DEBUG] Usuario {user.username} agregado al grupo Empleados (grupo creado: {group_created})")
+        elif tipo_usuario == 'cliente':
+            clientes_group, group_created = Group.objects.get_or_create(name='Clientes')
+            user.groups.add(clientes_group)
+            print(f"[DEBUG] Usuario {user.username} agregado al grupo Clientes (grupo creado: {group_created})")
+        
+        # Asignar grupos adicionales si se especifican
+        if groups:
+            user.groups.add(*groups)
+            print(f"[DEBUG] Grupos adicionales agregados: {[g.name for g in groups]}")
+        
+        # Verificar grupos finales
+        grupos_finales = list(user.groups.values_list('name', flat=True))
+        print(f"[DEBUG] Grupos finales del usuario {user.username}: {grupos_finales}")
+        
+        # Crear configuración por defecto si no existe (el signal también puede haberla creado)
+        ConfiguracionUsuario.objects.get_or_create(user=user)
         
         return user
 

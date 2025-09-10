@@ -36,7 +36,7 @@ const EmpleadosPage = () => {
     groups: ['Empleados']
   });
 
-  const isAdmin = user?.groups?.includes('Administradores');
+  const isAdmin = user.is_staff || user.is_superuser || user.perfil?.tipo_usuario === 'administrador' || user.groups?.includes('Administradores');
 
   // Redirigir si no es admin
   useEffect(() => {
@@ -54,7 +54,7 @@ const EmpleadosPage = () => {
   const fetchEmpleados = async () => {
     try {
       setLoading(true);
-      const data = await usersService.getUsers({ tipo_usuario: 'empleado' });
+      const data = await usersService.getEmpleados();
       setEmpleados(data.results || data);
     } catch (error) {
       handleApiError(error, 'Error al cargar los empleados');
@@ -74,14 +74,28 @@ const EmpleadosPage = () => {
   const handleAddEmpleado = async (e) => {
     e.preventDefault();
     try {
+      // Usar el endpoint específico para registro de empleados
       const empleadoData = {
-        ...formData,
-        perfil: {
-          tipo_usuario: 'empleado'
+        username: formData.username,
+        email: formData.email,
+        password: formData.password,
+        password_confirmation: formData.password, // El serializer CrearUsuarioSerializer requiere esto
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        persona_data: {
+          nombres: formData.first_name,
+          apellidos: formData.last_name,
+          tipo_documento: 'dni',
+          numero_documento: `emp_${Date.now()}`, // Temporal, se puede completar después
+          telefono: '',
+          genero: 'N', // 'N' = 'Prefiero no decir' - valor válido del modelo
+          fecha_nacimiento: '1990-01-01', // Fecha por defecto, se puede completar después
+          provincia: 'Buenos Aires', // Provincia por defecto
+          activo: true
         }
       };
       
-      await usersService.createUser(empleadoData);
+      await usersService.createEmpleado(empleadoData);
       success('Empleado creado exitosamente');
       setShowAddModal(false);
       setFormData({
@@ -114,8 +128,9 @@ const EmpleadosPage = () => {
 
   const handleToggleStatus = async (empleado) => {
     try {
-      await usersService.cambiarEstadoUsuario(empleado.id, !empleado.is_active);
-      success(`Empleado ${!empleado.is_active ? 'activado' : 'desactivado'} exitosamente`);
+      const nuevoEstado = empleado.is_active ? 'inactivo' : 'activo';
+      await usersService.cambiarEstadoUsuario(empleado.id, nuevoEstado);
+      success(`Empleado ${nuevoEstado === 'activo' ? 'activado' : 'desactivado'} exitosamente`);
       fetchEmpleados();
     } catch (error) {
       handleApiError(error, 'Error al cambiar el estado del empleado');

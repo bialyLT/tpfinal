@@ -31,14 +31,16 @@ const StatCard = ({ title, value, change, icon }) => {
 const DashboardPage = () => {
   const { user } = useAuth();
 
+  const isAdmin = user.is_staff || user.is_superuser || user.perfil?.tipo_usuario === 'administrador' || user.groups?.includes('Administradores')
+
   const getWelcomeMessage = () => {
-    if (user?.groups?.includes('Administradores')) return 'Panel de Administración';
+    if (isAdmin) return 'Panel de Administración';
     if (user?.groups?.includes('Empleados')) return 'Panel de Empleado';
     return 'Mi Dashboard';
   };
 
   const getStats = () => {
-    if (user?.groups?.includes('Administradores')) {
+    if (isAdmin) {
       return [
         { title: 'Total Usuarios', value: '127', change: '+12%', icon: <Users className="w-5 h-5 text-gray-400" /> },
         { title: 'Servicios Activos', value: '23', change: '+5%', icon: <Briefcase className="w-5 h-5 text-gray-400" /> },

@@ -160,21 +160,41 @@ export const usersService = {
     return response.data;
   },
   
+  getEmpleados: async (params = {}) => {
+    const response = await api.get('/users/usuarios/empleados/', { params });
+    return response.data;
+  },
+  
+  getClientes: async (params = {}) => {
+    const response = await api.get('/users/usuarios/clientes/', { params });
+    return response.data;
+  },
+  
+  getAdministradores: async (params = {}) => {
+    const response = await api.get('/users/usuarios/administradores/', { params });
+    return response.data;
+  },
+
   createUser: async (data) => {
     const response = await api.post('/users/usuarios/', data);
     return response.data;
   },
-  
+
+  createEmpleado: async (data) => {
+    const response = await api.post('/users/register-empleado/', data);
+    return response.data;
+  },
+
   updateUser: async (id, data) => {
     const response = await api.put(`/users/usuarios/${id}/`, data);
     return response.data;
   },
-  
+
   cambiarEstadoUsuario: async (id, estado) => {
     const response = await api.post(`/users/usuarios/${id}/cambiar_estado/`, { estado });
     return response.data;
   },
-  
+
   resetearPassword: async (id) => {
     const response = await api.post(`/users/usuarios/${id}/resetear_password/`);
     return response.data;

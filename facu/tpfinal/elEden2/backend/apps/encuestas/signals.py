@@ -49,8 +49,9 @@ def crear_encuesta_satisfaccion(sender, instance, created, **kwargs):
         # Enviar email (si está configurado)
         try:
             enviar_email_encuesta(encuesta, instance)
-        except Exception as e:
-            print(f"Error enviando email de encuesta: {e}")
+        except Exception:
+            # Error enviando email de encuesta - continuar silenciosamente
+            pass
 
 
 def crear_preguntas_por_defecto(encuesta):
@@ -165,6 +166,6 @@ def enviar_email_encuesta(encuesta, servicio):
         )
         encuesta.email_enviado = True
         encuesta.save()
-    except Exception as e:
-        print(f"Error enviando email: {e}")
+    except Exception:
+        # Error enviando email - continuar silenciosamente
         raise

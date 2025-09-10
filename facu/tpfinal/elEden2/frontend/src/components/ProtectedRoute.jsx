@@ -26,9 +26,29 @@ const ProtectedRoute = ({ children, allowedRoles = [], redirectTo = '/mis-servic
 
   // Verificar si el usuario tiene uno de los roles permitidos
   const userRole = user.perfil?.tipo_usuario || 'cliente';
-  const hasPermission = allowedRoles.includes(userRole) || 
-                       (allowedRoles.includes('administrador') && user.is_staff) ||
-                       (allowedRoles.includes('administrador') && user.is_superuser);
+  const isAdmin = user.is_staff || user.is_superuser || userRole === 'administrador' || user.groups?.includes('Administradores');
+  const isEmpleado = userRole === 'empleado' || userRole === 'diseñador' || user.groups?.includes('Empleados');
+  const isCliente = userRole === 'cliente' || user.groups?.includes('Clientes');
+
+  // Verificar permisos basándose en roles permitidos
+  let hasPermission = false;
+  
+  for (const role of allowedRoles) {
+    if (role === 'administrador' && isAdmin) {
+      hasPermission = true;
+      break;
+    }
+    if ((role === 'empleado' || role === 'diseñador') && (isEmpleado || isAdmin)) {
+      hasPermission = true;
+      break;
+    }
+    if (role === 'cliente' && (isCliente || isAdmin)) {
+      hasPermission = true;
+      break;
+    }
+  }
+
+  console.log(`[ProtectedRoute] Usuario: ${user.username}, Rol: ${userRole}, Grupos: ${user.groups?.join(',')}, Permisos para ${allowedRoles}: ${hasPermission}`);
 
   if (!hasPermission) {
     return <Navigate to={redirectTo} replace />;

@@ -25,13 +25,22 @@ class EsEmpleadoOAdministrador(permissions.BasePermission):
     
     def has_permission(self, request, view):
         if isinstance(request.user, AnonymousUser):
+            print(f"[PERMISOS] Usuario anónimo denegado")
             return False
         
         try:
             perfil = request.user.perfil
-            return perfil.tipo_usuario in ['empleado', 'diseñador', 'administrador']
-        except:
-            return request.user.is_staff or request.user.is_superuser
+            tipo_usuario = perfil.tipo_usuario
+            grupos = list(request.user.groups.values_list('name', flat=True))
+            tiene_permiso = tipo_usuario in ['empleado', 'diseñador', 'administrador']
+            
+            print(f"[PERMISOS] Usuario: {request.user.username}, Tipo: {tipo_usuario}, Grupos: {grupos}, Permitido: {tiene_permiso}")
+            
+            return tiene_permiso
+        except Exception as e:
+            es_staff = request.user.is_staff or request.user.is_superuser
+            print(f"[PERMISOS] Error obteniendo perfil para {request.user.username}: {e}, es_staff: {es_staff}")
+            return es_staff
 
 
 class SoloSusRecursos(permissions.BasePermission):
