@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { serviciosService } from '../services';
-import { toast } from 'react-hot-toast';
+import { success, error, handleApiError } from '../utils/notifications';
 import { 
   Calendar, 
   MapPin, 
@@ -42,9 +42,8 @@ const SolicitarServicioPage = () => {
       setLoading(true);
       const data = await serviciosService.getTiposServicio();
       setTiposServicio(data.results || []);
-    } catch (error) {
-      toast.error('Error al cargar los tipos de servicio');
-      console.error('Error fetching tipos servicio:', error);
+    } catch (err) {
+      handleApiError(err, 'Error al cargar los tipos de servicio');
     } finally {
       setLoading(false);
     }
@@ -71,23 +70,23 @@ const SolicitarServicioPage = () => {
     switch (currentStep) {
       case 1:
         if (!formData.tipo_servicio) {
-          toast.error('Por favor selecciona un tipo de servicio');
+          error('Por favor selecciona un tipo de servicio');
           return false;
         }
         break;
       case 2:
         if (!formData.descripcion.trim()) {
-          toast.error('Por favor ingresa una descripción del servicio');
+          error('Por favor ingresa una descripción del servicio');
           return false;
         }
         if (!formData.direccion_servicio.trim()) {
-          toast.error('Por favor ingresa la dirección del servicio');
+          error('Por favor ingresa la dirección del servicio');
           return false;
         }
         break;
       case 3:
         if (!formData.fecha_preferida) {
-          toast.error('Por favor selecciona una fecha preferida');
+          error('Por favor selecciona una fecha preferida');
           return false;
         }
         break;
@@ -103,7 +102,7 @@ const SolicitarServicioPage = () => {
     setSubmitting(true);
     try {
       await serviciosService.createSolicitud(formData);
-      toast.success('Solicitud de servicio enviada correctamente');
+      success('Solicitud de servicio enviada correctamente');
       // Reset form
       setFormData({
         tipo_servicio: '',
@@ -113,9 +112,8 @@ const SolicitarServicioPage = () => {
         notas_adicionales: ''
       });
       setCurrentStep(1);
-    } catch (error) {
-      toast.error('Error al enviar la solicitud');
-      console.error('Error submitting solicitud:', error);
+    } catch (err) {
+      handleApiError(err, 'Error al enviar la solicitud');
     } finally {
       setSubmitting(false);
     }

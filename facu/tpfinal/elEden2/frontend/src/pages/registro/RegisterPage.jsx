@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { toast } from 'react-hot-toast';
+import { error } from '../../utils/notifications';
 import { Leaf, ArrowLeft } from 'lucide-react';
 
 const RegisterPage = () => {
@@ -30,11 +30,11 @@ const RegisterPage = () => {
     e.preventDefault();
     
     if (formData.password !== formData.password2) {
-      toast.error('Las contraseñas no coinciden');
+      error('Las contraseñas no coinciden');
       return;
     }
     if (formData.password.length < 8) {
-      toast.error('La contraseña debe tener al menos 8 caracteres');
+      error('La contraseña debe tener al menos 8 caracteres');
       return;
     }
 
@@ -48,7 +48,7 @@ const RegisterPage = () => {
         navigate('/');
       }
     } catch (error) {
-      // el contexto maneja toasts de error
+      // El error ya se maneja en AuthContext, no necesitamos duplicar el toast aquí
     } finally {
       setIsLoading(false);
     }

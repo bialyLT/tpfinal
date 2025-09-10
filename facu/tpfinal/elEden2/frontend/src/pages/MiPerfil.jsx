@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { toast } from 'react-hot-toast';
+import { success, error, handleApiError } from '../utils/notifications';
 import { 
   User, 
   Mail, 
@@ -59,15 +59,15 @@ const MiPerfil = () => {
   const validatePasswordChange = () => {
     if (showPasswordFields) {
       if (!profileData.current_password) {
-        toast.error('Ingresa tu contraseña actual');
+        error('Ingresa tu contraseña actual');
         return false;
       }
       if (profileData.new_password.length < 6) {
-        toast.error('La nueva contraseña debe tener al menos 6 caracteres');
+        error('La nueva contraseña debe tener al menos 6 caracteres');
         return false;
       }
       if (profileData.new_password !== profileData.confirm_password) {
-        toast.error('Las contraseñas no coinciden');
+        error('Las contraseñas no coinciden');
         return false;
       }
     }
@@ -94,7 +94,7 @@ const MiPerfil = () => {
       }
 
       await updateUser(updateData);
-      toast.success('Perfil actualizado correctamente');
+      success('Perfil actualizado correctamente');
       setIsEditing(false);
       setShowPasswordFields(false);
       setProfileData({
@@ -103,9 +103,8 @@ const MiPerfil = () => {
         new_password: '',
         confirm_password: ''
       });
-    } catch (error) {
-      toast.error('Error al actualizar el perfil');
-      console.error('Error updating profile:', error);
+    } catch (err) {
+      handleApiError(err, 'Error al actualizar el perfil');
     } finally {
       setLoading(false);
     }

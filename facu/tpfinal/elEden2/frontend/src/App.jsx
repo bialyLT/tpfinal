@@ -14,6 +14,7 @@ import DashboardPage from './pages/DashboardPage';
 import ProductosPage from './pages/ProductosPage';
 import ServiciosPage from './pages/ServiciosPage';
 import EncuestasPage from './pages/EncuestasPage';
+import EmpleadosPage from './pages/EmpleadosPage';
 import SolicitarServicioPage from './pages/SolicitarServicioPage';
 import MiPerfil from './pages/MiPerfil';
 
@@ -140,6 +141,16 @@ function App() {
                 </ProtectedRoute>
               } 
             />
+
+            {/* Empleados - Solo Administradores */}
+            <Route 
+              path="/empleados" 
+              element={
+                <ProtectedRoute allowedRoles={['administrador']}>
+                  <EmpleadosPage />
+                </ProtectedRoute>
+              } 
+            />
             
             {/* Solicitar Servicio - Solo Clientes */}
             <Route 
@@ -219,23 +230,22 @@ function App() {
         {/* Toast notifications */}
         <Toaster
           position="top-right"
+          reverseOrder={false}
+          gutter={8}
+          containerClassName=""
+          containerStyle={{}}
           toastOptions={{
+            // Configuración base manejada por el sistema de notificaciones
+            className: '',
             duration: 4000,
             style: {
-              background: '#363636',
-              color: '#fff',
-            },
-            success: {
-              duration: 3000,
-              style: {
-                background: '#4ade80',
-              },
-            },
-            error: {
-              duration: 5000,
-              style: {
-                background: '#ef4444',
-              },
+              background: '#374151',
+              color: '#ffffff',
+              borderRadius: '8px',
+              padding: '12px 16px',
+              fontSize: '14px',
+              fontWeight: '500',
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
             },
           }}
         />

@@ -8,8 +8,6 @@ class TipoServicio(models.Model):
     """Tipos de servicios disponibles"""
     CATEGORIA_CHOICES = [
         ('mantenimiento', 'Mantenimiento'),
-        ('diseño', 'Diseño'),
-        ('construccion', 'Construcción'),
         ('consultoria', 'Consultoría'),
     ]
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { serviciosService } from '../services';
 import { useAuth } from '../context/AuthContext';
-import { toast } from 'react-hot-toast';
+import { success, handleApiError } from '../utils/notifications';
 import { Calendar, Clock, CheckCircle, XCircle, Users, Filter, Search, Eye } from 'lucide-react';
 
 const ServiciosPage = () => {
@@ -33,8 +33,7 @@ const ServiciosPage = () => {
       setSolicitudes(solicitudesData.results || []);
       setTiposServicio(tiposData.results || []);
     } catch (error) {
-      toast.error('Error al cargar los datos');
-      console.error('Error fetching data:', error);
+      handleApiError(error, 'Error al cargar los datos');
     } finally {
       setLoading(false);
     }
@@ -43,10 +42,10 @@ const ServiciosPage = () => {
   const handleUpdateEstado = async (servicioId, nuevoEstado) => {
     try {
       await serviciosService.updateServicio(servicioId, { estado: nuevoEstado });
-      toast.success('Estado actualizado correctamente');
+      success('Estado actualizado correctamente');
       fetchData();
     } catch (error) {
-      toast.error('Error al actualizar el estado');
+      handleApiError(error, 'Error al actualizar el estado');
     }
   };
 

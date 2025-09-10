@@ -96,6 +96,24 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(usuarios, many=True)
         return Response(serializer.data)
 
+    @action(detail=False, methods=['get'])
+    def empleados(self, request):
+        """Obtiene usuarios empleados"""
+        usuarios = self.get_queryset().filter(
+            Q(perfilusuario__tipo_usuario='empleado') | Q(groups__name='Empleados')
+        ).distinct()
+        serializer = self.get_serializer(usuarios, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def clientes(self, request):
+        """Obtiene usuarios clientes"""
+        usuarios = self.get_queryset().filter(
+            Q(perfilusuario__tipo_usuario='cliente') | Q(groups__name='Clientes')
+        ).distinct()
+        serializer = self.get_serializer(usuarios, many=True)
+        return Response(serializer.data)
+
     @action(detail=True, methods=['post'])
     def cambiar_estado(self, request, pk=None):
         """Cambiar estado del usuario"""

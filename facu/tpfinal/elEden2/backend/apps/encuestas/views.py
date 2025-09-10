@@ -6,21 +6,24 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from django.db.models import Q, Avg, Count
 from django.utils import timezone
 
-from .models import Encuesta, Pregunta, RespuestaEncuesta
+from .models import (
+    Encuesta, TipoEncuesta, Pregunta, RespuestaEncuesta, 
+    DetallePregunta, EncuestaServicio
+)
 from .serializers import (
-    EncuestaSerializer, PreguntaSerializer, 
+    EncuestaSerializer, TipoEncuestaSerializer, PreguntaSerializer, 
     RespuestaEncuestaSerializer, EncuestaPublicaSerializer
 )
 
 
 class EncuestaViewSet(viewsets.ModelViewSet):
-    queryset = Encuesta.objects.select_related('servicio__solicitud__cliente')
+    queryset = Encuesta.objects.select_related('cliente', 'tipo_encuesta').prefetch_related('respuestas')
     serializer_class = EncuestaSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['estado', 'servicio', 'puntuacion_general']
-    search_fields = ['servicio__solicitud__titulo']
-    ordering_fields = ['fecha_creacion', 'fecha_envio', 'fecha_completada', 'puntuacion_general']
-    ordering = ['-fecha_creacion']
+    filterset_fields = ['estado', 'tipo_encuesta', 'cliente']
+    search_fields = ['titulo', 'descripcion']
+    ordering_fields = ['fecha_envio', 'fecha_respuesta', 'fecha_expiracion']
+    ordering = ['-fecha_envio']
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -28,7 +31,7 @@ class EncuestaViewSet(viewsets.ModelViewSet):
 
         # Si es cliente, solo ver sus propias encuestas
         if hasattr(user, 'perfil') and user.perfil.tipo_usuario == 'cliente':
-            return queryset.filter(servicio__solicitud__cliente=user)
+            return queryset.filter(cliente=user)
         return queryset
 
     @action(detail=False, methods=['get'])
@@ -42,7 +45,7 @@ class EncuestaViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            encuesta = Encuesta.objects.get(token_publico=token)
+            encuesta = Encuesta.objects.get(token_acceso=token)
             serializer = EncuestaPublicaSerializer(encuesta)
             return Response(serializer.data)
         except Encuesta.DoesNotExist:
@@ -55,48 +58,96 @@ class EncuestaViewSet(viewsets.ModelViewSet):
     def enviar_encuesta(self, request, pk=None):
         """Enviar encuesta por email"""
         encuesta = self.get_object()
-        if encuesta.estado != 'pendiente':
+        if encuesta.estado != 'enviada':
             return Response(
-                {'error': 'La encuesta ya fue enviada'},
+                {'error': 'La encuesta ya fue procesada'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         # Aquí iría la lógica de envío de email
-        encuesta.estado = 'enviada'
-        encuesta.fecha_envio = timezone.now()
+        encuesta.email_enviado = True
         encuesta.save()
 
         return Response({'mensaje': 'Encuesta enviada por email'})
 
     @action(detail=True, methods=['post'])
     def completar_encuesta(self, request, pk=None):
-        """Marcar encuesta como completada"""
+        """Completar encuesta con respuestas"""
         encuesta = self.get_object()
-        respuestas_data = request.data.get('respuestas', [])
-
-        # Procesar respuestas
-        for respuesta_data in respuestas_data:
-            RespuestaEncuesta.objects.update_or_create(
-                encuesta=encuesta,
-                pregunta_id=respuesta_data['pregunta_id'],
-                defaults={
-                    'respuesta_texto': respuesta_data.get('respuesta_texto'),
-                    'puntuacion': respuesta_data.get('puntuacion')
-                }
+        
+        if encuesta.estado != 'enviada':
+            return Response(
+                {'error': 'Esta encuesta no puede ser completada'},
+                status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Calcular puntuación promedio
-        puntuaciones = RespuestaEncuesta.objects.filter(
-            encuesta=encuesta, 
-            puntuacion__isnull=False
-        ).aggregate(promedio=Avg('puntuacion'))
+        # Datos de la respuesta general
+        calificacion_general = request.data.get('calificacion_general')
+        comentario_general = request.data.get('comentario_general', '')
+        respuestas_detalles = request.data.get('respuestas', [])
 
-        encuesta.puntuacion_general = puntuaciones['promedio'] or 0
-        encuesta.estado = 'completada'
-        encuesta.fecha_completada = timezone.now()
-        encuesta.save()
+        if not calificacion_general:
+            return Response(
+                {'error': 'La calificación general es requerida'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        return Response({'mensaje': 'Encuesta completada'})
+        # Crear la respuesta principal
+        respuesta_encuesta, created = RespuestaEncuesta.objects.get_or_create(
+            encuesta=encuesta,
+            cliente=request.user,
+            defaults={
+                'calificacion_general': calificacion_general,
+                'comentario_general': comentario_general
+            }
+        )
+
+        if not created:
+            # Actualizar si ya existe
+            respuesta_encuesta.calificacion_general = calificacion_general
+            respuesta_encuesta.comentario_general = comentario_general
+            respuesta_encuesta.save()
+
+        # Procesar respuestas de preguntas específicas
+        for respuesta_data in respuestas_detalles:
+            pregunta_id = respuesta_data.get('pregunta_id')
+            if not pregunta_id:
+                continue
+
+            try:
+                pregunta = Pregunta.objects.get(id=pregunta_id, encuesta=encuesta)
+                
+                DetallePregunta.objects.update_or_create(
+                    respuesta_encuesta=respuesta_encuesta,
+                    pregunta=pregunta,
+                    defaults={
+                        'respuesta_texto': respuesta_data.get('respuesta_texto'),
+                        'respuesta_numero': respuesta_data.get('respuesta_numero'),
+                        'respuesta_boolean': respuesta_data.get('respuesta_boolean'),
+                        'respuesta_escala': respuesta_data.get('respuesta_escala'),
+                        'respuesta_multiple': respuesta_data.get('respuesta_multiple')
+                    }
+                )
+            except Pregunta.DoesNotExist:
+                continue
+
+        # Marcar encuesta como respondida
+        encuesta.marcar_como_respondida()
+
+        return Response({
+            'mensaje': 'Encuesta completada exitosamente',
+            'respuesta_id': respuesta_encuesta.id
+        })
+
+
+class TipoEncuestaViewSet(viewsets.ModelViewSet):
+    queryset = TipoEncuesta.objects.all()
+    serializer_class = TipoEncuestaSerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['activo']
+    search_fields = ['nombre', 'descripcion']
+    ordering_fields = ['nombre', 'fecha_creacion']
+    ordering = ['nombre']
 
 
 class PreguntaViewSet(viewsets.ModelViewSet):
@@ -110,19 +161,19 @@ class PreguntaViewSet(viewsets.ModelViewSet):
 
 
 class RespuestaEncuestaViewSet(viewsets.ModelViewSet):
-    queryset = RespuestaEncuesta.objects.select_related('encuesta', 'pregunta')
+    queryset = RespuestaEncuesta.objects.select_related('encuesta', 'cliente').prefetch_related('detalles')
     serializer_class = RespuestaEncuestaSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['encuesta', 'pregunta', 'puntuacion']
-    search_fields = ['respuesta_texto']
-    ordering_fields = ['fecha_respuesta', 'puntuacion']
+    filterset_fields = ['encuesta', 'cliente', 'calificacion_general']
+    search_fields = ['comentario_general']
+    ordering_fields = ['fecha_respuesta', 'calificacion_general']
     ordering = ['-fecha_respuesta']
 
     def get_queryset(self):
         queryset = super().get_queryset()
         user = self.request.user
 
-        # Si es cliente, solo ver respuestas de sus encuestas
+        # Si es cliente, solo ver sus propias respuestas
         if hasattr(user, 'perfil') and user.perfil.tipo_usuario == 'cliente':
-            return queryset.filter(encuesta__servicio__solicitud__cliente=user)
+            return queryset.filter(cliente=user)
         return queryset

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { authService } from '../services';
-import toast from 'react-hot-toast';
+import { success, error, handleApiError } from '../utils/notifications';
 
 const AuthContext = createContext();
 
@@ -98,14 +98,13 @@ export const AuthProvider = ({ children }) => {
         'administrador': `¡Bienvenido, ${user.first_name || user.username}! Acceso completo al sistema.`
       };
       
-      toast.success(welcomeMessages[userType] || welcomeMessages['cliente']);
+      success(welcomeMessages[userType] || welcomeMessages['cliente']);
       return { success: true };
-    } catch (error) {
-      console.error('❌ Error en login:', error);
-      console.error('❌ Error response:', error.response?.data);
-      const message = error.response?.data?.detail || error.response?.data?.message || 'Error al iniciar sesión';
+    } catch (err) {
+      console.error('❌ Error en login:', err);
+      console.error('❌ Error response:', err.response?.data);
+      const message = handleApiError(err, 'Error al iniciar sesión');
       dispatch({ type: 'LOGIN_FAILURE', payload: message });
-      toast.error(message);
       return { success: false, error: message };
     }
   };
@@ -114,11 +113,11 @@ export const AuthProvider = ({ children }) => {
     try {
       await authService.logout();
       dispatch({ type: 'LOGOUT' });
-      toast.success('Sesión cerrada');
+      success('Sesión cerrada');
     } catch (error) {
       // Aún así cerrar sesión localmente
       dispatch({ type: 'LOGOUT' });
-      toast.success('Sesión cerrada');
+      success('Sesión cerrada');
     }
   };
 
@@ -132,40 +131,19 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem('accessToken', response.access);
         localStorage.setItem('refreshToken', response.refresh);
         dispatch({ type: 'LOGIN_SUCCESS', payload: response.user });
-        toast.success('¡Registro exitoso! Bienvenido a El Edén.');
+        success('¡Registro exitoso! Bienvenido a El Edén.');
       } else {
         // Fallback si no se incluyen tokens
-        toast.success('Usuario registrado exitosamente. Ya puedes iniciar sesión.');
+        success('Usuario registrado exitosamente. Ya puedes iniciar sesión.');
         dispatch({ type: 'SET_LOADING', payload: false });
       }
       
       return { success: true };
-    } catch (error) {
-      console.error('Error en registro:', error);
+    } catch (err) {
+      console.error('Error en registro:', err);
       
-      // Mejorar el manejo de errores
-      let message = 'Error al registrar usuario';
-      if (error.response?.data) {
-        // Si hay errores específicos de campos
-        if (typeof error.response.data === 'object' && !error.response.data.message) {
-          const fieldErrors = [];
-          Object.entries(error.response.data).forEach(([field, errors]) => {
-            if (Array.isArray(errors)) {
-              fieldErrors.push(...errors);
-            } else {
-              fieldErrors.push(errors);
-            }
-          });
-          if (fieldErrors.length > 0) {
-            message = fieldErrors.join('. ');
-          }
-        } else {
-          message = error.response.data.message || error.response.data.detail || message;
-        }
-      }
-      
+      const message = handleApiError(err, 'Error al registrar usuario');
       dispatch({ type: 'LOGIN_FAILURE', payload: message });
-      toast.error(message);
       return { success: false, error: message };
     }
   };

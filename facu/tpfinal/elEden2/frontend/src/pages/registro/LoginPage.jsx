@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { toast } from 'react-hot-toast';
 import { Leaf, Home, Mail, Lock, ArrowLeft } from 'lucide-react';
 
 const LoginPage = () => {
@@ -27,10 +26,9 @@ const LoginPage = () => {
     try {
       // Asumimos que el backend puede manejar el email como nombre de usuario
       await login(formData.email, formData.password);
-      toast.success('¡Bienvenido de vuelta!');
       navigate('/dashboard');
     } catch (error) {
-      toast.error(error.message || 'Error al iniciar sesión. Revisa tus credenciales.');
+      // El error ya se maneja en AuthContext, no necesitamos duplicar el toast aquí
     } finally {
       setIsLoading(false);
     }

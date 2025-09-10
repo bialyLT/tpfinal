@@ -213,14 +213,30 @@ class CrearUsuarioSerializer(serializers.ModelSerializer):
 class PublicUserSerializer(serializers.ModelSerializer):
     """Serializer compacto de usuario para respuestas de auth."""
     groups = serializers.SerializerMethodField()
+    perfil = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'groups', 'date_joined']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'groups', 'perfil', 'date_joined']
         read_only_fields = ['id', 'date_joined']
 
     def get_groups(self, obj):
         return list(obj.groups.values_list('name', flat=True))
+
+    def get_perfil(self, obj):
+        try:
+            perfil = PerfilUsuario.objects.get(user=obj)
+            return {
+                'tipo_usuario': perfil.tipo_usuario,
+                'estado': perfil.estado,
+                'debe_cambiar_password': perfil.debe_cambiar_password,
+                'fecha_ultimo_acceso': perfil.fecha_ultimo_acceso,
+                'intentos_fallidos_login': perfil.intentos_fallidos_login,
+                'recibir_notificaciones_email': perfil.recibir_notificaciones_email,
+                'recibir_notificaciones_sistema': perfil.recibir_notificaciones_sistema,
+            }
+        except PerfilUsuario.DoesNotExist:
+            return None
 
 
 class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):

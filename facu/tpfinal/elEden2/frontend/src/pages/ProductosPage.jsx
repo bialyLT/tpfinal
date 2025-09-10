@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { productosService } from '../services';
-import { toast } from 'react-hot-toast';
+import { handleApiError } from '../utils/notifications';
 import { 
   ShoppingCart, 
   Search, 
@@ -37,8 +37,7 @@ const ProductosPage = () => {
       setProductos(productosData.results || []);
       setCategorias(categoriasData.results || []);
     } catch (error) {
-      toast.error('Error al cargar los datos');
-      console.error('Error fetching data:', error);
+      handleApiError(error, 'Error al cargar los datos');
     } finally {
       setLoading(false);
     }

@@ -40,12 +40,13 @@ const getNavLinks = () => {
     }
 
     // 2. Lógica para Administradores
-    if (user.perfil?.tipo_usuario === 'administrador' || user.groups?.includes('Administradores')) {
+    if (user.is_staff || user.is_superuser || user.perfil?.tipo_usuario === 'administrador' || user.groups?.includes('Administradores')) {
       return [
         { name: 'Dashboard', href: '/dashboard', icon: Settings },
         { name: 'Productos', href: '/productos', icon: ShoppingCart },
         { name: 'Servicios', href: '/servicios', icon: Wrench },
         { name: 'Encuestas', href: '/encuestas', icon: ClipboardList },
+        { name: 'Empleados', href: '/empleados', icon: User },
       ];
     }
     
