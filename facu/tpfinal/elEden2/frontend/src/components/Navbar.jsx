@@ -16,7 +16,7 @@ const Navbar = () => {
   const mobileMenuRef = useRef(null);
 
   const isAdmin = user && (user.is_staff || user.is_superuser || user.perfil?.tipo_usuario === 'administrador' || user.groups?.includes('Administradores'));
-  const isEmpleado = user.perfil?.tipo_usuario === 'empleado' || user.perfil?.tipo_usuario === 'diseñador' || user.groups?.includes('Empleados');
+  const isEmpleado = user && (user.perfil?.tipo_usuario === 'empleado' || user.groups?.includes('Empleados'));
 
   // Cerrar menús al hacer clic fuera
   useEffect(() => {
@@ -58,7 +58,7 @@ const getNavLinks = () => {
       return [
         { name: 'Mis Servicios', href: '/servicios', icon: Wrench },
         { name: 'Productos', href: '/productos', icon: ShoppingCart },
-        { name: 'Encuestas', href: '/encuestas', icon: ClipboardList },
+        { name: 'Mi Perfil', href: '/mi-perfil', icon: User },
       ];
     }
 
