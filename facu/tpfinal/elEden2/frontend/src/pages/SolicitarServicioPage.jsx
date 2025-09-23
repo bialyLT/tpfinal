@@ -10,7 +10,11 @@ import {
   CheckCircle,
   AlertCircle,
   Clock,
-  User
+  User,
+  Camera,
+  Image,
+  Upload,
+  X
 } from 'lucide-react';
 
 const SolicitarServicioPage = () => {
@@ -23,7 +27,9 @@ const SolicitarServicioPage = () => {
     descripcion: '',
     fecha_preferida: '',
     direccion_servicio: '',
-    notas_adicionales: ''
+    notas_adicionales: '',
+    imagenes_jardin: [],
+    imagenes_ideas: []
   });
 
   const steps = [
@@ -36,6 +42,18 @@ const SolicitarServicioPage = () => {
   useEffect(() => {
     fetchTiposServicio();
   }, []);
+
+  // Cleanup function para liberar URLs al desmontar el componente
+  useEffect(() => {
+    return () => {
+      formData.imagenes_jardin.forEach(img => {
+        if (img.preview) URL.revokeObjectURL(img.preview);
+      });
+      formData.imagenes_ideas.forEach(img => {
+        if (img.preview) URL.revokeObjectURL(img.preview);
+      });
+    };
+  }, [formData.imagenes_jardin, formData.imagenes_ideas]);
 
   const fetchTiposServicio = async () => {
     try {
@@ -54,6 +72,46 @@ const SolicitarServicioPage = () => {
       ...formData,
       [e.target.name]: e.target.value
     });
+  };
+
+  const handleImageUpload = (e, tipo) => {
+    const files = Array.from(e.target.files);
+    const campo = tipo === 'jardin' ? 'imagenes_jardin' : 'imagenes_ideas';
+    
+    // Crear objetos con archivo y URL de preview
+    const filesWithPreview = files.map(file => ({
+      file: file,
+      preview: URL.createObjectURL(file),
+      name: file.name
+    }));
+    
+    setFormData(prev => ({
+      ...prev,
+      [campo]: [...prev[campo], ...filesWithPreview]
+    }));
+  };
+
+  const removeImage = (index, tipo) => {
+    const campo = tipo === 'jardin' ? 'imagenes_jardin' : 'imagenes_ideas';
+    
+    setFormData(prev => {
+      // Revoke the URL to prevent memory leaks
+      const imageToRemove = prev[campo][index];
+      if (imageToRemove?.preview) {
+        URL.revokeObjectURL(imageToRemove.preview);
+      }
+      
+      return {
+        ...prev,
+        [campo]: prev[campo].filter((_, i) => i !== index)
+      };
+    });
+  };
+
+  // Verificar si el tipo seleccionado es "Diseño de jardines"
+  const isDisenioJardines = () => {
+    const tipoSeleccionado = tiposServicio.find(tipo => tipo.id == formData.tipo_servicio);
+    return tipoSeleccionado?.nombre?.toLowerCase().includes('diseño') || false;
   };
 
   const handleNext = () => {
@@ -101,15 +159,33 @@ const SolicitarServicioPage = () => {
 
     setSubmitting(true);
     try {
-      await serviciosService.createSolicitud(formData);
+      // Preparar los datos para enviar
+      const dataToSend = {
+        ...formData,
+        imagenes_jardin: formData.imagenes_jardin.map(img => img.file),
+        imagenes_ideas: formData.imagenes_ideas.map(img => img.file)
+      };
+
+      await serviciosService.createServicio(dataToSend);
       success('Solicitud de servicio enviada correctamente');
+      
+      // Limpiar URLs de preview para evitar memory leaks
+      formData.imagenes_jardin.forEach(img => {
+        if (img.preview) URL.revokeObjectURL(img.preview);
+      });
+      formData.imagenes_ideas.forEach(img => {
+        if (img.preview) URL.revokeObjectURL(img.preview);
+      });
+      
       // Reset form
       setFormData({
         tipo_servicio: '',
         descripcion: '',
         fecha_preferida: '',
         direccion_servicio: '',
-        notas_adicionales: ''
+        notas_adicionales: '',
+        imagenes_jardin: [],
+        imagenes_ideas: []
       });
       setCurrentStep(1);
     } catch (err) {
@@ -238,17 +314,118 @@ const SolicitarServicioPage = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     <FileText className="w-4 h-4 inline mr-2" />
-                    Descripción del servicio
+                    Descripción del diseño
                   </label>
                   <textarea
                     name="descripcion"
                     value={formData.descripcion}
                     onChange={handleChange}
                     rows={4}
-                    placeholder="Describe detalladamente el servicio que necesitas..."
+                    placeholder="Tengo pensado mejorar mi jardin agregando plantas que combinen con el entorno..."
                     className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
                   />
                 </div>
+
+                {/* Sección de imágenes para diseño de jardines */}
+                {isDisenioJardines() && (
+                  <div className="space-y-6 mt-6 p-4 bg-gray-800/50 rounded-lg border border-gray-600">
+                    <h3 className="text-lg font-medium text-white flex items-center">
+                      <Camera className="w-5 h-5 mr-2 text-green-400" />
+                      Imágenes para el diseño
+                    </h3>
+                    <p className="text-sm text-gray-400">
+                      Las imágenes nos ayudan a entender mejor sus necesidades y crear un diseño personalizado.
+                    </p>
+
+                    {/* Imágenes del jardín actual */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-3">
+                        <Image className="w-4 h-4 inline mr-2 text-blue-400" />
+                        Fotos de su jardín actual
+                      </label>
+                      <p className="text-xs text-gray-400 mb-3">
+                        Suba fotos del espacio donde quiere realizar el diseño
+                      </p>
+                      
+                      <div className="flex flex-wrap gap-3 mb-3">
+                        {formData.imagenes_jardin.map((imagen, index) => (
+                          <div key={index} className="relative">
+                            <div className="w-20 h-20 rounded-lg overflow-hidden border border-gray-600">
+                              <img 
+                                src={imagen.preview} 
+                                alt={`Jardín ${index + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeImage(index, 'jardin')}
+                              className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-600"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                        
+                        <label className="w-20 h-20 border-2 border-dashed border-gray-600 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-gray-500 transition-colors">
+                          <Upload className="w-6 h-6 text-gray-400 mb-1" />
+                          <span className="text-xs text-gray-400">Agregar</span>
+                          <input
+                            type="file"
+                            multiple
+                            accept="image/*"
+                            onChange={(e) => handleImageUpload(e, 'jardin')}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Imágenes de ideas y referencias */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-3">
+                        <Image className="w-4 h-4 inline mr-2 text-purple-400" />
+                        Ideas y referencias (opcional)
+                      </label>
+                      <p className="text-xs text-gray-400 mb-3">
+                        Suba imágenes de diseños que le gusten o ideas que quiera incorporar
+                      </p>
+                      
+                      <div className="flex flex-wrap gap-3 mb-3">
+                        {formData.imagenes_ideas.map((imagen, index) => (
+                          <div key={index} className="relative">
+                            <div className="w-20 h-20 rounded-lg overflow-hidden border border-gray-600">
+                              <img 
+                                src={imagen.preview} 
+                                alt={`Idea ${index + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeImage(index, 'ideas')}
+                              className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-600"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                        
+                        <label className="w-20 h-20 border-2 border-dashed border-gray-600 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-gray-500 transition-colors">
+                          <Upload className="w-6 h-6 text-gray-400 mb-1" />
+                          <span className="text-xs text-gray-400">Agregar</span>
+                          <input
+                            type="file"
+                            multiple
+                            accept="image/*"
+                            onChange={(e) => handleImageUpload(e, 'ideas')}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -279,6 +456,7 @@ const SolicitarServicioPage = () => {
                     className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
                   />
                 </div>
+
               </div>
             </div>
           )}

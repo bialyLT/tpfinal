@@ -4,9 +4,8 @@ from . import views
 
 router = DefaultRouter()
 router.register(r'tipos-servicio', views.TipoServicioViewSet)
-router.register(r'solicitudes', views.SolicitudServicioViewSet)
-router.register(r'propuestas', views.PropuestaDiseñoViewSet)
 router.register(r'servicios', views.ServicioViewSet)
+router.register(r'diseños', views.DiseñoViewSet)
 router.register(r'disponibilidad', views.EmpleadoDisponibilidadViewSet)
 router.register(r'actualizaciones', views.ActualizacionServicioViewSet)
 

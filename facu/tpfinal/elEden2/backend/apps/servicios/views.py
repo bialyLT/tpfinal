@@ -8,13 +8,25 @@ from django.utils import timezone
 from apps.users.permissions import SoloSusRecursos, EsEmpleadoOAdministrador
 
 from .models import (
-    TipoServicio, SolicitudServicio, PropuestaDiseño,
-    Servicio, EmpleadoDisponibilidad, ActualizacionServicio
+    TipoServicio, 
+    Servicio, 
+    Diseño,
+    ImagenServicio,
+    EmpleadoDisponibilidad, 
+    AsignacionEmpleado,
+    ServicioProducto,
+    ActualizacionServicio
 )
 from .serializers import (
-    TipoServicioSerializer, SolicitudServicioSerializer,
-    PropuestaDiseñoSerializer, ServicioSerializer,
-    EmpleadoDisponibilidadSerializer, ActualizacionServicioSerializer
+    TipoServicioSerializer,
+    ServicioSerializer,
+    DiseñoSerializer,
+    ImagenServicioSerializer,
+    EmpleadoDisponibilidadSerializer, 
+    AsignacionEmpleadoSerializer,
+    ServicioProductoSerializer,
+    ActualizacionServicioSerializer,
+    CrearServicioSerializer
 )
 
 
@@ -39,123 +51,144 @@ class TipoServicioViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
 
-class SolicitudServicioViewSet(viewsets.ModelViewSet):
-    queryset = SolicitudServicio.objects.select_related('cliente__perfil', 'tipo_servicio')
-    serializer_class = SolicitudServicioSerializer
-    permission_classes = [permissions.IsAuthenticated, SoloSusRecursos]
+class ServicioViewSet(viewsets.ModelViewSet):
+    queryset = Servicio.objects.select_related('cliente__perfil').prefetch_related('imagenes', 'empleados_asignados')
+    serializer_class = ServicioSerializer
+    permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['estado', 'tipo_servicio', 'prioridad']
-    search_fields = ['titulo', 'descripcion', 'cliente__username', 'cliente__first_name']
-    ordering_fields = ['fecha_solicitud', 'fecha_limite_diseño', 'presupuesto_maximo']
+    filterset_fields = ['estado', 'fecha_preferida', 'fecha_inicio']
+    search_fields = ['numero_servicio', 'notas_adicionales', 'cliente__username', 'cliente__first_name']
+    ordering_fields = ['fecha_solicitud', 'fecha_preferida', 'fecha_inicio']
     ordering = ['-fecha_solicitud']
 
     def get_queryset(self):
         queryset = super().get_queryset()
         user = self.request.user
 
-        # Si es cliente, solo ver sus propias solicitudes
+        # Si es cliente, solo ver sus propios servicios
         if hasattr(user, 'perfil') and user.perfil.tipo_usuario == 'cliente':
             return queryset.filter(cliente=user)
-        # Si es empleado/diseñador, ver todas las solicitudes
+        # Si es empleado/diseñador/admin, ver todos
         return queryset
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return CrearServicioSerializer
+        return ServicioSerializer
+
+    def get_permissions(self):
+        """
+        Los clientes pueden crear y ver sus servicios.
+        Los empleados pueden ver y actualizar todos los servicios.
+        """
+        if self.action == 'create':
+            permission_classes = [permissions.IsAuthenticated]
+        elif self.action in ['list', 'retrieve']:
+            permission_classes = [permissions.IsAuthenticated]
+        else:
+            permission_classes = [EsEmpleadoOAdministrador]
+        return [permission() for permission in permission_classes]
 
     @action(detail=True, methods=['post'])
     def cambiar_estado(self, request, pk=None):
-        """Cambiar estado de la solicitud"""
-        solicitud = self.get_object()
+        """Cambiar estado del servicio"""
+        servicio = self.get_object()
         nuevo_estado = request.data.get('estado')
 
-        if nuevo_estado not in dict(SolicitudServicio.ESTADO_CHOICES):
+        if nuevo_estado not in dict(Servicio.ESTADO_CHOICES):
             return Response(
                 {'error': 'Estado no válido'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        solicitud.estado = nuevo_estado
-        solicitud.save()
-
+        servicio.cambiar_estado(nuevo_estado)
         return Response({'mensaje': f'Estado cambiado a {nuevo_estado}'})
 
-
-class PropuestaDiseñoViewSet(viewsets.ModelViewSet):
-    queryset = PropuestaDiseño.objects.select_related('solicitud__cliente', 'diseñador__perfil')
-    serializer_class = PropuestaDiseñoSerializer
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['estado', 'solicitud', 'diseñador']
-    search_fields = ['titulo', 'descripcion']
-    ordering_fields = ['fecha_creacion', 'fecha_envio', 'costo_estimado']
-    ordering = ['-fecha_creacion']
-
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        user = self.request.user
-
-        # Si es cliente, solo ver propuestas de sus solicitudes
-        if hasattr(user, 'perfil') and user.perfil.tipo_usuario == 'cliente':
-            return queryset.filter(solicitud__cliente=user)
-        # Si es diseñador, ver sus propias propuestas
-        elif hasattr(user, 'perfil') and user.perfil.tipo_usuario == 'diseñador':
-            return queryset.filter(diseñador=user)
-        return queryset
+    @action(detail=True, methods=['get'])
+    def fechas_disponibles(self, request, pk=None):
+        """Obtener fechas disponibles para programar el servicio"""
+        servicio = self.get_object()
+        fechas = servicio.obtener_fechas_disponibles()
+        return Response({'fechas_disponibles': fechas})
 
     @action(detail=True, methods=['post'])
-    def enviar_propuesta(self, request, pk=None):
-        """Marcar propuesta como enviada"""
-        propuesta = self.get_object()
-        propuesta.estado = 'enviada'
-        propuesta.fecha_envio = timezone.now()
-        propuesta.save()
-
-        return Response({'mensaje': 'Propuesta enviada al cliente'})
-
-    @action(detail=True, methods=['post'])
-    def aprobar_propuesta(self, request, pk=None):
-        """Aprobar propuesta y crear servicio"""
-        propuesta = self.get_object()
-        if propuesta.estado != 'enviada':
+    def asignar_empleados(self, request, pk=None):
+        """Asignar empleados ejecutores al servicio"""
+        servicio = self.get_object()
+        empleados_ids = request.data.get('empleados_ids', [])
+        
+        if not empleados_ids:
             return Response(
-                {'error': 'La propuesta debe estar enviada para ser aprobada'},
+                {'error': 'Debe proporcionar al menos un empleado'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-        propuesta.estado = 'aprobada'
-        propuesta.save()
-
-        # Crear servicio basado en la propuesta aprobada
-        servicio = Servicio.objects.create(
-            solicitud=propuesta.solicitud,
-            diseñador=propuesta.diseñador,
-            costo_total=propuesta.costo_estimado,
-            descripcion=f"Servicio basado en propuesta: {propuesta.titulo}"
-        )
-
-        return Response({
-            'mensaje': 'Propuesta aprobada',
-            'servicio_id': servicio.id
-        })
+        
+        resultado = servicio.asignar_empleados_ejecutores(empleados_ids)
+        return Response(resultado)
 
 
-class ServicioViewSet(viewsets.ModelViewSet):
-    queryset = Servicio.objects.select_related('solicitud__cliente', 'propuesta_aprobada__diseñador', 'cliente')
-    serializer_class = ServicioSerializer
+class DiseñoViewSet(viewsets.ModelViewSet):
+    queryset = Diseño.objects.select_related('servicio__cliente', 'diseñador__perfil')
+    serializer_class = DiseñoSerializer
+    permission_classes = [EsEmpleadoOAdministrador]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['estado', 'solicitud', 'cliente']
-    search_fields = ['descripcion', 'solicitud__titulo', 'numero_servicio']
-    ordering_fields = ['fecha_programada', 'fecha_inicio_real', 'fecha_creacion']
-    ordering = ['-fecha_programada']
+    filterset_fields = ['diseñador_asignado', 'servicio']
+    search_fields = ['descripcion', 'servicio__numero_servicio']
+    ordering_fields = ['fecha_creacion', 'fecha_actualizacion']
+    ordering = ['-fecha_creacion']
+
+    @action(detail=True, methods=['post'])
+    def actualizar_diseño(self, request, pk=None):
+        """Actualizar información del diseño"""
+        diseño = self.get_object()
+        
+        # Actualizar campos permitidos
+        if 'descripcion' in request.data:
+            diseño.descripcion = request.data['descripcion']
+        
+        if 'presupuesto' in request.data:
+            diseño.presupuesto = request.data['presupuesto']
+        
+        if 'motivo_rechazo' in request.data:
+            diseño.motivo_rechazo = request.data['motivo_rechazo']
+        
+        diseño.save()
+        
+        return Response({'mensaje': 'Diseño actualizado correctamente'})
+
+
+class EmpleadoDisponibilidadViewSet(viewsets.ModelViewSet):
+    queryset = EmpleadoDisponibilidad.objects.select_related('empleado__perfil')
+    serializer_class = EmpleadoDisponibilidadSerializer
+    permission_classes = [EsEmpleadoOAdministrador]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['estado', 'fecha', 'empleado']
+    search_fields = ['empleado__username', 'empleado__first_name', 'empleado__last_name']
+    ordering_fields = ['fecha', 'empleado__username']
+    ordering = ['-fecha']
 
     def get_queryset(self):
         queryset = super().get_queryset()
         user = self.request.user
 
-        # Si es cliente, solo ver sus propios servicios
-        if hasattr(user, 'perfilusuario') and user.perfilusuario.persona:
-            # Filtrar por cliente directamente
-            return queryset.filter(cliente=user)
-        # Si es diseñador, ver servicios donde sea el diseñador de la propuesta aprobada
-        elif user.groups.filter(name='Diseñadores').exists():
-            return queryset.filter(propuesta_aprobada__diseñador=user)
+        # Si es empleado, solo ver su propia disponibilidad
+        if hasattr(user, 'perfil') and user.perfil.tipo_usuario == 'empleado':
+            return queryset.filter(empleado=user)
         return queryset
+
+
+class ActualizacionServicioViewSet(viewsets.ModelViewSet):
+    queryset = ActualizacionServicio.objects.select_related('servicio__cliente', 'empleado__perfil')
+    serializer_class = ActualizacionServicioSerializer
+    permission_classes = [EsEmpleadoOAdministrador]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['servicio', 'empleado']
+    search_fields = ['descripcion', 'servicio__numero_servicio']
+    ordering_fields = ['fecha_actualizacion']
+    ordering = ['-fecha_actualizacion']
+
+    def perform_create(self, serializer):
+        serializer.save(empleado=self.request.user)
 
     @action(detail=True, methods=['post'])
     def iniciar_servicio(self, request, pk=None):
@@ -201,31 +234,5 @@ class EmpleadoDisponibilidadViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        user = self.request.user
-
-        # Si es empleado, solo ver su propia disponibilidad
-        if hasattr(user, 'perfil') and user.perfil.es_empleado:
-            return queryset.filter(empleado=user)
-        return queryset
-
-
-class ActualizacionServicioViewSet(viewsets.ModelViewSet):
-    queryset = ActualizacionServicio.objects.select_related('servicio__solicitud__cliente', 'creado_por__perfil')
-    serializer_class = ActualizacionServicioSerializer
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['servicio', 'tipo', 'creado_por']
-    search_fields = ['titulo', 'descripcion']
-    ordering_fields = ['fecha_creacion', 'tipo']
-    ordering = ['-fecha_creacion']
-
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        user = self.request.user
-
-        # Si es cliente, solo ver actualizaciones de sus servicios
-        if hasattr(user, 'perfil') and user.perfil.tipo_usuario == 'cliente':
-            return queryset.filter(servicio__solicitud__cliente=user)
-        return queryset
-
     def perform_create(self, serializer):
-        serializer.save(creado_por=self.request.user)
+        serializer.save(empleado=self.request.user)

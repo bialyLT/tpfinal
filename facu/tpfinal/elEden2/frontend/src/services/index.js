@@ -125,6 +125,38 @@ export const serviciosService = {
   updateServicio: async (id, data) => {
     const response = await api.put(`/servicios/servicios/${id}/`, data);
     return response.data;
+  },
+
+  createServicio: async (data) => {
+    const formData = new FormData();
+    
+    // Agregar datos básicos
+    Object.keys(data).forEach(key => {
+      if (key !== 'imagenes_jardin' && key !== 'imagenes_ideas') {
+        formData.append(key, data[key]);
+      }
+    });
+    
+    // Agregar imágenes de jardín
+    if (data.imagenes_jardin) {
+      data.imagenes_jardin.forEach((imagen) => {
+        formData.append('imagenes_jardin', imagen);
+      });
+    }
+    
+    // Agregar imágenes de ideas
+    if (data.imagenes_ideas) {
+      data.imagenes_ideas.forEach((imagen) => {
+        formData.append('imagenes_ideas', imagen);
+      });
+    }
+    
+    const response = await api.post('/servicios/servicios/', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
   }
 };
 

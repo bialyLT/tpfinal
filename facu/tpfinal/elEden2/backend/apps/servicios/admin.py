@@ -1,8 +1,13 @@
 from django.contrib import admin
 from .models import (
-    TipoServicio, SolicitudServicio, ImagenSolicitud, PropuestaDiseño,
-    Servicio, EmpleadoDisponibilidad, AsignacionEmpleado, 
-    ServicioProducto, ActualizacionServicio
+    TipoServicio,
+    Servicio, 
+    Diseño,
+    ImagenServicio,
+    EmpleadoDisponibilidad, 
+    AsignacionEmpleado, 
+    ServicioProducto, 
+    ActualizacionServicio
 )
 
 
@@ -12,52 +17,6 @@ class TipoServicioAdmin(admin.ModelAdmin):
     list_filter = ('categoria', 'requiere_diseño', 'activo')
     search_fields = ('nombre', 'descripcion')
     ordering = ('categoria', 'nombre')
-
-
-class ImagenSolicitudInline(admin.TabularInline):
-    model = ImagenSolicitud
-    extra = 1
-
-
-@admin.register(SolicitudServicio)
-class SolicitudServicioAdmin(admin.ModelAdmin):
-    list_display = ('numero_solicitud', 'cliente', 'tipo_servicio', 'estado', 'prioridad', 'fecha_solicitud')
-    list_filter = ('estado', 'prioridad', 'tipo_servicio', 'fecha_solicitud')
-    search_fields = ('numero_solicitud', 'titulo', 'cliente__username', 'descripcion')
-    ordering = ('-fecha_solicitud',)
-    
-    inlines = [ImagenSolicitudInline]
-    
-    fieldsets = (
-        ('Información Básica', {
-            'fields': ('numero_solicitud', 'cliente', 'tipo_servicio', 'titulo', 'descripcion')
-        }),
-        ('Detalles del Proyecto', {
-            'fields': ('area_aproximada', 'presupuesto_maximo', 'observaciones_cliente')
-        }),
-        ('Ubicación', {
-            'fields': ('direccion_servicio', 'ciudad_servicio', 'provincia_servicio')
-        }),
-        ('Gestión', {
-            'fields': ('estado', 'prioridad', 'diseñador_asignado', 'fecha_limite_diseño')
-        }),
-        ('Observaciones Internas', {
-            'fields': ('observaciones_internas',),
-            'classes': ('collapse',)
-        }),
-    )
-    
-    readonly_fields = ('numero_solicitud', 'fecha_solicitud', 'fecha_asignacion', 'fecha_actualizacion')
-
-
-@admin.register(PropuestaDiseño)
-class PropuestaDiseñoAdmin(admin.ModelAdmin):
-    list_display = ('solicitud', 'diseñador', 'version', 'estado', 'presupuesto_estimado', 'fecha_creacion')
-    list_filter = ('estado', 'diseñador', 'fecha_creacion')
-    search_fields = ('solicitud__numero_solicitud', 'titulo', 'descripcion_diseño')
-    ordering = ('-fecha_creacion',)
-    
-    readonly_fields = ('version', 'fecha_creacion', 'fecha_envio', 'fecha_respuesta_cliente')
 
 
 class AsignacionEmpleadoInline(admin.TabularInline):
@@ -71,35 +30,63 @@ class ServicioProductoInline(admin.TabularInline):
     readonly_fields = ('costo_total',)
 
 
-@admin.register(Servicio)
-class ServicioAdmin(admin.ModelAdmin):
-    list_display = ('numero_servicio', 'cliente', 'estado', 'fecha_programada', 'progreso_porcentaje')
-    list_filter = ('estado', 'fecha_programada')
-    search_fields = ('numero_servicio', 'cliente__username', 'solicitud__titulo')
-    ordering = ('-fecha_programada',)
-    
-    inlines = [AsignacionEmpleadoInline, ServicioProductoInline]
+class ImagenServicioInline(admin.TabularInline):
+    model = ImagenServicio
+    extra = 1
+    fields = ('tipo_imagen', 'imagen', 'descripcion')
+
+
+@admin.register(Diseño)
+class DiseñoAdmin(admin.ModelAdmin):
+    list_display = ('servicio', 'diseñador_asignado', 'presupuesto', 'fecha_creacion', 'fecha_actualizacion')
+    list_filter = ('fecha_creacion', 'fecha_actualizacion', 'diseñador_asignado')
+    search_fields = ('servicio__numero_servicio', 'diseñador_asignado__username', 'descripcion')
+    ordering = ('-fecha_creacion',)
     
     fieldsets = (
         ('Información Básica', {
-            'fields': ('numero_servicio', 'cliente', 'solicitud', 'propuesta_aprobada')
+            'fields': ('servicio', 'diseñador_asignado', 'descripcion')
         }),
-        ('Programación', {
-            'fields': ('fecha_programada', 'fecha_inicio_real', 'fecha_finalizacion_real')
+        ('Presupuesto', {
+            'fields': ('presupuesto',)
         }),
-        ('Estado', {
-            'fields': ('estado', 'progreso_porcentaje')
-        }),
-        ('Pago', {
-            'fields': ('pago',)
-        }),
-        ('Observaciones', {
-            'fields': ('observaciones_ejecucion', 'observaciones_finalizacion'),
+        ('Rechazo', {
+            'fields': ('motivo_rechazo',),
             'classes': ('collapse',)
         }),
     )
     
-    readonly_fields = ('numero_servicio', 'fecha_creacion', 'fecha_actualizacion')
+    readonly_fields = ('fecha_creacion', 'fecha_actualizacion')
+
+
+@admin.register(Servicio)
+class ServicioAdmin(admin.ModelAdmin):
+    list_display = ('numero_servicio', 'cliente', 'estado', 'fecha_preferida', 'fecha_inicio', 'precio_final')
+    list_filter = ('estado', 'fecha_preferida', 'fecha_inicio', 'tipo_servicio')
+    search_fields = ('numero_servicio', 'cliente__username', 'cliente__first_name', 'cliente__last_name')
+    ordering = ('-fecha_solicitud',)
+    
+    inlines = [ImagenServicioInline, AsignacionEmpleadoInline, ServicioProductoInline]
+    
+    fieldsets = (
+        ('Información Básica', {
+            'fields': ('numero_servicio', 'cliente', 'tipo_servicio', 'notas_adicionales')
+        }),
+        ('Ubicación', {
+            'fields': ('direccion_servicio',)
+        }),
+        ('Fechas', {
+            'fields': ('fecha_preferida', 'fecha_inicio', 'fecha_finalizacion')
+        }),
+        ('Estado y Precio', {
+            'fields': ('estado', 'precio_final')
+        }),
+        ('Pago', {
+            'fields': ('pago',)
+        }),
+    )
+    
+    readonly_fields = ('numero_servicio', 'fecha_solicitud', 'fecha_actualizacion', 'fecha_inicio', 'fecha_finalizacion')
 
 
 @admin.register(EmpleadoDisponibilidad)

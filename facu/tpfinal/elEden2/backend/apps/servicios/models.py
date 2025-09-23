@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator
 from django.utils import timezone
+from datetime import date, timedelta
 
 
 class TipoServicio(models.Model):
@@ -33,41 +34,28 @@ class TipoServicio(models.Model):
         return f"{self.nombre} ({self.get_categoria_display()})"
 
 
-class SolicitudServicio(models.Model):
-    """Solicitudes de servicio de los clientes"""
-    ESTADO_CHOICES = [
-        ('pendiente', 'Pendiente de Revisión'),
-        ('en_diseño', 'En Diseño'),
-        ('diseño_enviado', 'Diseño Enviado'),
-        ('revision_diseño', 'En Revisión de Diseño'),
-        ('aprobado', 'Diseño Aprobado'),
-        ('rechazado', 'Diseño Rechazado'),
-        ('cancelado', 'Cancelado'),
-    ]
+class Diseño(models.Model):
+    """Gestión de diseños para servicios que requieren diseño"""
 
-    PRIORIDAD_CHOICES = [
-        ('baja', 'Baja'),
-        ('media', 'Media'),
-        ('alta', 'Alta'),
-        ('urgente', 'Urgente'),
-    ]
-
-    # Información básica
-    numero_solicitud = models.CharField(max_length=20, unique=True, editable=False)
-    cliente = models.ForeignKey(User, on_delete=models.CASCADE, related_name='solicitudes_servicio')
-    tipo_servicio = models.ForeignKey(TipoServicio, on_delete=models.PROTECT, related_name='solicitudes')
+    # Relación con servicio
+    servicio = models.OneToOneField('Servicio', on_delete=models.CASCADE, related_name='diseño')
     
-    # Detalles de la solicitud
-    titulo = models.CharField(max_length=200)
-    descripcion = models.TextField(help_text="Descripción detallada de lo que necesita")
-    area_aproximada = models.DecimalField(
-        max_digits=8, 
-        decimal_places=2, 
+    # Información del diseño
+    descripcion_tecnica = models.TextField(blank=True, null=True, help_text="Descripción técnica del diseño propuesto")
+    descripcion_deseada = models.TextField(blank=True, null=True, help_text="Descripción deseada por el cliente")
+    
+    # Diseñador asignado
+    diseñador_asignado = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
         null=True, 
         blank=True,
-        help_text="Área en metros cuadrados"
+        related_name='diseños_asignados',
+        limit_choices_to={'perfil__tipo_usuario': 'diseñador'}
     )
-    presupuesto_maximo = models.DecimalField(
+    
+    # Presupuesto y costos
+    presupuesto = models.DecimalField(
         max_digits=10, 
         decimal_places=2, 
         null=True, 
@@ -75,238 +63,295 @@ class SolicitudServicio(models.Model):
         validators=[MinValueValidator(0)]
     )
     
-    # Ubicación del servicio
-    direccion_servicio = models.CharField(max_length=300)
-    ciudad_servicio = models.CharField(max_length=100)
-    provincia_servicio = models.CharField(max_length=100)
-    
-    # Estado y seguimiento
-    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
-    prioridad = models.CharField(max_length=10, choices=PRIORIDAD_CHOICES, default='media')
-    diseñador_asignado = models.ForeignKey(
-        User, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True,
-        related_name='solicitudes_asignadas',
-        limit_choices_to={'groups__name__icontains': 'diseñador'}
-    )
-    
-    # Fechas importantes
-    fecha_solicitud = models.DateTimeField(auto_now_add=True)
-    fecha_asignacion = models.DateTimeField(null=True, blank=True)
-    fecha_limite_diseño = models.DateTimeField(null=True, blank=True)
-    fecha_actualizacion = models.DateTimeField(auto_now=True)
-    
-    # Observaciones
-    observaciones_cliente = models.TextField(blank=True, null=True)
-    observaciones_internas = models.TextField(blank=True, null=True)
-
-    class Meta:
-        verbose_name = 'Solicitud de Servicio'
-        verbose_name_plural = 'Solicitudes de Servicio'
-        ordering = ['-fecha_solicitud']
-        indexes = [
-            models.Index(fields=['numero_solicitud']),
-            models.Index(fields=['cliente', 'estado']),
-            models.Index(fields=['diseñador_asignado']),
-        ]
-
-    def __str__(self):
-        return f"{self.numero_solicitud} - {self.titulo}"
-
-    def save(self, *args, **kwargs):
-        if not self.numero_solicitud:
-            import uuid
-            self.numero_solicitud = f"SOL-{uuid.uuid4().hex[:8].upper()}"
-        super().save(*args, **kwargs)
-
-    @property
-    def dias_desde_solicitud(self):
-        """Días transcurridos desde la solicitud"""
-        return (timezone.now() - self.fecha_solicitud).days
-
-    def asignar_diseñador(self, diseñador):
-        """Asignar un diseñador a la solicitud"""
-        self.diseñador_asignado = diseñador
-        self.fecha_asignacion = timezone.now()
-        self.estado = 'en_diseño'
-        # Calcular fecha límite (por ejemplo, 5 días hábiles)
-        import datetime
-        self.fecha_limite_diseño = timezone.now() + datetime.timedelta(days=5)
-        self.save()
-
-
-class ImagenSolicitud(models.Model):
-    """Imágenes adjuntas a las solicitudes"""
-    solicitud = models.ForeignKey(SolicitudServicio, on_delete=models.CASCADE, related_name='imagenes')
-    imagen = models.ImageField(upload_to='solicitudes/')
-    descripcion = models.CharField(max_length=200, blank=True, null=True)
-    fecha_subida = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        verbose_name = 'Imagen de Solicitud'
-        verbose_name_plural = 'Imágenes de Solicitud'
-        ordering = ['fecha_subida']
-
-    def __str__(self):
-        return f"Imagen de {self.solicitud.numero_solicitud}"
-
-
-class PropuestaDiseño(models.Model):
-    """Propuestas de diseño enviadas por diseñadores"""
-    ESTADO_CHOICES = [
-        ('borrador', 'Borrador'),
-        ('enviado', 'Enviado al Cliente'),
-        ('aprobado', 'Aprobado'),
-        ('rechazado', 'Rechazado'),
-        ('revision', 'En Revisión'),
-    ]
-
-    solicitud = models.ForeignKey(SolicitudServicio, on_delete=models.CASCADE, related_name='propuestas')
-    diseñador = models.ForeignKey(User, on_delete=models.CASCADE, related_name='propuestas_diseño')
-    version = models.IntegerField(default=1)
-    
-    # Contenido de la propuesta
-    titulo = models.CharField(max_length=200)
-    descripcion_diseño = models.TextField()
-    presupuesto_estimado = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
-    tiempo_ejecucion_dias = models.IntegerField(validators=[MinValueValidator(1)])
-    
-    # Archivos de diseño
-    archivo_diseño = models.FileField(upload_to='diseños/', blank=True, null=True)
-    imagen_renderizado = models.ImageField(upload_to='renderizados/', blank=True, null=True)
-    
-    # Estado y fechas
-    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='borrador')
+    # Fechas
     fecha_creacion = models.DateTimeField(auto_now_add=True)
-    fecha_envio = models.DateTimeField(null=True, blank=True)
-    fecha_respuesta_cliente = models.DateTimeField(null=True, blank=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
     
-    # Feedback del cliente
-    comentarios_cliente = models.TextField(blank=True, null=True)
+    # Retroalimentación del cliente
     motivo_rechazo = models.TextField(blank=True, null=True)
 
     class Meta:
-        verbose_name = 'Propuesta de Diseño'
-        verbose_name_plural = 'Propuestas de Diseño'
+        verbose_name = 'Diseño'
+        verbose_name_plural = 'Diseños'
         ordering = ['-fecha_creacion']
-        unique_together = ['solicitud', 'version']
+        indexes = [
+            models.Index(fields=['diseñador_asignado']),
+            models.Index(fields=['servicio']),
+            models.Index(fields=['fecha_creacion']),
+        ]
 
     def __str__(self):
-        return f"Propuesta v{self.version} - {self.solicitud.numero_solicitud}"
+        return f"Diseño {self.servicio.numero_servicio} - {self.get_estado_display()}"
 
-    def enviar_al_cliente(self):
-        """Enviar propuesta al cliente"""
-        self.estado = 'enviado'
-        self.fecha_envio = timezone.now()
-        self.solicitud.estado = 'diseño_enviado'
-        self.solicitud.save()
+    def asignar_diseñador(self, diseñador):
+        """Asignar diseñador y cambiar estado"""
+        self.diseñador_asignado = diseñador
         self.save()
 
-    def aprobar(self, comentarios=None):
-        """Aprobar propuesta"""
-        self.estado = 'aprobado'
-        self.fecha_respuesta_cliente = timezone.now()
-        if comentarios:
-            self.comentarios_cliente = comentarios
-        self.solicitud.estado = 'aprobado'
-        self.solicitud.save()
+
+        # Actualizar servicio principal
+        self.servicio.estado = 'aprobado'
+        self.servicio.precio_final = self.presupuesto_final or self.presupuesto_estimado
+        self.servicio.save()
         self.save()
 
-    def rechazar(self, motivo):
-        """Rechazar propuesta"""
-        self.estado = 'rechazado'
-        self.fecha_respuesta_cliente = timezone.now()
-        self.motivo_rechazo = motivo
-        self.solicitud.estado = 'revision_diseño'
-        self.solicitud.save()
-        self.save()
+
+class ImagenDiseño(models.Model):
+    """Imágenes específicas para diseños"""
+
+    diseño = models.ForeignKey(Diseño, on_delete=models.CASCADE, related_name='imagenes')
+    imagen = models.ImageField(upload_to='diseños/')
+    descripcion = models.CharField(max_length=200, blank=True, null=True)
+    fecha_subida = models.DateTimeField(auto_now_add=True)
+    subida_por = models.ForeignKey(User, on_delete=models.CASCADE, related_name='imagenes_diseño_subidas')
+
+    class Meta:
+        verbose_name = 'Imagen de Diseño'
+        verbose_name_plural = 'Imágenes de Diseño'
+        ordering = ['fecha_subida']
+
+    def __str__(self):
+        return f"Imagen de Diseño - Servicio {self.diseño.servicio.numero_servicio}"
 
 
 class Servicio(models.Model):
-    """Servicios confirmados y en ejecución"""
+    """Servicios desde solicitud hasta finalización"""
     ESTADO_CHOICES = [
-        ('programado', 'Programado'),
-        ('en_curso', 'En Curso'),
+        ('solicitud', 'Solicitud Inicial'),
+        ('en_revision', 'En Revisión'),
+        ('en_diseño', 'En Diseño'),
+        ('diseño_enviado', 'Diseño Enviado'),
+        ('revision_diseño', 'En Revisión de Diseño'),
+        ('aprobado', 'Diseño Aprobado'),
+        ('en_curso', 'En Ejecución'),
         ('pausado', 'Pausado'),
         ('completado', 'Completado'),
         ('cancelado', 'Cancelado'),
+        ('rechazado', 'Rechazado'),
     ]
 
-    # Relaciones principales
+    # Información básica
     numero_servicio = models.CharField(max_length=20, unique=True, editable=False)
-    solicitud = models.OneToOneField(SolicitudServicio, on_delete=models.CASCADE, related_name='servicio')
-    propuesta_aprobada = models.ForeignKey(PropuestaDiseño, on_delete=models.PROTECT, related_name='servicios')
     cliente = models.ForeignKey(User, on_delete=models.CASCADE, related_name='servicios')
-    pago = models.OneToOneField('users.Pago', on_delete=models.PROTECT, related_name='servicio', null=True, blank=True)
+    tipo_servicio = models.ForeignKey(TipoServicio, on_delete=models.PROTECT, related_name='servicios')
     
-    # Información del servicio
-    fecha_programada = models.DateTimeField()
-    fecha_inicio_real = models.DateTimeField(null=True, blank=True)
-    fecha_finalizacion_real = models.DateTimeField(null=True, blank=True)
+    # Detalles de la solicitud inicial (solo información básica)
+    notas_adicionales = models.TextField(blank=True, null=True, help_text="Notas adicionales del cliente")
+    
+    # Ubicación del servicio (obligatorio)
+    direccion_servicio = models.CharField(max_length=300)
+    # ciudad_servicio = models.CharField(max_length=100)
+    # provincia_servicio = models.CharField(max_length=100)
+    
+    # Fecha propuesta por el cliente (debe estar dentro de fechas disponibles)
+    fecha_preferida = models.DateTimeField(help_text="Fecha preferida por el cliente")
+    fecha_inicio = models.DateTimeField(null=True, blank=True, help_text="Se establece cuando el diseño es aprobado")
+    fecha_finalizacion = models.DateTimeField(null=True, blank=True, help_text="Se establece cuando el servicio termina")
+    
+    # Fechas de seguimiento
+    fecha_solicitud = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
     
     # Estado y seguimiento
-    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='programado')
-    progreso_porcentaje = models.IntegerField(default=0, validators=[MinValueValidator(0)])
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='solicitud')
     
-    # Observaciones y notas
-    observaciones_ejecucion = models.TextField(blank=True, null=True)
-    observaciones_finalizacion = models.TextField(blank=True, null=True)
-    
-    # Metadatos
-    fecha_creacion = models.DateTimeField(auto_now_add=True)
-    fecha_actualizacion = models.DateTimeField(auto_now=True)
+    # Precio final del servicio
+    precio_final = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
+    # Relación con pago
+    pago = models.OneToOneField('users.Pago', on_delete=models.PROTECT, related_name='servicio', null=True, blank=True)
 
     class Meta:
         verbose_name = 'Servicio'
         verbose_name_plural = 'Servicios'
-        ordering = ['-fecha_programada']
+        ordering = ['-fecha_solicitud']
         indexes = [
             models.Index(fields=['numero_servicio']),
             models.Index(fields=['cliente', 'estado']),
-            models.Index(fields=['fecha_programada']),
+            models.Index(fields=['fecha_preferida']),
         ]
 
     def __str__(self):
-        return f"{self.numero_servicio} - {self.solicitud.titulo}"
+        return f"{self.numero_servicio} - Cliente: {self.cliente.username}"
 
     def save(self, *args, **kwargs):
+        # Generar número de servicio si no existe
         if not self.numero_servicio:
             import uuid
             self.numero_servicio = f"SER-{uuid.uuid4().hex[:8].upper()}"
+        
+        # Manejar fechas según cambios de estado
+        if self.pk:  # Si ya existe el servicio
+            old_servicio = Servicio.objects.get(pk=self.pk)
+            
+            # Si cambia de 'revision_diseño' a 'aprobado', establecer fecha_inicio
+            if old_servicio.estado == 'revision_diseño' and self.estado == 'aprobado':
+                self.fecha_inicio = timezone.now()
+            
+            # Si cambia a estados finales, establecer fecha_finalizacion
+            if self.estado in ['completado', 'cancelado', 'rechazado'] and not self.fecha_finalizacion:
+                self.fecha_finalizacion = timezone.now()
+        
         super().save(*args, **kwargs)
+        
+        # Crear diseño automáticamente si el tipo de servicio requiere diseño
+        if not hasattr(self, 'diseño') and self.tipo_servicio.requiere_diseño:
+            Diseño.objects.create(servicio=self)
 
-    def iniciar_servicio(self):
-        """Marcar servicio como iniciado"""
+    def requiere_diseño(self):
+        """Verifica si el servicio requiere diseño"""
+        return self.tipo_servicio.requiere_diseño
+
+    def crear_diseño(self, descripcion_diseño):
+        """Crear un diseño para este servicio"""
+        if self.requiere_diseño() and not hasattr(self, 'diseño'):
+            return Diseño.objects.create(
+                servicio=self,
+                descripcion_diseño=descripcion_diseño
+            )
+        return None
+
+    def asignar_empleados_ejecutores(self, empleados_ids):
+        """Asignar empleados ejecutores al servicio cuando se aprueba"""
+        if self.estado == 'aprobado':
+            for empleado_id in empleados_ids:
+                empleado = User.objects.get(id=empleado_id)
+                AsignacionEmpleado.objects.get_or_create(
+                    servicio=self,
+                    empleado=empleado,
+                    defaults={'rol_en_servicio': 'Ejecutor'}
+                )
+
+    def iniciar_servicio(self, empleados_ejecutores_ids=None):
+        """Marcar servicio como iniciado y asignar empleados ejecutores"""
         self.estado = 'en_curso'
-        self.fecha_inicio_real = timezone.now()
+        if not self.fecha_inicio:
+            self.fecha_inicio = timezone.now()
         self.save()
+        
+        # Asignar empleados ejecutores si se proporcionan
+        if empleados_ejecutores_ids:
+            self.asignar_empleados_ejecutores(empleados_ejecutores_ids)
+
+    def get_empleados_ejecutores_asignados(self):
+        """Obtener empleados ejecutores asignados activos"""
+        return User.objects.filter(
+            asignaciones_servicio__servicio=self
+        ).distinct()
 
     def finalizar_servicio(self, observaciones=None):
         """Marcar servicio como completado"""
         self.estado = 'completado'
-        self.fecha_finalizacion_real = timezone.now()
-        self.progreso_porcentaje = 100
-        if observaciones:
-            self.observaciones_finalizacion = observaciones
+        self.fecha_finalizacion = timezone.now()
+        self.save()
+    
+    def cancelar_servicio(self, motivo=None):
+        """Cancelar servicio"""
+        self.estado = 'cancelado'
+        self.fecha_finalizacion = timezone.now()
         self.save()
 
-    @property
-    def duracion_real(self):
-        """Duración real del servicio en horas"""
-        if self.fecha_inicio_real and self.fecha_finalizacion_real:
-            delta = self.fecha_finalizacion_real - self.fecha_inicio_real
-            return delta.total_seconds() / 3600
-        return None
+    def rechazar_servicio(self, motivo):
+        """Rechazar servicio"""
+        self.estado = 'rechazado'
+        self.fecha_finalizacion = timezone.now()
+        self.save()
 
-    @property
-    def esta_atrasado(self):
-        """Verifica si el servicio está atrasado"""
-        if self.estado not in ['completado', 'cancelado']:
-            return timezone.now() > self.fecha_programada
-        return False
+    @classmethod
+    def get_fechas_disponibles(cls, tipo_servicio_id=None):
+        """
+        Obtener fechas disponibles para programar servicios considerando 
+        solo la disponibilidad de empleados ejecutores
+        """
+        fechas_disponibles = []
+        fecha_actual = date.today()
+        
+        # Buscar fechas en los próximos 60 días
+        for i in range(1, 61):  # Empezar desde mañana
+            fecha_check = fecha_actual + timedelta(days=i)
+            
+            # Excluir fines de semana (opcional)
+            if fecha_check.weekday() >= 5:  # 5=Sábado, 6=Domingo
+                continue
+            
+            # Contar empleados EJECUTORES ocupados en servicios en ejecución
+            servicios_en_ejecucion = cls.objects.filter(
+                fecha_preferida__date=fecha_check,
+                estado__in=['aprobado', 'en_curso'],  # Solo servicios en ejecución
+                asignaciones__empleado__isnull=False
+            ).values_list('asignaciones__empleado', flat=True)
+            
+            # Total de empleados ejecutores disponibles
+            total_empleados_ejecutores = User.objects.filter(
+                perfil__tipo_usuario='empleado',  # Solo empleados comunes, no diseñadores
+                groups__name='Empleados'
+            ).count()
+            
+            empleados_ocupados_count = len(set(servicios_en_ejecucion))
+            
+            # Si hay al menos un empleado ejecutor disponible, agregar la fecha
+            if total_empleados_ejecutores > empleados_ocupados_count:
+                fechas_disponibles.append(fecha_check)
+        
+        return fechas_disponibles
+
+    def get_empleados_ejecutores_disponibles(self):
+        """Obtener empleados EJECUTORES disponibles para la fecha preferida de este servicio"""
+        if not self.fecha_preferida:
+            return User.objects.filter(
+                perfil__tipo_usuario='empleado',
+                groups__name='Empleados'
+            )
+        
+        # Empleados ejecutores que NO tienen servicios en ejecución en la fecha preferida
+        empleados_ocupados = Servicio.objects.filter(
+            fecha_preferida__date=self.fecha_preferida.date(),
+            estado__in=['aprobado', 'en_curso'],
+            asignaciones__empleado__isnull=False
+        ).values_list('asignaciones__empleado', flat=True)
+        
+        return User.objects.filter(
+            perfil__tipo_usuario='empleado',  # Solo empleados comunes
+            groups__name='Empleados'
+        ).exclude(
+            id__in=empleados_ocupados
+        )
+
+        
+class ImagenServicio(models.Model):
+    """Imágenes adjuntas a los servicios (solicitud inicial, progreso y resultado)"""
+    TIPO_IMAGEN_CHOICES = [
+        ('jardin_actual', 'Imagen del Jardín Actual'),
+        ('idea_referencia', 'Imagen de Idea/Referencia')
+    ]
+
+    servicio = models.ForeignKey(Servicio, on_delete=models.CASCADE, related_name='imagenes')
+    imagen = models.ImageField(upload_to='servicios/')
+    tipo_imagen = models.CharField(max_length=20, choices=TIPO_IMAGEN_CHOICES)
+    descripcion = models.CharField(max_length=200, blank=True, null=True)
+    fecha_subida = models.DateTimeField(auto_now_add=True)
+    subida_por = models.ForeignKey(User, on_delete=models.CASCADE, related_name='imagenes_servicio_subidas')
+
+    class Meta:
+        verbose_name = 'Imagen de Servicio'
+        verbose_name_plural = 'Imágenes de Servicio'
+        ordering = ['fecha_subida']
+
+    def __str__(self):
+        return f"Imagen {self.get_tipo_imagen_display()} - {self.servicio.numero_servicio}"
+
+    @classmethod
+    def get_imagenes_por_tipo(cls, servicio, tipo):
+        """Obtener imágenes de un tipo específico para un servicio"""
+        return cls.objects.filter(servicio=servicio, tipo_imagen=tipo)
+
+    @classmethod
+    def get_imagenes_solicitud(cls, servicio):
+        """Obtener imágenes de la solicitud inicial (jardín e ideas)"""
+        return cls.objects.filter(
+            servicio=servicio, 
+            tipo_imagen__in=['jardin_actual', 'idea_referencia']
+        )
 
 
 class EmpleadoDisponibilidad(models.Model):
@@ -346,13 +391,13 @@ class EmpleadoDisponibilidad(models.Model):
 
 
 class AsignacionEmpleado(models.Model):
-    """Asignación de empleados a servicios"""
+    """Asignación de empleados ejecutores a servicios"""
     servicio = models.ForeignKey(Servicio, on_delete=models.CASCADE, related_name='asignaciones')
     empleado = models.ForeignKey(
         User, 
         on_delete=models.CASCADE, 
         related_name='asignaciones_servicio',
-        limit_choices_to={'groups__name__icontains': 'empleado'}
+        limit_choices_to={'perfil__tipo_usuario': 'empleado'}  # Solo empleados ejecutores
     )
     rol_en_servicio = models.CharField(max_length=100, default='Ejecutor')
     fecha_asignacion = models.DateTimeField(auto_now_add=True)
