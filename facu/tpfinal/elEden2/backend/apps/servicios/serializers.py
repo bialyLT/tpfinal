@@ -36,6 +36,8 @@ class DiseñoSerializer(serializers.ModelSerializer):
 
 class ServicioSerializer(serializers.ModelSerializer):
     cliente_nombre = serializers.CharField(source='cliente.get_full_name', read_only=True)
+    tipo_servicio_nombre = serializers.CharField(source='tipo_servicio.nombre', read_only=True)
+    tipo_servicio_requiere_diseño = serializers.BooleanField(source='tipo_servicio.requiere_diseño', read_only=True)
     imagenes = ImagenServicioSerializer(many=True, read_only=True)
     diseño = DiseñoSerializer(read_only=True)
     empleados_asignados = serializers.SerializerMethodField()
@@ -46,8 +48,7 @@ class ServicioSerializer(serializers.ModelSerializer):
         read_only_fields = ('numero_servicio', 'fecha_inicio', 'fecha_finalizacion', 'fecha_solicitud', 'fecha_actualizacion')
     
     def get_empleados_asignados(self, obj):
-        asignaciones = AsignacionEmpleado.objects.filter(servicio=obj)
-        return [{'empleado': asig.empleado.get_full_name(), 'fecha_asignacion': asig.fecha_asignacion} for asig in asignaciones]
+        return [{'empleado': asig.empleado.get_full_name(), 'fecha_asignacion': asig.fecha_asignacion} for asig in obj.asignaciones.all()]
 
 
 class AsignacionEmpleadoSerializer(serializers.ModelSerializer):

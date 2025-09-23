@@ -3,6 +3,7 @@ import { serviciosService } from '../services';
 import { useAuth } from '../context/AuthContext';
 import { success, handleApiError } from '../utils/notifications';
 import { Calendar, Clock, CheckCircle, XCircle, Users, Filter, Search, Eye } from 'lucide-react';
+import ServicioDetalleModal from './ServicioDetalleModal';
 
 const ServiciosPage = () => {
   const [servicios, setServicios] = useState([]);
@@ -12,6 +13,8 @@ const ServiciosPage = () => {
   const [activeTab, setActiveTab] = useState('solicitudes');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [selectedServicioId, setSelectedServicioId] = useState(null);
+  const [isDetalleModalOpen, setIsDetalleModalOpen] = useState(false);
   const { user } = useAuth();
 
   const isAdmin = user?.groups?.includes('Administradores');
@@ -49,24 +52,40 @@ const ServiciosPage = () => {
     }
   };
 
+  const handleVerDetalle = (servicioId) => {
+    setSelectedServicioId(servicioId);
+    setIsDetalleModalOpen(true);
+  };
+
+  const handleCloseDetalle = () => {
+    setIsDetalleModalOpen(false);
+    setSelectedServicioId(null);
+  };
+
   const getStatusColor = (status) => {
     const colors = {
-      'pendiente': 'bg-yellow-500',
-      'en_curso': 'bg-blue-500',
-      'completado': 'bg-green-500',
+      'solicitud': 'bg-blue-500',
+      'en_revision': 'bg-yellow-500',
+      'en_diseño': 'bg-purple-500',
+      'diseño_enviado': 'bg-indigo-500',
+      'revision_diseño': 'bg-orange-500',
+      'aprobado': 'bg-green-500',
+      'en_curso': 'bg-cyan-500',
+      'pausado': 'bg-gray-500',
+      'completado': 'bg-emerald-500',
       'cancelado': 'bg-red-500',
-      'programado': 'bg-purple-500'
+      'rechazado': 'bg-red-700'
     };
     return colors[status] || 'bg-gray-500';
   };
 
   const filteredData = activeTab === 'solicitudes' 
     ? solicitudes.filter(item => 
-        item.titulo?.toLowerCase().includes(searchTerm.toLowerCase()) &&
+        (item.tipo_servicio_nombre || item.tipo_servicio?.nombre || item.notas_adicionales || '')?.toLowerCase().includes(searchTerm.toLowerCase()) &&
         (!statusFilter || item.estado === statusFilter)
       )
     : servicios.filter(item => 
-        item.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) &&
+        (item.tipo_servicio_nombre || item.tipo_servicio?.nombre || item.notas_adicionales || '')?.toLowerCase().includes(searchTerm.toLowerCase()) &&
         (!statusFilter || item.estado === statusFilter)
       );
 
@@ -173,21 +192,26 @@ const ServiciosPage = () => {
                       <td className="px-6 py-4">
                         <div>
                           <p className="font-medium text-white">
-                            {activeTab === 'solicitudes' ? item.titulo : item.descripcion}
+                            {item.tipo_servicio_nombre || item.tipo_servicio?.nombre || 'Servicio sin título'}
                           </p>
                           <p className="text-xs text-gray-400 mt-1">
-                            #{activeTab === 'solicitudes' ? item.numero_solicitud : item.numero_servicio}
+                            #{item.numero_servicio}
                           </p>
+                          {item.notas_adicionales && (
+                            <p className="text-xs text-gray-500 mt-1 truncate max-w-xs">
+                              {item.notas_adicionales}
+                            </p>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center">
                           <Users className="w-4 h-4 mr-2 text-gray-400" />
-                          {item.cliente?.username || 'N/A'}
+                          {item.cliente_nombre || item.cliente?.username || item.cliente?.get_full_name || 'N/A'}
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        {new Date(activeTab === 'solicitudes' ? item.fecha_solicitud : item.fecha_programada).toLocaleDateString()}
+                        {new Date(item.fecha_solicitud || item.fecha_preferida || item.fecha_inicio).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center">
@@ -197,7 +221,11 @@ const ServiciosPage = () => {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center space-x-2">
-                          <button className="p-1 text-gray-400 hover:text-white">
+                          <button 
+                            onClick={() => handleVerDetalle(item.id)}
+                            className="p-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded"
+                            title="Ver detalles"
+                          >
                             <Eye className="w-4 h-4" />
                           </button>
                           {(isAdmin || isEmpleado) && (
@@ -206,10 +234,17 @@ const ServiciosPage = () => {
                               onChange={(e) => handleUpdateEstado(item.id, e.target.value)}
                               className="text-xs bg-gray-700 border border-gray-600 rounded px-2 py-1"
                             >
-                              <option value="pendiente">Pendiente</option>
-                              <option value="en_curso">En Curso</option>
+                              <option value="solicitud">Solicitud Inicial</option>
+                              <option value="en_revision">En Revisión</option>
+                              <option value="en_diseño">En Diseño</option>
+                              <option value="diseño_enviado">Diseño Enviado</option>
+                              <option value="revision_diseño">En Revisión de Diseño</option>
+                              <option value="aprobado">Diseño Aprobado</option>
+                              <option value="en_curso">En Ejecución</option>
+                              <option value="pausado">Pausado</option>
                               <option value="completado">Completado</option>
                               <option value="cancelado">Cancelado</option>
+                              <option value="rechazado">Rechazado</option>
                             </select>
                           )}
                         </div>
@@ -228,6 +263,13 @@ const ServiciosPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Modal de Detalle */}
+      <ServicioDetalleModal
+        servicioId={selectedServicioId}
+        isOpen={isDetalleModalOpen}
+        onClose={handleCloseDetalle}
+      />
     </div>
   );
 };

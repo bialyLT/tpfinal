@@ -78,31 +78,21 @@ export const productosService = {
 // Servicios Services
 export const serviciosService = {
   getSolicitudes: async (params = {}) => {
-    const response = await api.get('/servicios/solicitudes/', { params });
+    // Las solicitudes son servicios con estado 'solicitud'
+    const response = await api.get('/servicios/servicios/', { 
+      params: { ...params, estado: 'solicitud' } 
+    });
     return response.data;
   },
   
   createSolicitud: async (data) => {
-    const response = await api.post('/servicios/solicitudes/', data);
-    return response.data;
-  },
-  
-  getPropuestas: async (params = {}) => {
-    const response = await api.get('/servicios/propuestas/', { params });
-    return response.data;
-  },
-  
-  createPropuesta: async (data) => {
-    const response = await api.post('/servicios/propuestas/', data);
-    return response.data;
-  },
-  
-  aprobarPropuesta: async (id) => {
-    const response = await api.post(`/servicios/propuestas/${id}/aprobar_propuesta/`);
+    // Crear servicio es lo mismo que crear solicitud
+    const response = await api.post('/servicios/servicios/', data);
     return response.data;
   },
   
   getServicios: async (params = {}) => {
+    // Los servicios son aquellos que no están en estado 'solicitado'
     const response = await api.get('/servicios/servicios/', { params });
     return response.data;
   },
@@ -119,6 +109,11 @@ export const serviciosService = {
   
   getTiposServicio: async () => {
     const response = await api.get('/servicios/tipos-servicio/');
+    return response.data;
+  },
+
+  getServicioById: async (id) => {
+    const response = await api.get(`/servicios/servicios/${id}/`);
     return response.data;
   },
 

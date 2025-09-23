@@ -52,7 +52,7 @@ class TipoServicioViewSet(viewsets.ModelViewSet):
 
 
 class ServicioViewSet(viewsets.ModelViewSet):
-    queryset = Servicio.objects.select_related('cliente__perfil').prefetch_related('imagenes', 'empleados_asignados')
+    queryset = Servicio.objects.select_related('cliente', 'tipo_servicio').prefetch_related('imagenes', 'asignaciones')
     serializer_class = ServicioSerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
