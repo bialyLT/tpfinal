@@ -1,59 +1,57 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django.db.models import Q, F
-from apps.users.permissions import EsEmpleadoOAdministrador
 
-from .models import Categoria, Marca, Unidad, Producto, Stock, MovimientoStock
+from .models import Categoria, Marca, Producto, Stock
 from .serializers import (
-    CategoriaSerializer, MarcaSerializer, UnidadSerializer,
-    ProductoSerializer, ProductoListSerializer, StockSerializer,
-    MovimientoStockSerializer
+    CategoriaSerializer, MarcaSerializer,
+    ProductoSerializer, ProductoListSerializer, StockSerializer
 )
 
 
 class CategoriaViewSet(viewsets.ModelViewSet):
     queryset = Categoria.objects.all()
     serializer_class = CategoriaSerializer
-    permission_classes = [EsEmpleadoOAdministrador]
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['activo']
-    search_fields = ['nombre', 'descripcion']
-    ordering_fields = ['nombre', 'fecha_creacion']
-    ordering = ['nombre']
+    search_fields = ['nombre_categoria', 'descripcion']
+    ordering_fields = ['nombre_categoria', 'id_categoria']
+    ordering = ['nombre_categoria']
 
 
 class MarcaViewSet(viewsets.ModelViewSet):
     queryset = Marca.objects.all()
     serializer_class = MarcaSerializer
-    permission_classes = [EsEmpleadoOAdministrador]
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['activo']
-    search_fields = ['nombre', 'descripcion']
-    ordering_fields = ['nombre', 'fecha_creacion']
-    ordering = ['nombre']
+    search_fields = ['nombre_marca', 'descripcion']
+    ordering_fields = ['nombre_marca', 'id_marca']
+    ordering = ['nombre_marca']
 
 
-class UnidadViewSet(viewsets.ModelViewSet):
-    queryset = Unidad.objects.all()
-    serializer_class = UnidadSerializer
-    permission_classes = [EsEmpleadoOAdministrador]
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['activo']
-    search_fields = ['nombre', 'abreviatura', 'descripcion']
-    ordering_fields = ['nombre', 'fecha_creacion']
-    ordering = ['nombre']
+# UnidadViewSet comentado - modelo no existe en el diagrama ER
+# class UnidadViewSet(viewsets.ModelViewSet):
+#     queryset = Unidad.objects.all()
+#     serializer_class = UnidadSerializer
+#     permission_classes = [EsEmpleadoOAdministrador]
+#     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+#     filterset_fields = ['activo']
+#     search_fields = ['nombre', 'abreviatura', 'descripcion']
+#     ordering_fields = ['nombre', 'fecha_creacion']
+#     ordering = ['nombre']
 
 
 class ProductoViewSet(viewsets.ModelViewSet):
-    queryset = Producto.objects.select_related('categoria', 'marca', 'unidad', 'stock').all()
-    permission_classes = [EsEmpleadoOAdministrador]
+    queryset = Producto.objects.select_related('categoria', 'marca').all()
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['estado', 'categoria', 'marca', 'requiere_stock']
-    search_fields = ['codigo', 'nombre', 'descripcion', 'codigo_barras']
-    ordering_fields = ['nombre', 'precio_venta', 'fecha_creacion']
+    filterset_fields = ['categoria', 'marca']
+    search_fields = ['nombre', 'descripcion']
+    ordering_fields = ['nombre', 'fecha_creacion']
     ordering = ['nombre']
 
     def get_serializer_class(self):
@@ -136,30 +134,31 @@ class StockViewSet(viewsets.ModelViewSet):
         return Response(resumen)
 
 
-class MovimientoStockViewSet(viewsets.ModelViewSet):
-    queryset = MovimientoStock.objects.select_related('producto').all()
-    serializer_class = MovimientoStockSerializer
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['tipo', 'motivo', 'producto']
-    search_fields = ['producto__nombre', 'producto__codigo', 'observaciones', 'numero_documento']
-    ordering_fields = ['fecha_movimiento', 'cantidad']
-    ordering = ['-fecha_movimiento']
-
-    @action(detail=False, methods=['get'])
-    def por_producto(self, request):
-        """Obtiene movimientos de stock por producto"""
-        producto_id = request.query_params.get('producto_id')
-        if not producto_id:
-            return Response(
-                {'error': 'Se requiere el parámetro producto_id'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        movimientos = self.get_queryset().filter(producto_id=producto_id)
-        serializer = self.get_serializer(movimientos, many=True)
-        return Response(serializer.data)
-
-    def perform_create(self, serializer):
-        """Asegurar que se actualice el stock al crear un movimiento"""
-        movimiento = serializer.save()
-        return movimiento
+# MovimientoStockViewSet comentado - modelo no existe en el diagrama ER
+# class MovimientoStockViewSet(viewsets.ModelViewSet):
+#     queryset = MovimientoStock.objects.select_related('producto').all()
+#     serializer_class = MovimientoStockSerializer
+#     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+#     filterset_fields = ['tipo', 'motivo', 'producto']
+#     search_fields = ['producto__nombre', 'producto__codigo', 'observaciones', 'numero_documento']
+#     ordering_fields = ['fecha_movimiento', 'cantidad']
+#     ordering = ['-fecha_movimiento']
+#
+#     @action(detail=False, methods=['get'])
+#     def por_producto(self, request):
+#         """Obtiene movimientos de stock por producto"""
+#         producto_id = request.query_params.get('producto_id')
+#         if not producto_id:
+#             return Response(
+#                 {'error': 'Se requiere el parámetro producto_id'},
+#                 status=status.HTTP_400_BAD_REQUEST
+#             )
+#         
+#         movimientos = self.get_queryset().filter(producto_id=producto_id)
+#         serializer = self.get_serializer(movimientos, many=True)
+#         return Response(serializer.data)
+#
+#     def perform_create(self, serializer):
+#         """Asegurar que se actualice el stock al crear un movimiento"""
+#         movimiento = serializer.save()
+#         return movimiento

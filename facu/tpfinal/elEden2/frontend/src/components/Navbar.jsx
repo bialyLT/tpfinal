@@ -46,10 +46,14 @@ const getNavLinks = () => {
     if (isAdmin) {
       return [
         { name: 'Dashboard', href: '/dashboard', icon: Settings },
-        { name: 'Productos', href: '/productos', icon: ShoppingCart },
+        { name: 'Inventario', href: '/productos', icon: ShoppingCart },
+        { name: 'Compras', href: '/compras', icon: ShoppingCart },
+        { name: 'Proveedores', href: '/proveedores', icon: User },
+        { name: 'Categorías', href: '/categorias', icon: ClipboardList },
+        { name: 'Marcas', href: '/marcas', icon: ClipboardList },
         { name: 'Servicios', href: '/servicios', icon: Wrench },
         { name: 'Encuestas', href: '/encuestas', icon: ClipboardList },
-        { name: 'Empleados', href: '/empleados', icon: User },
+        // { name: 'Empleados', href: '/empleados', icon: User }, // ⚠️ Deshabilitado: endpoints no implementados
       ];
     }
     
@@ -57,7 +61,9 @@ const getNavLinks = () => {
     if (isEmpleado) {
       return [
         { name: 'Mis Servicios', href: '/servicios', icon: Wrench },
-        { name: 'Productos', href: '/productos', icon: ShoppingCart },
+        { name: 'Inventario', href: '/productos', icon: ShoppingCart },
+        { name: 'Compras', href: '/compras', icon: ShoppingCart },
+        { name: 'Proveedores', href: '/proveedores', icon: User },
         { name: 'Mi Perfil', href: '/mi-perfil', icon: User },
       ];
     }
@@ -130,19 +136,17 @@ const getNavLinks = () => {
                       <img className="h-8 w-8 rounded-full" src={`https://ui-avatars.com/api/?name=${user?.first_name}+${user?.last_name}&background=0D8ABC&color=fff`} alt="" />
                     </button>
                   </div>
-                  <div
-                    className={`origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none transition-all duration-200 ease-out ${
-                      isProfileMenuOpen ? 'transform opacity-100 scale-100' : 'transform opacity-0 scale-95'
-                    }`}
-                  >
-                    <div className="px-4 py-2 text-sm text-gray-700 border-b">
-                      <p className="font-bold">{user?.first_name} {user?.last_name}</p>
-                      <p className="text-xs text-gray-500">{user?.email}</p>
+                  {isProfileMenuOpen && (
+                    <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none">
+                      <div className="px-4 py-2 text-sm text-gray-700 border-b">
+                        <p className="font-bold">{user?.first_name} {user?.last_name}</p>
+                        <p className="text-xs text-gray-500">{user?.email}</p>
+                      </div>
+                      <button onClick={logout} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        <LogOut size={16} /> Cerrar Sesión
+                      </button>
                     </div>
-                    <button onClick={logout} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                      <LogOut size={16} /> Cerrar Sesión
-                    </button>
-                  </div>
+                  )}
                 </div>
               ) : (
                 /* Botón de Iniciar Sesión para usuarios no autenticados */

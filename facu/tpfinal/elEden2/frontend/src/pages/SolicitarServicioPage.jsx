@@ -58,7 +58,8 @@ const SolicitarServicioPage = () => {
   const fetchTiposServicio = async () => {
     try {
       setLoading(true);
-      const data = await serviciosService.getTiposServicio();
+      // Usar getServicios en lugar de getTiposServicio (que no existe)
+      const data = await serviciosService.getServicios();
       setTiposServicio(data.results || []);
     } catch (err) {
       handleApiError(err, 'Error al cargar los tipos de servicio');

@@ -18,10 +18,17 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from rest_framework_simplejwt.views import TokenRefreshView, TokenBlacklistView
+from core.views import CustomTokenObtainPairView
 
 urlpatterns = [
     # Admin
     path('admin/', admin.site.urls),
+    
+    # JWT Authentication (con serializer personalizado que acepta email)
+    path('api/v1/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/v1/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/v1/token/blacklist/', TokenBlacklistView.as_view(), name='token_blacklist'),
     
     # API
     path('api/v1/', include('core.urls')),
@@ -29,6 +36,7 @@ urlpatterns = [
     path('api/v1/', include('apps.users.urls')),
     path('api/v1/', include('apps.servicios.urls')),
     path('api/v1/', include('apps.encuestas.urls')),
+    path('api/v1/', include('apps.ventas.urls')),
 ]
 
 # Serve media files in development

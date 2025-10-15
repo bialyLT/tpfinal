@@ -1,25 +1,16 @@
-from django.urls import path, include
+﻿from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import TokenRefreshView
 from . import views
 
 router = DefaultRouter()
+router.register(r'generos', views.GeneroViewSet)
+router.register(r'tipos-documento', views.TipoDocumentoViewSet)
+router.register(r'localidades', views.LocalidadViewSet)
 router.register(r'personas', views.PersonaViewSet)
-router.register(r'usuarios', views.UsuarioViewSet)
-router.register(r'roles', views.RolViewSet)
-router.register(r'pagos', views.PagoViewSet)
-router.register(r'metodos-pago', views.MetodoPagoViewSet)
-router.register(r'historial-acceso', views.HistorialAccesoViewSet)
-router.register(r'configuraciones', views.ConfiguracionUsuarioViewSet)
+router.register(r'clientes', views.ClienteViewSet)
+router.register(r'proveedores', views.ProveedorViewSet)
 
 urlpatterns = [
     path('users/', include(router.urls)),
-    # Auth endpoints
-    path('auth/login/', views.LoginView.as_view(), name='auth-login'),
-    path('auth/register/', views.RegisterPublicView.as_view(), name='auth-register'),
-    path('auth/token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
-    path('auth/user/', views.ProfileView.as_view(), name='auth-user'),
-    path('auth/logout/', views.LogoutView.as_view(), name='auth-logout'),
-    # Admin endpoints
-    path('users/register-empleado/', views.RegisterEmpleadoView.as_view(), name='register-empleado'),
+    path('users/me/', views.CurrentUserView.as_view(), name='current-user'),
 ]

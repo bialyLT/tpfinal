@@ -1,0 +1,409 @@
+# Instrucciones del Proyecto - El Edén (Sistema de Gestión de Jardinería)
+
+## Información General del Proyecto
+
+**Nombre**: El Edén
+**Tipo**: Sistema de gestión integral para empresa de jardinería
+**Stack Tecnológico**:
+- **Backend**: Django 5.2.5 + Django REST Framework + SQLite
+- **Frontend**: React + Vite + TailwindCSS + Lucide React Icons
+- **Autenticación**: JWT (Simple JWT) con refresh tokens y blacklist
+
+## Estructura del Proyecto
+
+```
+elEden2/
+├── backend/
+│   ├── apps/
+│   │   ├── productos/      # Gestión de inventario de productos
+│   │   ├── users/          # Usuarios, roles, proveedores
+│   │   ├── servicios/      # Servicios de jardinería
+│   │   ├── ventas/         # Compras, presupuestos, ventas
+│   │   └── encuestas/      # Encuestas de satisfacción
+│   ├── core/               # Configuración base
+│   └── elEden_api/         # Settings principales
+└── frontend/
+    └── src/
+        ├── components/     # Componentes reutilizables
+        ├── pages/          # Páginas principales
+        ├── services/       # Servicios API
+        └── utils/          # Utilidades y helpers
+```
+
+## Reglas de Negocio Críticas
+
+### 1. **Productos e Inventario**
+
+#### Gestión de Precios (CRÍTICO)
+- **Los productos NO tienen precio fijo en el formulario de creación**
+- **El precio se calcula automáticamente desde las compras**
+- Lógica de precio:
+  - Cuando se registra una compra con un producto, se define el precio unitario
+  - El precio del producto SIEMPRE es el **precio unitario MÁS ALTO** de todas las compras realizadas
+  - Ejemplo:
+    * Compra 1: Tierra de Campo - 5 unidades a $500/unidad → Precio producto: $500
+    * Compra 2: Tierra de Campo - 10 unidades a $600/unidad → Precio producto: $600 (actualizado)
+    * Compra 3: Tierra de Campo - 3 unidades a $450/unidad → Precio producto: $600 (sin cambios)
+
+#### Campo `precio` en modelo Producto
+```python
+# El campo precio en la base de datos es NULL permitido
+precio = models.DecimalField(
+    max_digits=10, 
+    decimal_places=2, 
+    validators=[MinValueValidator(0)],
+    blank=True,
+    null=True,
+    help_text="Precio calculado automáticamente desde las compras"
+)
+
+# Método para calcular precio
+def calcular_precio_desde_compras(self):
+    """Calcula precio desde el precio unitario más alto de las compras"""
+    from apps.ventas.models import DetalleCompra
+    detalle_max = DetalleCompra.objects.filter(
+        producto=self
+    ).order_by('-precio_unitario').first()
+    return detalle_max.precio_unitario if detalle_max else 0
+```
+
+#### Uso de Productos
+- Los productos son para **uso interno** en la empresa de jardinería
+- NO se venden directamente a clientes
+- Se usan en **Diseños** que requieren aprobación del cliente
+- Solo usuarios con rol **Admin** o **Empleado** pueden gestionar inventario
+
+### 2. **Proveedores**
+
+- **Proveedor NO es una Persona** - Es una empresa/entidad
+- Campos de Proveedor:
+  - `razon_social`: Nombre de la empresa
+  - `cuit`: CUIT único de la empresa
+  - `nombre_contacto`: Persona de contacto
+  - `email`: Email de contacto
+  - `telefono`: Teléfono de contacto
+  - `direccion`: Dirección física
+  - `activo`: Estado (activo/inactivo)
+  - `observaciones`: Notas adicionales
+
+### 3. **Compras a Proveedores** (CRÍTICO)
+
+#### Gestión de Compras
+- **Las compras NO se pagan en el sistema** - Solo se registran
+- **El total de la compra se calcula automáticamente**
+- Una compra consiste en:
+  - Proveedor
+  - Fecha de compra
+  - Observaciones (opcional)
+  - **Detalles** (productos comprados con cantidad y precio unitario)
+
+#### Flujo de Creación de Compra
+1. Usuario selecciona proveedor y fecha
+2. Agrega productos con:
+   - Producto seleccionado
+   - Cantidad comprada
+   - Precio unitario de compra
+3. **Sistema calcula automáticamente**:
+   - Subtotal de cada detalle: `cantidad * precio_unitario`
+   - Total de la compra: suma de todos los subtotales
+   - **Actualiza el precio del producto** al precio más alto de todas las compras
+   - **Actualiza el stock** sumando la cantidad comprada
+
+#### Campo `total` en modelo Compra
+```python
+# El campo total en la base de datos es NULL permitido
+total = models.DecimalField(
+    max_digits=10,
+    decimal_places=2,
+    validators=[MinValueValidator(0)],
+    blank=True,
+    null=True,
+    editable=False,
+    help_text="Total calculado automáticamente desde los detalles"
+)
+
+# Método para calcular total
+def calcular_total(self):
+    """Calcula total sumando todos los subtotales de los detalles"""
+    from decimal import Decimal
+    total = sum(
+        (detalle.subtotal for detalle in self.detalles.all()),
+        start=Decimal('0.00')
+    )
+    self.total = total
+    self.save(update_fields=['total'])
+    return total
+```
+
+#### Serializer Especial para Crear Compras
+```python
+class CompraCreateSerializer(serializers.ModelSerializer):
+    """Serializer para crear compras con detalles inline"""
+    detalles = DetalleCompraCreateSerializer(many=True, write_only=True)
+    
+    def create(self, validated_data):
+        detalles_data = validated_data.pop('detalles')
+        compra = Compra.objects.create(**validated_data)
+        
+        # Crear detalles y actualizar precios de productos
+        for detalle_data in detalles_data:
+            producto = Producto.objects.get(id_producto=detalle_data['producto'])
+            DetalleCompra.objects.create(
+                compra=compra,
+                producto=producto,
+                cantidad=detalle_data['cantidad'],
+                precio_unitario=detalle_data['precio_unitario']
+            )
+        
+        compra.calcular_total()  # Calcular total automáticamente
+        return compra
+```
+
+#### ViewSet con get_serializer_class
+```python
+class CompraViewSet(viewsets.ModelViewSet):
+    def get_serializer_class(self):
+        if self.action in ['create', 'update']:
+            return CompraCreateSerializer
+        return CompraSerializer
+```
+
+### 4. **Roles de Usuario**
+
+El sistema tiene 3 roles principales:
+- **Admin**: Acceso completo al sistema
+- **Empleado**: Gestión de productos, servicios, ventas
+- **Cliente**: Acceso limitado a sus propios servicios y presupuestos
+
+## Convenciones de Código
+
+### Backend (Django)
+
+#### Nombres de Modelos
+- Usar nombres en español
+- Primary keys: `id_<nombre_modelo>` (ej: `id_producto`, `id_categoria`)
+- Foreign keys: nombre del modelo en minúscula (ej: `categoria`, `marca`)
+- Fechas: `fecha_creacion`, `fecha_actualizacion`
+
+#### Serializers
+- Crear serializers de lista y detalle cuando sea necesario
+- Usar `select_related()` y `prefetch_related()` para optimizar queries
+- Ejemplo:
+```python
+class ProductoListSerializer(serializers.ModelSerializer):
+    categoria_nombre = serializers.CharField(source='categoria.nombre_categoria', read_only=True)
+    marca_nombre = serializers.CharField(source='marca.nombre_marca', read_only=True)
+```
+
+#### ViewSets
+- Usar `ModelViewSet` para CRUD completo
+- Agregar filtros de búsqueda con `search_fields`
+- Permisos: `IsAuthenticated` por defecto
+```python
+class ProductoViewSet(viewsets.ModelViewSet):
+    queryset = Producto.objects.select_related('categoria', 'marca')
+    serializer_class = ProductoSerializer
+    search_fields = ['nombre', 'descripcion', 'categoria__nombre_categoria']
+```
+
+### Frontend (React)
+
+#### Estructura de Componentes
+- Páginas principales en `src/pages/`
+- Componentes reutilizables en `src/components/`
+- Servicios API en `src/services/`
+
+#### Diseño UI
+- **Tema oscuro consistente**:
+  - Background principal: `bg-gray-900`
+  - Cards/contenedores: `bg-gray-800`
+  - Inputs: `bg-gray-700` con `border-gray-600`
+  - Texto: `text-white` / `text-gray-300`
+- **Colores de acción**:
+  - Primario/Crear: `green-600` (éxito, crear)
+  - Editar: `blue-600` (información, modificar)
+  - Eliminar: `red-600` (peligro, borrar)
+  - Advertencia: `yellow-400`
+
+#### Iconos
+- Usar **Lucide React** para todos los iconos
+- Importar desde `'lucide-react'`
+```jsx
+import { Package, Edit, Trash2, Plus } from 'lucide-react';
+```
+
+#### Modales
+- **CRÍTICO**: Siempre agregar `stopPropagation()` en el contenido del modal
+```jsx
+<div className="modal-overlay" onClick={handleClose}>
+  <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+    {/* contenido */}
+  </div>
+</div>
+```
+
+#### Manejo de Imágenes
+- Usar `FormData` para upload de archivos
+- Axios debe **auto-detectar** `FormData` y no establecer `Content-Type` manualmente
+```jsx
+// Interceptor en services/api.js
+if (config.data instanceof FormData) {
+  delete config.headers['Content-Type']; // Dejar que axios lo maneje
+}
+```
+
+#### Estados de Formulario
+- Usar objetos para `formData` con todos los campos necesarios
+- Resetear estado al cerrar modales
+- Validación: campos requeridos con asterisco (*)
+
+## Servicios API
+
+### Estructura de servicios (`src/services/`)
+
+```javascript
+const productosService = {
+  getProductos: () => api.get('/productos/productos/'),
+  getById: (id) => api.get(`/productos/productos/${id}/`),
+  create: (data) => api.post('/productos/productos/', data),
+  update: (id, data) => api.put(`/productos/productos/${id}/`, data),
+  delete: (id) => api.delete(`/productos/productos/${id}/`)
+};
+```
+
+### Manejo de Errores
+```javascript
+import { handleApiError, success } from '../utils/notifications';
+
+try {
+  await productosService.create(data);
+  success('Producto creado exitosamente');
+} catch (error) {
+  handleApiError(error, 'Error al crear producto');
+}
+```
+
+## Migraciones y Base de Datos
+
+### SQLite - Modificar Columnas
+SQLite no soporta `ALTER COLUMN` directamente. Usar esta técnica:
+
+```sql
+PRAGMA foreign_keys=off;
+BEGIN TRANSACTION;
+
+-- 1. Crear tabla nueva con estructura correcta
+CREATE TABLE tabla_new (...);
+
+-- 2. Copiar datos
+INSERT INTO tabla_new SELECT * FROM tabla;
+
+-- 3. Eliminar tabla vieja
+DROP TABLE tabla;
+
+-- 4. Renombrar tabla nueva
+ALTER TABLE tabla_new RENAME TO tabla;
+
+-- 5. Recrear índices
+CREATE INDEX ...;
+
+COMMIT;
+PRAGMA foreign_keys=on;
+```
+
+## Solución de Problemas Comunes
+
+### 1. Modal cierra sesión inesperadamente
+**Causa**: Event bubbling hace click en botón de logout invisible
+**Solución**: 
+- Agregar `stopPropagation()` en contenido del modal
+- Usar renderizado condicional en lugar de CSS `opacity` para dropdowns
+
+### 2. Error `NOT NULL constraint failed`
+**Causa**: Campo requerido en base de datos pero no en formulario
+**Solución**: 
+- Verificar esquema DB con `PRAGMA table_info(tabla)`
+- Comparar con modelo Django
+- Ajustar modelo o hacer campo nullable
+
+### 3. FormData no envía archivos correctamente
+**Causa**: `Content-Type` establecido manualmente
+**Solución**: Dejar que axios detecte FormData automáticamente
+
+### 4. Imports no resuelven
+**Causa**: Rutas relativas incorrectas
+**Solución**: Verificar estructura de carpetas y usar paths absolutos cuando sea posible
+
+## Comandos Útiles
+
+### Backend
+```bash
+# Activar entorno virtual
+.\venv\Scripts\activate
+
+# Correr servidor
+python manage.py runserver
+
+# Crear migraciones
+python manage.py makemigrations
+
+# Aplicar migraciones
+python manage.py migrate
+
+# Crear superusuario
+python manage.py createsuperuser
+
+# Shell de Django
+python manage.py shell
+```
+
+### Frontend
+```bash
+# Instalar dependencias
+npm install
+
+# Correr desarrollo
+npm run dev
+
+# Build producción
+npm run build
+```
+
+### Base de Datos (SQLite)
+```bash
+# Abrir DB
+sqlite3 db.sqlite3
+
+# Ver estructura de tabla
+PRAGMA table_info(nombre_tabla);
+
+# Ver datos
+SELECT * FROM nombre_tabla LIMIT 10;
+```
+
+## Notas de Desarrollo
+
+### Al crear nuevas features:
+1. Verificar reglas de negocio primero
+2. Mantener consistencia en diseño UI (tema oscuro)
+3. Agregar validaciones apropiadas
+4. Manejar errores correctamente
+5. Probar con datos reales antes de commit
+
+### Al modificar modelos:
+1. Verificar impacto en relaciones
+2. Actualizar serializers correspondientes
+3. Crear/aplicar migraciones
+4. Verificar que frontend recibe datos correctos
+
+### Al crear formularios:
+1. Validar campos requeridos
+2. Agregar placeholders descriptivos
+3. Manejar estados de carga
+4. Feedback visual de errores
+5. Confirmación en operaciones destructivas (eliminar)
+
+---
+
+**Última actualización**: Octubre 2025
+**Mantenedor**: Equipo El Edén

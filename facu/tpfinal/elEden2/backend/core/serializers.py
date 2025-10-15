@@ -1,9 +1,43 @@
 from rest_framework import serializers
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.models import Group
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 User = get_user_model()
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """Serializer personalizado para JWT que acepta email en lugar de username"""
+    username_field = 'username'  # Mantenemos el campo como username en la validación
+    
+    def validate(self, attrs):
+        # Obtener username o email
+        username = attrs.get('username')
+        password = attrs.get('password')
+        
+        # Intentar autenticar con username
+        user = authenticate(username=username, password=password)
+        
+        # Si no funciona, intentar con email
+        if user is None:
+            try:
+                user_obj = User.objects.get(email=username)
+                user = authenticate(username=user_obj.username, password=password)
+            except User.DoesNotExist:
+                pass
+        
+        if user is None:
+            raise serializers.ValidationError('Credenciales inválidas')
+        
+        # Usar el método parent para generar los tokens
+        refresh = self.get_token(user)
+        
+        data = {
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+        }
+        
+        return data
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer para el modelo de usuario"""

@@ -1,112 +1,75 @@
-from django.contrib import admin
-from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.contrib.auth.models import Group
-from .models import (
-    Persona, Rol, Pago,
-    MetodoPago, HistorialAcceso, ConfiguracionUsuario
-)
+﻿from django.contrib import admin
+from .models import Genero, TipoDocumento, Localidad, Persona, Cliente, Proveedor
 
 
-# Desregistrar el modelo Group por defecto para usar nuestro Rol
-admin.site.unregister(Group)
+@admin.register(Genero)
+class GeneroAdmin(admin.ModelAdmin):
+    list_display = ('id_genero', 'genero')
+    search_fields = ('genero',)
+    ordering = ('genero',)
+
+
+@admin.register(TipoDocumento)
+class TipoDocumentoAdmin(admin.ModelAdmin):
+    list_display = ('id_tipo_documento', 'tipo')
+    search_fields = ('tipo',)
+    ordering = ('tipo',)
+
+
+@admin.register(Localidad)
+class LocalidadAdmin(admin.ModelAdmin):
+    list_display = ('id_localidad', 'cp', 'nombre_localidad', 'nombre_provincia')
+    list_filter = ('nombre_provincia',)
+    search_fields = ('cp', 'nombre_localidad', 'nombre_provincia')
+    ordering = ('nombre_provincia', 'nombre_localidad')
 
 
 @admin.register(Persona)
 class PersonaAdmin(admin.ModelAdmin):
-    list_display = ('numero_documento', 'apellidos', 'nombres', 'telefono', 'ciudad', 'activo')
-    list_filter = ('tipo_documento', 'genero', 'provincia', 'activo', 'fecha_creacion')
-    search_fields = ('nombres', 'apellidos', 'numero_documento', 'telefono')
-    ordering = ('apellidos', 'nombres')
-
+    list_display = ('id_persona', 'nombre', 'apellido', 'nro_documento', 'email', 'telefono')
+    list_filter = ('genero', 'tipo_documento', 'localidad__nombre_provincia')
+    search_fields = ('nombre', 'apellido', 'nro_documento', 'email', 'telefono')
+    ordering = ('apellido', 'nombre')
+    
     fieldsets = (
-        ('Información Personal', {
-            'fields': ('nombres', 'apellidos', 'fecha_nacimiento', 'genero')
+        ('Informacion Personal', {
+            'fields': ('nombre', 'apellido', 'genero')
         }),
-        ('Documentación', {
-            'fields': ('tipo_documento', 'numero_documento')
+        ('Documentacion', {
+            'fields': ('tipo_documento', 'nro_documento')
         }),
         ('Contacto', {
-            'fields': ('telefono', 'telefono_alternativo')
+            'fields': ('email', 'telefono')
         }),
-        ('Dirección', {
-            'fields': ('direccion', 'ciudad', 'provincia', 'codigo_postal', 'pais'),
-            'classes': ('collapse',)
-        }),
-        ('Configuración', {
-            'fields': ('activo', 'observaciones')
+        ('Direccion', {
+            'fields': ('calle', 'numero', 'piso', 'dpto', 'localidad')
         }),
     )
 
-    readonly_fields = ('fecha_creacion', 'fecha_actualizacion')
+
+@admin.register(Cliente)
+class ClienteAdmin(admin.ModelAdmin):
+    list_display = ('id_cliente', 'get_nombre_completo', 'get_email', 'fecha_registro', 'activo')
+    list_filter = ('activo', 'fecha_registro')
+    search_fields = ('persona__nombre', 'persona__apellido', 'persona__email')
+    ordering = ('-fecha_registro',)
+    
+    def get_nombre_completo(self, obj):
+        return f"{obj.persona.apellido}, {obj.persona.nombre}"
+    get_nombre_completo.short_description = 'Nombre'
+    
+    def get_email(self, obj):
+        return obj.persona.email
+    get_email.short_description = 'Email'
 
 
-@admin.register(Rol)
-class RolAdmin(admin.ModelAdmin):
-    list_display = ('nombre', 'nivel_acceso', 'activo', 'fecha_creacion')
-    list_filter = ('nivel_acceso', 'activo', 'fecha_creacion')
-    search_fields = ('grupo__name', 'descripcion')
-    ordering = ('nivel_acceso', 'grupo__name')
-
-    readonly_fields = ('fecha_creacion', 'fecha_actualizacion')
-
-
-class ConfiguracionUsuarioInline(admin.StackedInline):
-    model = ConfiguracionUsuario
-    extra = 0
-
-
-@admin.register(MetodoPago)
-class MetodoPagoAdmin(admin.ModelAdmin):
-    list_display = ('nombre', 'tipo', 'comision_porcentaje', 'comision_fija', 'activo')
-    list_filter = ('tipo', 'activo', 'requiere_autorizacion')
-    search_fields = ('nombre', 'descripcion')
-    ordering = ('nombre',)
-
-    readonly_fields = ('fecha_creacion', 'fecha_actualizacion')
-
-
-@admin.register(Pago)
-class PagoAdmin(admin.ModelAdmin):
-    list_display = ('numero_transaccion', 'user', 'metodo_pago', 'monto', 'estado', 'fecha_pago')
-    list_filter = ('estado', 'tipo_transaccion', 'metodo_pago', 'fecha_pago')
-    search_fields = ('numero_transaccion', 'user__username', 'user__persona__nombres',
-                    'user__persona__apellidos', 'referencia_externa')
-    ordering = ('-fecha_pago',)
-
-    fieldsets = (
-        ('Información del Pago', {
-            'fields': ('numero_transaccion', 'user', 'metodo_pago', 'tipo_transaccion')
-        }),
-        ('Montos', {
-            'fields': ('monto', 'monto_comision', 'monto_neto')
-        }),
-        ('Estado', {
-            'fields': ('estado', 'fecha_pago', 'fecha_procesamiento', 'fecha_completado')
-        }),
-        ('Información Adicional', {
-            'fields': ('referencia_externa', 'descripcion', 'observaciones'),
-            'classes': ('collapse',)
-        }),
-    )
-
-    readonly_fields = ('numero_transaccion', 'monto_neto', 'fecha_creacion', 'fecha_actualizacion')
-
-
-@admin.register(HistorialAcceso)
-class HistorialAccesoAdmin(admin.ModelAdmin):
-    list_display = ('user', 'ip_address', 'fecha_acceso', 'accion', 'exitoso')
-    list_filter = ('exitoso', 'fecha_acceso')
-    search_fields = ('user__username', 'ip_address', 'accion')
-    ordering = ('-fecha_acceso',)
-
-    readonly_fields = ('fecha_acceso',)
-
-
-@admin.register(ConfiguracionUsuario)
-class ConfiguracionUsuarioAdmin(admin.ModelAdmin):
-    list_display = ('user', 'tema', 'idioma', 'productos_por_pagina')
-    list_filter = ('tema', 'idioma', 'notif_stock_bajo')
-    search_fields = ('user__username',)
-    ordering = ('user__username',)
-
-    readonly_fields = ('fecha_creacion', 'fecha_actualizacion')
+@admin.register(Proveedor)
+class ProveedorAdmin(admin.ModelAdmin):
+    list_display = ('id_proveedor', 'razon_social', 'cuit', 'get_nombre_contacto', 'fecha_alta', 'activo')
+    list_filter = ('activo', 'fecha_alta')
+    search_fields = ('razon_social', 'cuit', 'persona__nombre', 'persona__apellido')
+    ordering = ('razon_social',)
+    
+    def get_nombre_contacto(self, obj):
+        return f"{obj.persona.apellido}, {obj.persona.nombre}"
+    get_nombre_contacto.short_description = 'Contacto'

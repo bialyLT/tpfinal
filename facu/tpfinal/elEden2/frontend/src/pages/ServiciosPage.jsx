@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { serviciosService } from '../services';
 import { useAuth } from '../context/AuthContext';
 import { success, handleApiError } from '../utils/notifications';
-import { Calendar, Clock, CheckCircle, XCircle, Users, Filter, Search, Eye } from 'lucide-react';
+import { Calendar, Clock, CheckCircle, XCircle, Users, Filter, Search, Eye, Palette } from 'lucide-react';
 import ServicioDetalleModal from './ServicioDetalleModal';
+import CrearDisenoModal from './CrearDisenoModal';
 
 const ServiciosPage = () => {
   const [servicios, setServicios] = useState([]);
@@ -15,6 +16,8 @@ const ServiciosPage = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedServicioId, setSelectedServicioId] = useState(null);
   const [isDetalleModalOpen, setIsDetalleModalOpen] = useState(false);
+  const [isDisenoModalOpen, setIsDisenoModalOpen] = useState(false);
+  const [servicioParaDiseno, setServicioParaDiseno] = useState(null);
   const { user } = useAuth();
 
   const isAdmin = user?.groups?.includes('Administradores');
@@ -27,14 +30,14 @@ const ServiciosPage = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [serviciosData, solicitudesData, tiposData] = await Promise.all([
+      const [serviciosData, solicitudesData] = await Promise.all([
         serviciosService.getServicios(),
-        serviciosService.getSolicitudes(),
-        serviciosService.getTiposServicio()
+        serviciosService.getSolicitudes()
       ]);
       setServicios(serviciosData.results || []);
       setSolicitudes(solicitudesData.results || []);
-      setTiposServicio(tiposData.results || []);
+      // Los servicios también funcionan como tipos de servicio
+      setTiposServicio(serviciosData.results || []);
     } catch (error) {
       handleApiError(error, 'Error al cargar los datos');
     } finally {
@@ -60,6 +63,23 @@ const ServiciosPage = () => {
   const handleCloseDetalle = () => {
     setIsDetalleModalOpen(false);
     setSelectedServicioId(null);
+  };
+
+  const handleCrearDiseno = (servicio) => {
+    setServicioParaDiseno(servicio);
+    setIsDisenoModalOpen(true);
+  };
+
+  const handleCloseDisenoModal = () => {
+    setIsDisenoModalOpen(false);
+    setServicioParaDiseno(null);
+  };
+
+  const handleDisenoCreado = () => {
+    // Recargar los servicios después de crear el diseño
+    fetchData();
+    setIsDisenoModalOpen(false);
+    setServicioParaDiseno(null);
   };
 
   const getStatusColor = (status) => {
@@ -229,23 +249,38 @@ const ServiciosPage = () => {
                             <Eye className="w-4 h-4" />
                           </button>
                           {(isAdmin || isEmpleado) && (
-                            <select
-                              value={item.estado}
-                              onChange={(e) => handleUpdateEstado(item.id, e.target.value)}
-                              className="text-xs bg-gray-700 border border-gray-600 rounded px-2 py-1"
-                            >
-                              <option value="solicitud">Solicitud Inicial</option>
-                              <option value="en_revision">En Revisión</option>
-                              <option value="en_diseño">En Diseño</option>
-                              <option value="diseño_enviado">Diseño Enviado</option>
-                              <option value="revision_diseño">En Revisión de Diseño</option>
-                              <option value="aprobado">Diseño Aprobado</option>
-                              <option value="en_curso">En Ejecución</option>
-                              <option value="pausado">Pausado</option>
-                              <option value="completado">Completado</option>
-                              <option value="cancelado">Cancelado</option>
-                              <option value="rechazado">Rechazado</option>
-                            </select>
+                            <>
+                              {/* Si el servicio está en revisión y no tiene diseño, mostrar botón crear diseño */}
+                              {console.log('Item debug:', { id: item.id, estado: item.estado, diseno: item.diseno, hasDiseno: !!item.diseno })}
+                              {!item.diseno && (
+                                <button
+                                  onClick={() => handleCrearDiseno(item)}
+                                  className="inline-flex items-center px-2 py-1 text-xs font-medium rounded text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                                  title="Crear diseño para este servicio"
+                                >
+                                  <Palette className="w-3 h-3 mr-1" />
+                                  Crear Diseño
+                                </button>
+                              )}
+                              {/* Select para cambiar estado - siempre visible para admins y empleados */}
+                              <select
+                                value={item.estado}
+                                onChange={(e) => handleUpdateEstado(item.id, e.target.value)}
+                                className="text-xs bg-gray-700 border border-gray-600 rounded px-2 py-1"
+                              >
+                                <option value="solicitud">Solicitud Inicial</option>
+                                <option value="en_revision">En Revisión</option>
+                                <option value="en_diseño">En Diseño</option>
+                                <option value="diseño_enviado">Diseño Enviado</option>
+                                <option value="revision_diseño">En Revisión de Diseño</option>
+                                <option value="aprobado">Diseño Aprobado</option>
+                                <option value="en_curso">En Ejecución</option>
+                                <option value="pausado">Pausado</option>
+                                <option value="completado">Completado</option>
+                                <option value="cancelado">Cancelado</option>
+                                <option value="rechazado">Rechazado</option>
+                              </select>
+                            </>
                           )}
                         </div>
                       </td>
@@ -269,6 +304,14 @@ const ServiciosPage = () => {
         servicioId={selectedServicioId}
         isOpen={isDetalleModalOpen}
         onClose={handleCloseDetalle}
+      />
+
+      {/* Modal de Crear Diseño */}
+      <CrearDisenoModal
+        servicio={servicioParaDiseno}
+        isOpen={isDisenoModalOpen}
+        onClose={handleCloseDisenoModal}
+        onDisenoCreado={handleDisenoCreado}
       />
     </div>
   );

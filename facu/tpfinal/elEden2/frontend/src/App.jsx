@@ -14,9 +14,14 @@ import DashboardPage from './pages/DashboardPage';
 import ProductosPage from './pages/ProductosPage';
 import ServiciosPage from './pages/ServiciosPage';
 import EncuestasPage from './pages/EncuestasPage';
-import EmpleadosPage from './pages/EmpleadosPage';
+// import EmpleadosPage from './pages/EmpleadosPage'; // ⚠️ Deshabilitado: endpoints no implementados
 import SolicitarServicioPage from './pages/SolicitarServicioPage';
 import MiPerfil from './pages/MiPerfil';
+// ABM Pages
+import ComprasPage from './pages/ComprasPage';
+import CategoriasPage from './pages/CategoriasPage';
+import MarcasPage from './pages/MarcasPage';
+import ProveedoresPage from './pages/ProveedoresPage';
 
 // Basic Protected Route Component (solo requiere autenticación)
 const BasicProtectedRoute = ({ children }) => {
@@ -115,7 +120,7 @@ function App() {
               } 
             />
 
-            {/* Empleados - Solo Administradores */}
+            {/* Empleados - ⚠️ DESHABILITADO: endpoints no implementados
             <Route 
               path="/empleados" 
               element={
@@ -124,6 +129,7 @@ function App() {
                 </ProtectedRoute>
               } 
             />
+            */}
             
             {/* Productos - Solo Empleados y Administradores */}
             <Route 
@@ -151,6 +157,46 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['empleado', 'diseñador', 'administrador']}>
                   <EncuestasPage />
+                </ProtectedRoute>
+              } 
+            />
+
+            {/* Compras - Solo Empleados y Administradores */}
+            <Route 
+              path="/compras" 
+              element={
+                <ProtectedRoute allowedRoles={['empleado', 'diseñador', 'administrador']}>
+                  <ComprasPage />
+                </ProtectedRoute>
+              } 
+            />
+
+            {/* Categorías - Solo Empleados y Administradores */}
+            <Route 
+              path="/categorias" 
+              element={
+                <ProtectedRoute allowedRoles={['empleado', 'diseñador', 'administrador']}>
+                  <CategoriasPage />
+                </ProtectedRoute>
+              } 
+            />
+
+            {/* Marcas - Solo Empleados y Administradores */}
+            <Route 
+              path="/marcas" 
+              element={
+                <ProtectedRoute allowedRoles={['empleado', 'diseñador', 'administrador']}>
+                  <MarcasPage />
+                </ProtectedRoute>
+              } 
+            />
+
+            {/* Proveedores - Solo Empleados y Administradores */}
+            <Route 
+              path="/proveedores" 
+              element={
+                <ProtectedRoute allowedRoles={['empleado', 'diseñador', 'administrador']}>
+                  <ProveedoresPage />
                 </ProtectedRoute>
               } 
             />
