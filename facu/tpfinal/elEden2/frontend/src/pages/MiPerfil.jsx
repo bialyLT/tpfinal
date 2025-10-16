@@ -1,50 +1,61 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { success, error, handleApiError } from '../utils/notifications';
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  MapPin, 
-  Edit, 
-  Save, 
-  Calendar, 
-  Shield,
-  Settings,
-  Eye,
-  EyeOff,
-  Camera
-} from 'lucide-react';
+import { success, error } from '../utils/notifications';
+import api from '../services/api';
+import { User, Mail, Phone, MapPin, Edit, Save, Shield, FileText, IdCard } from 'lucide-react';
 
 const MiPerfil = () => {
   const { user, updateUser } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showPasswordFields, setShowPasswordFields] = useState(false);
+  const [referenceData, setReferenceData] = useState({
+    generos: [],
+    tipos_documento: [],
+    localidades: []
+  });
+  
   const [profileData, setProfileData] = useState({
-    first_name: user?.first_name || '',
-    last_name: user?.last_name || '',
-    email: user?.email || '',
-    phone: user?.phone || '',
-    address: user?.address || '',
-    bio: user?.bio || '',
-    current_password: '',
-    new_password: '',
-    confirm_password: ''
+    first_name: '',
+    last_name: '',
+    email: '',
+    telefono: '',
+    nro_documento: '',
+    tipo_documento_id: '',
+    genero_id: '',
+    calle: '',
+    numero: '',
+    piso: '',
+    dpto: '',
+    localidad_id: ''
   });
 
   useEffect(() => {
-    if (user) {
+    const fetchReferenceData = async () => {
+      try {
+        const response = await api.get('/reference-data/');
+        setReferenceData(response.data);
+      } catch (err) {
+        console.error('Error al cargar datos de referencia:', err);
+      }
+    };
+    fetchReferenceData();
+  }, []);
+
+  useEffect(() => {
+    if (user && user.persona) {
       setProfileData({
         first_name: user.first_name || '',
         last_name: user.last_name || '',
         email: user.email || '',
-        phone: user.phone || '',
-        address: user.address || '',
-        bio: user.bio || '',
-        current_password: '',
-        new_password: '',
-        confirm_password: ''
+        telefono: user.persona.telefono || '',
+        nro_documento: user.persona.nro_documento || '',
+        tipo_documento_id: user.persona.tipo_documento?.id || '',
+        genero_id: user.persona.genero?.id || '',
+        calle: user.persona.calle || '',
+        numero: user.persona.numero || '',
+        piso: user.persona.piso || '',
+        dpto: user.persona.dpto || '',
+        localidad_id: user.persona.localidad?.id || ''
       });
     }
   }, [user]);
@@ -56,74 +67,68 @@ const MiPerfil = () => {
     });
   };
 
-  const validatePasswordChange = () => {
-    if (showPasswordFields) {
-      if (!profileData.current_password) {
-        error('Ingresa tu contraseña actual');
-        return false;
-      }
-      if (profileData.new_password.length < 6) {
-        error('La nueva contraseña debe tener al menos 6 caracteres');
-        return false;
-      }
-      if (profileData.new_password !== profileData.confirm_password) {
-        error('Las contraseñas no coinciden');
-        return false;
-      }
-    }
-    return true;
-  };
-
   const handleSave = async () => {
-    if (!validatePasswordChange()) return;
-
     setLoading(true);
     try {
       const updateData = {
         first_name: profileData.first_name,
         last_name: profileData.last_name,
         email: profileData.email,
-        phone: profileData.phone,
-        address: profileData.address,
-        bio: profileData.bio
+        telefono: profileData.telefono,
+        nro_documento: profileData.nro_documento,
+        tipo_documento_id: parseInt(profileData.tipo_documento_id),
+        genero_id: parseInt(profileData.genero_id),
+        calle: profileData.calle,
+        numero: profileData.numero,
+        piso: profileData.piso,
+        dpto: profileData.dpto,
+        localidad_id: parseInt(profileData.localidad_id)
       };
 
-      if (showPasswordFields && profileData.new_password) {
-        updateData.current_password = profileData.current_password;
-        updateData.new_password = profileData.new_password;
+      const response = await api.put('/users/me/', updateData);
+      
+      // Verificar que la respuesta sea exitosa (status 200-299)
+      if (response.status >= 200 && response.status < 300) {
+        updateUser(response.data);
+        success('Perfil actualizado correctamente');
+        setIsEditing(false);
+      } else {
+        throw new Error('Respuesta inesperada del servidor');
       }
-
-      await updateUser(updateData);
-      success('Perfil actualizado correctamente');
-      setIsEditing(false);
-      setShowPasswordFields(false);
-      setProfileData({
-        ...profileData,
-        current_password: '',
-        new_password: '',
-        confirm_password: ''
-      });
     } catch (err) {
-      handleApiError(err, 'Error al actualizar el perfil');
+      console.error('Error completo:', err);
+      console.error('Respuesta del servidor:', err.response);
+      
+      // Solo mostrar error si realmente hubo un error HTTP (no fue actualizado)
+      if (err.response && err.response.status >= 400) {
+        error(err.response?.data?.error || 'Error al actualizar el perfil');
+      } else {
+        // Si no hay respuesta de error clara, verificar si se actualizó de todas formas
+        error('Hubo un problema con la respuesta del servidor');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleCancel = () => {
-    setProfileData({
-      first_name: user?.first_name || '',
-      last_name: user?.last_name || '',
-      email: user?.email || '',
-      phone: user?.phone || '',
-      address: user?.address || '',
-      bio: user?.bio || '',
-      current_password: '',
-      new_password: '',
-      confirm_password: ''
-    });
+    if (user && user.persona) {
+      setProfileData({
+        first_name: user.first_name || '',
+        last_name: user.last_name || '',
+        email: user.email || '',
+        telefono: user.persona.telefono || '',
+        nro_documento: user.persona.nro_documento || '',
+        tipo_documento_id: user.persona.tipo_documento?.id || '',
+        genero_id: user.persona.genero?.id || '',
+        calle: user.persona.calle || '',
+        numero: user.persona.numero || '',
+        piso: user.persona.piso || '',
+        dpto: user.persona.dpto || '',
+        localidad_id: user.persona.localidad?.id || ''
+      });
+    }
     setIsEditing(false);
-    setShowPasswordFields(false);
   };
 
   const getUserInitials = () => {
@@ -142,11 +147,10 @@ const MiPerfil = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-300 p-4 sm:p-6 lg:p-8">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
+      <div className="max-w-5xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white mb-2 flex items-center">
-            <User className="w-8 h-8 mr-3 text-green-400" />
+            <User className="w-8 h-8 mr-3 text-emerald-400" />
             Mi Perfil
           </h1>
           <p className="text-gray-400">
@@ -154,20 +158,13 @@ const MiPerfil = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Profile Summary Card */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="lg:col-span-1">
-            <div className="bg-gray-800 rounded-lg p-6 text-center">
-              {/* Avatar */}
+            <div className="bg-gray-800 rounded-lg p-6 text-center sticky top-6">
               <div className="relative mb-4">
-                <div className="w-24 h-24 bg-green-600 rounded-full flex items-center justify-center mx-auto text-2xl font-bold text-white">
+                <div className="w-24 h-24 bg-emerald-600 rounded-full flex items-center justify-center mx-auto text-2xl font-bold text-white">
                   {getUserInitials()}
                 </div>
-                {isEditing && (
-                  <button className="absolute bottom-0 right-1/2 transform translate-x-1/2 translate-y-2 p-2 bg-gray-700 rounded-full text-gray-400 hover:text-white">
-                    <Camera className="w-4 h-4" />
-                  </button>
-                )}
               </div>
 
               <h2 className="text-xl font-semibold text-white mb-1">
@@ -177,33 +174,34 @@ const MiPerfil = () => {
               </h2>
               
               <div className="flex items-center justify-center mb-3">
-                <Shield className="w-4 h-4 mr-2 text-green-400" />
-                <span className="text-green-400 font-medium">{getUserRole()}</span>
+                <Shield className="w-4 h-4 mr-2 text-emerald-400" />
+                <span className="text-emerald-400 font-medium">{getUserRole()}</span>
               </div>
 
-              <div className="flex items-center justify-center text-gray-400 mb-4">
-                <Calendar className="w-4 h-4 mr-2" />
-                <span className="text-sm">
-                  Miembro desde {user?.date_joined ? new Date(user.date_joined).getFullYear() : 'N/A'}
-                </span>
+              <div className="text-sm text-gray-400 mt-4 space-y-2">
+                <div className="flex items-center justify-center">
+                  <Mail className="w-4 h-4 mr-2 flex-shrink-0" />
+                  <span className="truncate">{user?.email}</span>
+                </div>
+                <div className="flex items-center justify-center">
+                  <User className="w-4 h-4 mr-2" />
+                  @{user?.username}
+                </div>
               </div>
-
-              {user?.bio && (
-                <p className="text-sm text-gray-400 italic">"{user.bio}"</p>
-              )}
             </div>
           </div>
 
-          {/* Profile Details */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-3 space-y-6">
             <div className="bg-gray-800 rounded-lg p-6">
-              {/* Header with Edit Button */}
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-semibold text-white">Información Personal</h3>
+                <h3 className="text-xl font-semibold text-white flex items-center">
+                  <User className="w-5 h-5 mr-2 text-emerald-400" />
+                  Datos Personales
+                </h3>
                 {!isEditing ? (
                   <button
                     onClick={() => setIsEditing(true)}
-                    className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
                   >
                     <Edit className="w-4 h-4 mr-2" />
                     Editar
@@ -219,7 +217,7 @@ const MiPerfil = () => {
                     <button
                       onClick={handleSave}
                       disabled={loading}
-                      className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                      className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
                     >
                       {loading ? (
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
@@ -232,56 +230,40 @@ const MiPerfil = () => {
                 )}
               </div>
 
-              {/* Form Fields */}
-              <div className="space-y-6">
-                {/* Personal Info */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      <User className="w-4 h-4 inline mr-2" />
-                      Nombre
-                    </label>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        name="first_name"
-                        value={profileData.first_name}
-                        onChange={handleChange}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                      />
-                    ) : (
-                      <div className="px-3 py-2 bg-gray-700 rounded-lg text-gray-300">
-                        {user?.first_name || 'No especificado'}
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      <User className="w-4 h-4 inline mr-2" />
-                      Apellido
-                    </label>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        name="last_name"
-                        value={profileData.last_name}
-                        onChange={handleChange}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                      />
-                    ) : (
-                      <div className="px-3 py-2 bg-gray-700 rounded-lg text-gray-300">
-                        {user?.last_name || 'No especificado'}
-                      </div>
-                    )}
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Nombre</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      name="first_name"
+                      value={profileData.first_name}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
+                    />
+                  ) : (
+                    <p className="text-white px-3 py-2">{user?.first_name || '-'}</p>
+                  )}
                 </div>
 
-                {/* Contact Info */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Apellido</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      name="last_name"
+                      value={profileData.last_name}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
+                    />
+                  ) : (
+                    <p className="text-white px-3 py-2">{user?.last_name || '-'}</p>
+                  )}
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    <Mail className="w-4 h-4 inline mr-2" />
-                    Correo Electrónico
+                    <Mail className="w-4 h-4 inline mr-2" />Email
                   </label>
                   {isEditing ? (
                     <input
@@ -289,182 +271,184 @@ const MiPerfil = () => {
                       name="email"
                       value={profileData.email}
                       onChange={handleChange}
-                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
                     />
                   ) : (
-                    <div className="px-3 py-2 bg-gray-700 rounded-lg text-gray-300">
-                      {user?.email}
-                    </div>
+                    <p className="text-white px-3 py-2">{user?.email || '-'}</p>
                   )}
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    <Phone className="w-4 h-4 inline mr-2" />
-                    Teléfono
+                    <Phone className="w-4 h-4 inline mr-2" />Teléfono
                   </label>
                   {isEditing ? (
                     <input
                       type="tel"
-                      name="phone"
-                      value={profileData.phone}
+                      name="telefono"
+                      value={profileData.telefono}
                       onChange={handleChange}
-                      placeholder="Número de teléfono"
-                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
                     />
                   ) : (
-                    <div className="px-3 py-2 bg-gray-700 rounded-lg text-gray-300">
-                      {user?.phone || 'No especificado'}
-                    </div>
+                    <p className="text-white px-3 py-2">{user?.persona?.telefono || '-'}</p>
                   )}
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    <MapPin className="w-4 h-4 inline mr-2" />
-                    Dirección
+                    <FileText className="w-4 h-4 inline mr-2" />Tipo de Documento
+                  </label>
+                  {isEditing ? (
+                    <select
+                      name="tipo_documento_id"
+                      value={profileData.tipo_documento_id}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
+                    >
+                      <option value="">Selecciona...</option>
+                      {referenceData.tipos_documento.map(tipo => (
+                        <option key={tipo.id} value={tipo.id}>{tipo.nombre}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="text-white px-3 py-2">{user?.persona?.tipo_documento?.nombre || '-'}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <IdCard className="w-4 h-4 inline mr-2" />Número de Documento
                   </label>
                   {isEditing ? (
                     <input
                       type="text"
-                      name="address"
-                      value={profileData.address}
+                      name="nro_documento"
+                      value={profileData.nro_documento}
                       onChange={handleChange}
-                      placeholder="Dirección completa"
-                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
                     />
                   ) : (
-                    <div className="px-3 py-2 bg-gray-700 rounded-lg text-gray-300">
-                      {user?.address || 'No especificado'}
-                    </div>
+                    <p className="text-white px-3 py-2">{user?.persona?.nro_documento || '-'}</p>
+                  )}
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <User className="w-4 h-4 inline mr-2" />Género
+                  </label>
+                  {isEditing ? (
+                    <select
+                      name="genero_id"
+                      value={profileData.genero_id}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
+                    >
+                      <option value="">Selecciona...</option>
+                      {referenceData.generos.map(genero => (
+                        <option key={genero.id} value={genero.id}>{genero.nombre}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="text-white px-3 py-2">{user?.persona?.genero?.nombre || '-'}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-800 rounded-lg p-6">
+              <h3 className="text-xl font-semibold text-white mb-6 flex items-center">
+                <MapPin className="w-5 h-5 mr-2 text-emerald-400" />
+                Dirección
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Calle</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      name="calle"
+                      value={profileData.calle}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
+                    />
+                  ) : (
+                    <p className="text-white px-3 py-2">{user?.persona?.calle || '-'}</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    <User className="w-4 h-4 inline mr-2" />
-                    Biografía
-                  </label>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Número</label>
                   {isEditing ? (
-                    <textarea
-                      name="bio"
-                      value={profileData.bio}
+                    <input
+                      type="text"
+                      name="numero"
+                      value={profileData.numero}
                       onChange={handleChange}
-                      rows={3}
-                      placeholder="Cuéntanos un poco sobre ti..."
-                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
                     />
                   ) : (
-                    <div className="px-3 py-2 bg-gray-700 rounded-lg text-gray-300 min-h-[80px]">
-                      {user?.bio || 'No especificado'}
-                    </div>
+                    <p className="text-white px-3 py-2">{user?.persona?.numero || '-'}</p>
                   )}
                 </div>
 
-                {/* Password Section */}
-                {isEditing && (
-                  <div className="pt-6 border-t border-gray-700">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="text-lg font-medium text-white">Cambiar Contraseña</h4>
-                      <button
-                        onClick={() => setShowPasswordFields(!showPasswordFields)}
-                        className="text-sm text-green-400 hover:text-green-300 flex items-center"
-                      >
-                        {showPasswordFields ? (
-                          <>
-                            <EyeOff className="w-4 h-4 mr-1" />
-                            Ocultar
-                          </>
-                        ) : (
-                          <>
-                            <Eye className="w-4 h-4 mr-1" />
-                            Mostrar
-                          </>
-                        )}
-                      </button>
-                    </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Piso</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      name="piso"
+                      value={profileData.piso}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
+                    />
+                  ) : (
+                    <p className="text-white px-3 py-2">{user?.persona?.piso || '-'}</p>
+                  )}
+                </div>
 
-                    {showPasswordFields && (
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">
-                            Contraseña Actual
-                          </label>
-                          <input
-                            type="password"
-                            name="current_password"
-                            value={profileData.current_password}
-                            onChange={handleChange}
-                            placeholder="Ingresa tu contraseña actual"
-                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                          />
-                        </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Departamento</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      name="dpto"
+                      value={profileData.dpto}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
+                    />
+                  ) : (
+                    <p className="text-white px-3 py-2">{user?.persona?.dpto || '-'}</p>
+                  )}
+                </div>
 
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">
-                            Nueva Contraseña
-                          </label>
-                          <input
-                            type="password"
-                            name="new_password"
-                            value={profileData.new_password}
-                            onChange={handleChange}
-                            placeholder="Nueva contraseña (mínimo 6 caracteres)"
-                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">
-                            Confirmar Nueva Contraseña
-                          </label>
-                          <input
-                            type="password"
-                            name="confirm_password"
-                            value={profileData.confirm_password}
-                            onChange={handleChange}
-                            placeholder="Confirma tu nueva contraseña"
-                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Localidad</label>
+                  {isEditing ? (
+                    <select
+                      name="localidad_id"
+                      value={profileData.localidad_id}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
+                    >
+                      <option value="">Selecciona...</option>
+                      {referenceData.localidades.map(localidad => (
+                        <option key={localidad.id} value={localidad.id}>{localidad.nombre}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="text-white px-3 py-2">{user?.persona?.localidad?.nombre || '-'}</p>
+                  )}
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Account Settings */}
-        <div className="mt-6 bg-gray-800 rounded-lg p-6">
-          <h3 className="text-xl font-semibold text-white mb-4 flex items-center">
-            <Settings className="w-6 h-6 mr-2 text-green-400" />
-            Configuración de Cuenta
-          </h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div className="flex justify-between items-center py-2">
-              <span className="text-gray-300">Usuario:</span>
-              <span className="text-white font-medium">{user?.username}</span>
-            </div>
-            <div className="flex justify-between items-center py-2">
-              <span className="text-gray-300">Fecha de registro:</span>
-              <span className="text-white font-medium">
-                {user?.date_joined ? new Date(user.date_joined).toLocaleDateString() : 'N/A'}
-              </span>
-            </div>
-            <div className="flex justify-between items-center py-2">
-              <span className="text-gray-300">Último acceso:</span>
-              <span className="text-white font-medium">
-                {user?.last_login ? new Date(user.last_login).toLocaleDateString() : 'N/A'}
-              </span>
-            </div>
-            <div className="flex justify-between items-center py-2">
-              <span className="text-gray-300">Estado:</span>
-              <span className="text-green-400 font-medium">
-                {user?.is_active ? 'Activo' : 'Inactivo'}
-              </span>
+              {!isEditing && user?.cliente?.direccion_completa && (
+                <div className="mt-4 p-3 bg-gray-700 rounded-lg">
+                  <p className="text-sm text-gray-400 mb-1">Dirección completa:</p>
+                  <p className="text-white">{user.cliente.direccion_completa}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

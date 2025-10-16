@@ -573,9 +573,9 @@ const ComprasPage = () => {
                           <tr key={index}>
                             <td className="px-4 py-2 text-white">{detalle.producto_nombre || `Producto ${detalle.producto}`}</td>
                             <td className="px-4 py-2 text-center text-gray-300">{detalle.cantidad}</td>
-                            <td className="px-4 py-2 text-right text-gray-300">${detalle.precio_unitario?.toFixed(2)}</td>
+                            <td className="px-4 py-2 text-right text-gray-300">${detalle.precio_unitario ? Number(detalle.precio_unitario).toFixed(2) : '0.00'}</td>
                             <td className="px-4 py-2 text-right font-semibold text-green-400">
-                              ${(detalle.cantidad * detalle.precio_unitario).toFixed(2)}
+                              ${detalle.cantidad && detalle.precio_unitario ? Number(detalle.cantidad * detalle.precio_unitario).toFixed(2) : '0.00'}
                             </td>
                           </tr>
                         ))}

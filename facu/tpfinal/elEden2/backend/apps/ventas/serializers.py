@@ -25,7 +25,7 @@ class DetalleCompraCreateSerializer(serializers.Serializer):
 
 
 class CompraSerializer(serializers.ModelSerializer):
-    proveedor_razon_social = serializers.CharField(source='proveedor.razon_social', read_only=True)
+    proveedor_nombre = serializers.CharField(source='proveedor.razon_social', read_only=True)
     detalles = DetalleCompraSerializer(many=True, read_only=True)
 
     class Meta:

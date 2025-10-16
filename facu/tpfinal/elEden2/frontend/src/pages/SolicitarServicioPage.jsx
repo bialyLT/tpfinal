@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { serviciosService } from '../services';
 import { success, error, handleApiError } from '../utils/notifications';
+import { useAuth } from '../context/AuthContext';
 import { 
   Calendar, 
   MapPin, 
@@ -18,12 +19,12 @@ import {
 } from 'lucide-react';
 
 const SolicitarServicioPage = () => {
-  const [tiposServicio, setTiposServicio] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
-    tipo_servicio: '',
+    tipo_servicio: '', // Será 'diseno' o 'mantenimiento'
     descripcion: '',
     fecha_preferida: '',
     direccion_servicio: '',
@@ -32,6 +33,21 @@ const SolicitarServicioPage = () => {
     imagenes_ideas: []
   });
 
+  const tiposServicio = [
+    { 
+      id: 'diseno', 
+      nombre: 'Diseño de jardines',
+      descripcion: 'Solicita una propuesta personalizada para diseñar tu espacio verde ideal',
+      icon: '🌻'
+    },
+    { 
+      id: 'mantenimiento', 
+      nombre: 'Mantenimiento',
+      descripcion: 'Programa el mantenimiento periódico de tu jardín',
+      icon: '🌿'
+    }
+  ];
+
   const steps = [
     { id: 1, title: 'Tipo de Servicio', icon: Settings },
     { id: 2, title: 'Detalles', icon: FileText },
@@ -39,9 +55,15 @@ const SolicitarServicioPage = () => {
     { id: 4, title: 'Confirmación', icon: CheckCircle }
   ];
 
+  // Cargar dirección del cliente al montar el componente
   useEffect(() => {
-    fetchTiposServicio();
-  }, []);
+    if (user?.cliente?.direccion_completa) {
+      setFormData(prev => ({
+        ...prev,
+        direccion_servicio: user.cliente.direccion_completa
+      }));
+    }
+  }, [user]);
 
   // Cleanup function para liberar URLs al desmontar el componente
   useEffect(() => {
@@ -54,19 +76,6 @@ const SolicitarServicioPage = () => {
       });
     };
   }, [formData.imagenes_jardin, formData.imagenes_ideas]);
-
-  const fetchTiposServicio = async () => {
-    try {
-      setLoading(true);
-      // Usar getServicios en lugar de getTiposServicio (que no existe)
-      const data = await serviciosService.getServicios();
-      setTiposServicio(data.results || []);
-    } catch (err) {
-      handleApiError(err, 'Error al cargar los tipos de servicio');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleChange = (e) => {
     setFormData({
@@ -111,8 +120,7 @@ const SolicitarServicioPage = () => {
 
   // Verificar si el tipo seleccionado es "Diseño de jardines"
   const isDisenioJardines = () => {
-    const tipoSeleccionado = tiposServicio.find(tipo => tipo.id == formData.tipo_servicio);
-    return tipoSeleccionado?.nombre?.toLowerCase().includes('diseño') || false;
+    return formData.tipo_servicio === 'diseno';
   };
 
   const handleNext = () => {
@@ -138,14 +146,14 @@ const SolicitarServicioPage = () => {
           error('Por favor ingresa una descripción del servicio');
           return false;
         }
-        if (!formData.direccion_servicio.trim()) {
-          error('Por favor ingresa la dirección del servicio');
-          return false;
-        }
         break;
       case 3:
         if (!formData.fecha_preferida) {
           error('Por favor selecciona una fecha preferida');
+          return false;
+        }
+        if (!formData.direccion_servicio.trim()) {
+          error('Por favor ingresa la dirección del servicio');
           return false;
         }
         break;
@@ -160,15 +168,25 @@ const SolicitarServicioPage = () => {
 
     setSubmitting(true);
     try {
-      // Preparar los datos para enviar
-      const dataToSend = {
-        ...formData,
-        imagenes_jardin: formData.imagenes_jardin.map(img => img.file),
-        imagenes_ideas: formData.imagenes_ideas.map(img => img.file)
+      // Preparar observaciones con toda la información
+      let observaciones = `Tipo de servicio: ${getSelectedServiceType()?.nombre}\n\n`;
+      observaciones += `${formData.descripcion}\n\n`;
+      observaciones += `Dirección: ${formData.direccion_servicio}\n\n`;
+      
+      if (formData.notas_adicionales) {
+        observaciones += `\nNotas adicionales: ${formData.notas_adicionales}`;
+      }
+
+      // Crear la solicitud como una reserva pendiente
+      const solicitudData = {
+        tipo_servicio: formData.tipo_servicio,
+        fecha_reserva: formData.fecha_preferida,
+        observaciones: observaciones,
+        estado: 'pendiente'
       };
 
-      await serviciosService.createServicio(dataToSend);
-      success('Solicitud de servicio enviada correctamente');
+      await serviciosService.createReserva(solicitudData);
+      success('Solicitud enviada correctamente. Nos pondremos en contacto contigo pronto.');
       
       // Limpiar URLs de preview para evitar memory leaks
       formData.imagenes_jardin.forEach(img => {
@@ -178,12 +196,12 @@ const SolicitarServicioPage = () => {
         if (img.preview) URL.revokeObjectURL(img.preview);
       });
       
-      // Reset form
+      // Reset form (manteniendo la dirección del cliente)
       setFormData({
         tipo_servicio: '',
         descripcion: '',
         fecha_preferida: '',
-        direccion_servicio: '',
+        direccion_servicio: user?.cliente?.direccion_completa || '',
         notas_adicionales: '',
         imagenes_jardin: [],
         imagenes_ideas: []
@@ -197,7 +215,7 @@ const SolicitarServicioPage = () => {
   };
 
   const getSelectedServiceType = () => {
-    return tiposServicio.find(tipo => tipo.id == formData.tipo_servicio);
+    return tiposServicio.find(tipo => tipo.id === formData.tipo_servicio);
   };
 
   if (loading) {
@@ -270,36 +288,21 @@ const SolicitarServicioPage = () => {
           {currentStep === 1 && (
             <div>
               <h2 className="text-xl font-semibold text-white mb-4">Selecciona el tipo de servicio</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {tiposServicio.map(tipo => (
                   <div
                     key={tipo.id}
-                    className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                      formData.tipo_servicio == tipo.id
-                        ? 'border-green-500 bg-green-500/10'
+                    className={`p-6 border-2 rounded-lg cursor-pointer transition-all hover:scale-105 ${
+                      formData.tipo_servicio === tipo.id
+                        ? 'border-green-500 bg-green-500/10 shadow-lg shadow-green-500/20'
                         : 'border-gray-600 hover:border-gray-500'
                     }`}
-                    onClick={() => setFormData({...formData, tipo_servicio: tipo.id})}
+                    onClick={() => setFormData({...formData, tipo_servicio: tipo.id, servicio_id: ''})}
                   >
-                    <div className="flex items-center">
-                      <input
-                        type="radio"
-                        name="tipo_servicio"
-                        value={tipo.id}
-                        checked={formData.tipo_servicio == tipo.id}
-                        onChange={handleChange}
-                        className="sr-only"
-                      />
-                      <Settings className="w-8 h-8 text-green-400 mr-4" />
-                      <div>
-                        <h3 className="text-lg font-medium text-white">{tipo.nombre}</h3>
-                        <p className="text-sm text-gray-400 mt-1">{tipo.descripcion}</p>
-                        {tipo.precio_base && (
-                          <p className="text-green-400 font-semibold mt-2">
-                            Desde ${tipo.precio_base}
-                          </p>
-                        )}
-                      </div>
+                    <div className="text-center">
+                      <div className="text-5xl mb-4">{tipo.icon}</div>
+                      <h3 className="text-xl font-semibold text-white mb-2">{tipo.nombre}</h3>
+                      <p className="text-sm text-gray-400">{tipo.descripcion}</p>
                     </div>
                   </div>
                 ))}
@@ -310,124 +313,148 @@ const SolicitarServicioPage = () => {
           {/* Step 2: Details */}
           {currentStep === 2 && (
             <div>
-              <h2 className="text-xl font-semibold text-white mb-4">Detalles del servicio</h2>
+              <h2 className="text-xl font-semibold text-white mb-4">
+                Detalles de la solicitud
+              </h2>
+              <p className="text-gray-400 mb-6">
+                Tipo: <span className="text-green-400 font-semibold">{getSelectedServiceType()?.nombre} {getSelectedServiceType()?.icon}</span>
+              </p>
+              
               <div className="space-y-6">
+                {/* Descripción - común para ambos tipos */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     <FileText className="w-4 h-4 inline mr-2" />
-                    Descripción del diseño
+                    Descripción de lo que necesita *
                   </label>
                   <textarea
                     name="descripcion"
                     value={formData.descripcion}
                     onChange={handleChange}
                     rows={4}
-                    placeholder="Tengo pensado mejorar mi jardin agregando plantas que combinen con el entorno..."
+                    placeholder={isDisenioJardines() 
+                      ? "Cuéntenos sobre su proyecto de diseño de jardín..."
+                      : "Describa el mantenimiento que necesita (frecuencia, tareas específicas, etc.)..."
+                    }
                     className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
                   />
                 </div>
 
-                {/* Sección de imágenes para diseño de jardines */}
+                {/* Campos específicos para Diseño de jardines */}
                 {isDisenioJardines() && (
-                  <div className="space-y-6 mt-6 p-4 bg-gray-800/50 rounded-lg border border-gray-600">
-                    <h3 className="text-lg font-medium text-white flex items-center">
-                      <Camera className="w-5 h-5 mr-2 text-green-400" />
-                      Imágenes para el diseño
-                    </h3>
-                    <p className="text-sm text-gray-400">
-                      Las imágenes nos ayudan a entender mejor sus necesidades y crear un diseño personalizado.
-                    </p>
-
-                    {/* Imágenes del jardín actual */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-3">
-                        <Image className="w-4 h-4 inline mr-2 text-blue-400" />
-                        Fotos de su jardín actual
-                      </label>
-                      <p className="text-xs text-gray-400 mb-3">
-                        Suba fotos del espacio donde quiere realizar el diseño
+                  <>
+                    {/* Sección de imágenes para diseño */}
+                    <div className="space-y-6 p-4 bg-gray-800/50 rounded-lg border border-gray-600">
+                      <h3 className="text-lg font-medium text-white flex items-center">
+                        <Camera className="w-5 h-5 mr-2 text-green-400" />
+                        Imágenes (opcional pero recomendado)
+                      </h3>
+                      <p className="text-sm text-gray-400">
+                        Las imágenes nos ayudan a entender mejor sus necesidades y crear un diseño personalizado.
                       </p>
-                      
-                      <div className="flex flex-wrap gap-3 mb-3">
-                        {formData.imagenes_jardin.map((imagen, index) => (
-                          <div key={index} className="relative">
-                            <div className="w-20 h-20 rounded-lg overflow-hidden border border-gray-600">
-                              <img 
-                                src={imagen.preview} 
-                                alt={`Jardín ${index + 1}`}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => removeImage(index, 'jardin')}
-                              className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-600"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ))}
-                        
-                        <label className="w-20 h-20 border-2 border-dashed border-gray-600 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-gray-500 transition-colors">
-                          <Upload className="w-6 h-6 text-gray-400 mb-1" />
-                          <span className="text-xs text-gray-400">Agregar</span>
-                          <input
-                            type="file"
-                            multiple
-                            accept="image/*"
-                            onChange={(e) => handleImageUpload(e, 'jardin')}
-                            className="hidden"
-                          />
+
+                      {/* Imágenes del jardín actual */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-3">
+                          <Image className="w-4 h-4 inline mr-2 text-blue-400" />
+                          Fotos de su jardín actual
                         </label>
+                        
+                        <div className="flex flex-wrap gap-3 mb-3">
+                          {formData.imagenes_jardin.map((imagen, index) => (
+                            <div key={index} className="relative">
+                              <div className="w-20 h-20 rounded-lg overflow-hidden border border-gray-600">
+                                <img 
+                                  src={imagen.preview} 
+                                  alt={`Jardín ${index + 1}`}
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removeImage(index, 'jardin')}
+                                className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-600"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                          
+                          <label className="w-20 h-20 border-2 border-dashed border-gray-600 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-gray-500 transition-colors">
+                            <Upload className="w-6 h-6 text-gray-400 mb-1" />
+                            <span className="text-xs text-gray-400">Subir</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              className="hidden"
+                              onChange={(e) => handleImageUpload(e, 'jardin')}
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Imágenes de ideas */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-3">
+                          <Image className="w-4 h-4 inline mr-2 text-purple-400" />
+                          Ideas de referencia
+                        </label>
+                        
+                        <div className="flex flex-wrap gap-3 mb-3">
+                          {formData.imagenes_ideas.map((imagen, index) => (
+                            <div key={index} className="relative">
+                              <div className="w-20 h-20 rounded-lg overflow-hidden border border-gray-600">
+                                <img 
+                                  src={imagen.preview} 
+                                  alt={`Idea ${index + 1}`}
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removeImage(index, 'ideas')}
+                                className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-600"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                          
+                          <label className="w-20 h-20 border-2 border-dashed border-gray-600 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-gray-500 transition-colors">
+                            <Upload className="w-6 h-6 text-gray-400 mb-1" />
+                            <span className="text-xs text-gray-400">Subir</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              className="hidden"
+                              onChange={(e) => handleImageUpload(e, 'ideas')}
+                            />
+                          </label>
+                        </div>
                       </div>
                     </div>
-
-                    {/* Imágenes de ideas y referencias */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-3">
-                        <Image className="w-4 h-4 inline mr-2 text-purple-400" />
-                        Ideas y referencias (opcional)
-                      </label>
-                      <p className="text-xs text-gray-400 mb-3">
-                        Suba imágenes de diseños que le gusten o ideas que quiera incorporar
-                      </p>
-                      
-                      <div className="flex flex-wrap gap-3 mb-3">
-                        {formData.imagenes_ideas.map((imagen, index) => (
-                          <div key={index} className="relative">
-                            <div className="w-20 h-20 rounded-lg overflow-hidden border border-gray-600">
-                              <img 
-                                src={imagen.preview} 
-                                alt={`Idea ${index + 1}`}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => removeImage(index, 'ideas')}
-                              className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-600"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ))}
-                        
-                        <label className="w-20 h-20 border-2 border-dashed border-gray-600 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-gray-500 transition-colors">
-                          <Upload className="w-6 h-6 text-gray-400 mb-1" />
-                          <span className="text-xs text-gray-400">Agregar</span>
-                          <input
-                            type="file"
-                            multiple
-                            accept="image/*"
-                            onChange={(e) => handleImageUpload(e, 'ideas')}
-                            className="hidden"
-                          />
-                        </label>
-                      </div>
-                    </div>
-                  </div>
+                  </>
                 )}
 
+                {/* Notas adicionales - común para ambos tipos */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <FileText className="w-4 h-4 inline mr-2" />
+                    Notas adicionales
+                  </label>
+                  <textarea
+                    name="notas_adicionales"
+                    value={formData.notas_adicionales}
+                    onChange={handleChange}
+                    rows={3}
+                    placeholder="Cualquier información adicional que considere relevante..."
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
+                </div>
+
+                {/* Dirección - al final del formulario */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     <MapPin className="w-4 h-4 inline mr-2" />
@@ -438,26 +465,13 @@ const SolicitarServicioPage = () => {
                     name="direccion_servicio"
                     value={formData.direccion_servicio}
                     onChange={handleChange}
-                    placeholder="Ingresa la dirección donde se realizará el servicio"
+                    placeholder="Calle, número, ciudad..."
                     className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
                   />
+                  <p className="text-xs text-gray-400 mt-2">
+                    Se ha cargado tu dirección registrada por defecto. Puedes modificarla si el servicio será en otra ubicación.
+                  </p>
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    <FileText className="w-4 h-4 inline mr-2" />
-                    Notas adicionales (opcional)
-                  </label>
-                  <textarea
-                    name="notas_adicionales"
-                    value={formData.notas_adicionales}
-                    onChange={handleChange}
-                    rows={3}
-                    placeholder="Información adicional que consideres importante..."
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                  />
-                </div>
-
               </div>
             </div>
           )}
@@ -497,9 +511,9 @@ const SolicitarServicioPage = () => {
                 <div className="flex items-center">
                   <Settings className="w-5 h-5 text-green-400 mr-3" />
                   <div>
-                    <span className="text-gray-300">Servicio: </span>
+                    <span className="text-gray-300">Tipo de servicio: </span>
                     <span className="text-white font-medium">
-                      {getSelectedServiceType()?.nombre}
+                      {getSelectedServiceType()?.nombre} {getSelectedServiceType()?.icon}
                     </span>
                   </div>
                 </div>
@@ -512,6 +526,16 @@ const SolicitarServicioPage = () => {
                   </div>
                 </div>
 
+                {formData.notas_adicionales && (
+                  <div className="flex items-start">
+                    <FileText className="w-5 h-5 text-green-400 mr-3 mt-0.5" />
+                    <div>
+                      <span className="text-gray-300">Notas adicionales: </span>
+                      <span className="text-white">{formData.notas_adicionales}</span>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center">
                   <MapPin className="w-5 h-5 text-green-400 mr-3" />
                   <div>
@@ -519,6 +543,23 @@ const SolicitarServicioPage = () => {
                     <span className="text-white">{formData.direccion_servicio}</span>
                   </div>
                 </div>
+
+                {/* Imágenes para diseño */}
+                {isDisenioJardines() && (
+                  <>
+                    {(formData.imagenes_jardin.length > 0 || formData.imagenes_ideas.length > 0) && (
+                      <div className="flex items-start">
+                        <Camera className="w-5 h-5 text-green-400 mr-3 mt-0.5" />
+                        <div>
+                          <span className="text-gray-300">Imágenes: </span>
+                          <span className="text-white">
+                            {formData.imagenes_jardin.length} foto(s) del jardín, {formData.imagenes_ideas.length} idea(s) de referencia
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
 
                 <div className="flex items-center">
                   <Calendar className="w-5 h-5 text-green-400 mr-3" />
@@ -532,7 +573,7 @@ const SolicitarServicioPage = () => {
                   <div className="flex items-start">
                     <FileText className="w-5 h-5 text-green-400 mr-3 mt-0.5" />
                     <div>
-                      <span className="text-gray-300">Notas: </span>
+                      <span className="text-gray-300">Notas adicionales: </span>
                       <span className="text-white">{formData.notas_adicionales}</span>
                     </div>
                   </div>
@@ -545,7 +586,7 @@ const SolicitarServicioPage = () => {
                   <div>
                     <h4 className="text-blue-300 font-medium">¿Qué sigue?</h4>
                     <p className="text-sm text-gray-300 mt-1">
-                      Revisaremos tu solicitud y nos pondremos en contacto contigo dentro de las próximas 24 horas para confirmar los detalles y programar el servicio.
+                      Revisaremos tu solicitud y nos pondremos en contacto contigo dentro de las próximas 24 horas para confirmar los detalles y enviarte una propuesta personalizada.
                     </p>
                   </div>
                 </div>

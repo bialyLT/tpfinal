@@ -74,25 +74,13 @@ const EmpleadosPage = () => {
   const handleAddEmpleado = async (e) => {
     e.preventDefault();
     try {
-      // Usar el endpoint específico para registro de empleados
       const empleadoData = {
         username: formData.username,
         email: formData.email,
         password: formData.password,
-        password_confirmation: formData.password, // El serializer CrearUsuarioSerializer requiere esto
         first_name: formData.first_name,
         last_name: formData.last_name,
-        persona_data: {
-          nombres: formData.first_name,
-          apellidos: formData.last_name,
-          tipo_documento: 'dni',
-          numero_documento: `emp_${Date.now()}`, // Temporal, se puede completar después
-          telefono: '',
-          genero: 'N', // 'N' = 'Prefiero no decir' - valor válido del modelo
-          fecha_nacimiento: '1990-01-01', // Fecha por defecto, se puede completar después
-          provincia: 'Buenos Aires', // Provincia por defecto
-          activo: true
-        }
+        is_active: formData.is_active
       };
       
       await usersService.createEmpleado(empleadoData);
@@ -116,7 +104,20 @@ const EmpleadosPage = () => {
   const handleEditEmpleado = async (e) => {
     e.preventDefault();
     try {
-      await usersService.updateUser(selectedEmpleado.id, formData);
+      const updateData = {
+        username: formData.username,
+        email: formData.email,
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        is_active: formData.is_active,
+      };
+      
+      // Solo incluir password si se proporcionó
+      if (formData.password) {
+        updateData.password = formData.password;
+      }
+      
+      await usersService.updateEmpleado(selectedEmpleado.id, updateData);
       success('Empleado actualizado exitosamente');
       setShowEditModal(false);
       setSelectedEmpleado(null);
@@ -128,9 +129,15 @@ const EmpleadosPage = () => {
 
   const handleToggleStatus = async (empleado) => {
     try {
-      const nuevoEstado = empleado.is_active ? 'inactivo' : 'activo';
-      await usersService.cambiarEstadoUsuario(empleado.id, nuevoEstado);
-      success(`Empleado ${nuevoEstado === 'activo' ? 'activado' : 'desactivado'} exitosamente`);
+      if (empleado.is_active) {
+        // Desactivar
+        await usersService.deleteEmpleado(empleado.id);
+        success('Empleado desactivado exitosamente');
+      } else {
+        // Activar
+        await usersService.activarEmpleado(empleado.id);
+        success('Empleado activado exitosamente');
+      }
       fetchEmpleados();
     } catch (error) {
       handleApiError(error, 'Error al cambiar el estado del empleado');

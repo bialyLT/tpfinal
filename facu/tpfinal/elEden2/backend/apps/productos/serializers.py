@@ -52,6 +52,19 @@ class ProductoSerializer(serializers.ModelSerializer):
     def get_stock_actual(self, obj):
         """Obtiene el stock actual del producto (property)"""
         return obj.stock_actual
+    
+    def to_representation(self, instance):
+        """Personaliza la representación para devolver URL completa de imagen"""
+        representation = super().to_representation(instance)
+        if instance.imagen:
+            request = self.context.get('request')
+            if request:
+                representation['imagen'] = request.build_absolute_uri(instance.imagen.url)
+            else:
+                representation['imagen'] = instance.imagen.url
+        else:
+            representation['imagen'] = None
+        return representation
 
 
 class ProductoListSerializer(serializers.ModelSerializer):
@@ -63,7 +76,8 @@ class ProductoListSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Producto
-        fields = ('id_producto', 'nombre', 'categoria_nombre', 'marca_nombre', 'precio', 'stock_actual')
+        fields = ('id_producto', 'nombre', 'descripcion', 'categoria', 'categoria_nombre', 
+                  'marca', 'marca_nombre', 'imagen', 'precio', 'stock_actual')
     
     def get_precio(self, obj):
         """Obtiene el precio del producto (property)"""
@@ -72,6 +86,19 @@ class ProductoListSerializer(serializers.ModelSerializer):
     def get_stock_actual(self, obj):
         """Obtiene el stock actual del producto (property)"""
         return obj.stock_actual
+    
+    def to_representation(self, instance):
+        """Personaliza la representación para devolver URL completa de imagen"""
+        representation = super().to_representation(instance)
+        if instance.imagen:
+            request = self.context.get('request')
+            if request:
+                representation['imagen'] = request.build_absolute_uri(instance.imagen.url)
+            else:
+                representation['imagen'] = instance.imagen.url
+        else:
+            representation['imagen'] = None
+        return representation
 
 
 # MovimientoStockSerializer comentado - modelo no existe en el diagrama ER

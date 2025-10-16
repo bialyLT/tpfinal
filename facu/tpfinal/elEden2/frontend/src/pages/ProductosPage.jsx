@@ -60,15 +60,25 @@ const ProductosPage = () => {
 
   const handleOpenModal = (producto = null) => {
     if (producto) {
+      console.log('Producto recibido:', producto);
+      console.log('Categoria:', producto.categoria, 'Marca:', producto.marca, 'Imagen:', producto.imagen);
+      
       setSelectedProducto(producto);
       setFormData({
         nombre: producto.nombre,
         descripcion: producto.descripcion || '',
-        categoria: producto.categoria,
-        marca: producto.marca,
+        categoria: producto.categoria ? String(producto.categoria) : '',
+        marca: producto.marca ? String(producto.marca) : '',
         imagen: null
       });
-      setImagePreview(producto.imagen);
+      // Si el producto tiene imagen, mostrarla como preview
+      setImagePreview(producto.imagen || null);
+      
+      console.log('FormData después de setear:', {
+        categoria: producto.categoria ? String(producto.categoria) : '',
+        marca: producto.marca ? String(producto.marca) : '',
+        imagen: producto.imagen
+      });
     } else {
       setSelectedProducto(null);
       setFormData({
@@ -106,6 +116,14 @@ const ProductosPage = () => {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleRemoveImage = () => {
+    setFormData({ ...formData, imagen: null });
+    setImagePreview(null);
+    // Reset file input
+    const fileInput = document.getElementById('imagen-input');
+    if (fileInput) fileInput.value = '';
   };
 
   const handleSubmit = async (e) => {
@@ -496,7 +514,7 @@ const ProductosPage = () => {
                     >
                       <option value="">Seleccione categoría</option>
                       {categorias.map(cat => (
-                        <option key={cat.id_categoria} value={cat.id_categoria}>
+                        <option key={cat.id_categoria} value={String(cat.id_categoria)}>
                           {cat.nombre_categoria}
                         </option>
                       ))}
@@ -521,7 +539,7 @@ const ProductosPage = () => {
                     >
                       <option value="">Seleccione marca</option>
                       {marcas.map(marca => (
-                        <option key={marca.id_marca} value={marca.id_marca}>
+                        <option key={marca.id_marca} value={String(marca.id_marca)}>
                           {marca.nombre_marca}
                         </option>
                       ))}
@@ -570,12 +588,22 @@ const ProductosPage = () => {
                         </label>
                       </div>
                       {imagePreview && (
-                        <div className="w-24 h-24 bg-gray-700 rounded-lg overflow-hidden">
-                          <img
-                            src={imagePreview}
-                            alt="Preview"
-                            className="w-full h-full object-cover"
-                          />
+                        <div className="relative">
+                          <div className="w-24 h-24 bg-gray-700 rounded-lg overflow-hidden">
+                            <img
+                              src={imagePreview}
+                              alt="Preview"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleRemoveImage}
+                            className="absolute -top-2 -right-2 bg-red-600 hover:bg-red-700 text-white rounded-full p-1 transition-colors"
+                            title="Eliminar imagen"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
                         </div>
                       )}
                     </div>

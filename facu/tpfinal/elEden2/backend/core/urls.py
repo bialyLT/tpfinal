@@ -15,4 +15,8 @@ urlpatterns = [
     
     # Custom API endpoints
     path('health/', views.HealthCheckView.as_view(), name='health-check'),
+    
+    # Authentication
+    path('users/register/', views.RegisterView.as_view(), name='register'),
+    path('reference-data/', views.ReferenceDataView.as_view(), name='reference-data'),
 ]

@@ -205,6 +205,9 @@ class ProductoViewSet(viewsets.ModelViewSet):
     serializer_class = ProductoSerializer
     search_fields = ['nombre', 'descripcion', 'categoria__nombre_categoria']
 ```
+#### Temas con respecto a los diseños
+Cuando un cliente solicita un diseño, se envia una propuesta de diseño a los empleados, y ahi el empleado deberia elegirla para poder empzar a trabajar, recuerda que una propuesta de diseño incluye una descripcion, imagenes y productos, en base a eso se calcula la propuesta de presupuesto que se le envia al cliente
+
 
 ### Frontend (React)
 

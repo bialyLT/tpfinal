@@ -52,21 +52,53 @@ class UserSerializer(serializers.ModelSerializer):
         return list(obj.groups.values_list('name', flat=True))
 
 class RegisterSerializer(serializers.ModelSerializer):
-    """Serializer para el registro de usuarios"""
+    """Serializer para el registro de usuarios (clientes)"""
     password = serializers.CharField(write_only=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True)
     
+    # Campos de Persona
+    telefono = serializers.CharField(required=True)
+    calle = serializers.CharField(required=True)
+    numero = serializers.CharField(required=True)
+    piso = serializers.CharField(required=False, allow_blank=True)
+    dpto = serializers.CharField(required=False, allow_blank=True)
+    nro_documento = serializers.CharField(required=True)
+    localidad_id = serializers.IntegerField(required=True)
+    
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'password2', 'first_name', 'last_name']
+        fields = [
+            # Campos de Persona (primero)
+            'first_name', 'last_name', 'telefono', 'nro_documento', 
+            'calle', 'numero', 'piso', 'dpto', 'localidad_id',
+            # Campos de User (después)
+            'username', 'email', 'password', 'password2'
+        ]
     
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
             raise serializers.ValidationError({"password": "Las contraseñas no coinciden."})
+        
+        # Validar que no exista un documento duplicado
+        from apps.users.models import Persona
+        nro_doc = attrs.get('nro_documento')
+        if Persona.objects.filter(nro_documento=nro_doc).exists():
+            raise serializers.ValidationError({"nro_documento": "Este número de documento ya está registrado."})
+        
         return attrs
     
     def create(self, validated_data):
+        # Extraer campos que no pertenecen al User
         validated_data.pop('password2')
+        telefono = validated_data.pop('telefono')
+        calle = validated_data.pop('calle')
+        numero = validated_data.pop('numero')
+        piso = validated_data.pop('piso', '')
+        dpto = validated_data.pop('dpto', '')
+        nro_documento = validated_data.pop('nro_documento')
+        localidad_id = validated_data.pop('localidad_id')
+        
+        # Crear el usuario de Django
         user = User.objects.create_user(**validated_data)
         
         # Agregar al grupo de Clientes por defecto
@@ -74,6 +106,43 @@ class RegisterSerializer(serializers.ModelSerializer):
             clientes_group, created = Group.objects.get_or_create(name='Clientes')
             user.groups.add(clientes_group)
         except Exception as e:
-            pass  # Si no existe el grupo, continuar sin error
+            pass
+        
+        # Importar modelos necesarios
+        from apps.users.models import Persona, Cliente, Genero, TipoDocumento, Localidad
+        
+        try:
+            # Obtener las relaciones (con valores por defecto)
+            genero = Genero.objects.filter(genero='Prefiero no decir').first() or Genero.objects.first()
+            tipo_documento = TipoDocumento.objects.filter(tipo='DNI').first() or TipoDocumento.objects.first()
+            localidad = Localidad.objects.get(id_localidad=localidad_id)
+            
+            # Crear Persona (manteniendo email por compatibilidad con la BD actual)
+            persona = Persona.objects.create(
+                nombre=user.first_name,
+                apellido=user.last_name,
+                email=user.email,  # Mantener por compatibilidad
+                telefono=telefono,
+                calle=calle,
+                numero=numero,
+                piso=piso or '',
+                dpto=dpto or '',
+                nro_documento=nro_documento,
+                genero=genero,
+                tipo_documento=tipo_documento,
+                localidad=localidad
+            )
+            
+            # Crear Cliente vinculado a la Persona
+            Cliente.objects.create(
+                persona=persona,
+                activo=True
+            )
+        except Exception as e:
+            # Si falla la creación de Persona/Cliente, eliminar el usuario creado
+            user.delete()
+            raise serializers.ValidationError({
+                'error': f'Error al crear el perfil de cliente: {str(e)}'
+            })
         
         return user

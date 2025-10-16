@@ -1,8 +1,11 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { Menu } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { SidebarProvider, useSidebar } from './context/SidebarContext';
 import Navbar from './components/Navbar';
+import Sidebar from './components/Sidebar';
 import Loading from './components/Loading';
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -14,7 +17,7 @@ import DashboardPage from './pages/DashboardPage';
 import ProductosPage from './pages/ProductosPage';
 import ServiciosPage from './pages/ServiciosPage';
 import EncuestasPage from './pages/EncuestasPage';
-// import EmpleadosPage from './pages/EmpleadosPage'; // ⚠️ Deshabilitado: endpoints no implementados
+import EmpleadosPage from './pages/EmpleadosPage';
 import SolicitarServicioPage from './pages/SolicitarServicioPage';
 import MiPerfil from './pages/MiPerfil';
 // ABM Pages
@@ -67,13 +70,56 @@ const PublicRoute = ({ children }) => {
 // App Layout Component
 const AppLayout = ({ children }) => {
   const { user } = useAuth();
+  const { isCollapsed, toggleSidebar } = useSidebar();
+  const location = useLocation();
+  
+  // Determinar si el usuario es admin o empleado
+  const isAdmin = user && (user.is_staff || user.is_superuser || user.perfil?.tipo_usuario === 'administrador' || user.groups?.includes('Administradores'));
+  const isEmpleado = user && (user.perfil?.tipo_usuario === 'empleado' || user.groups?.includes('Empleados'));
+  const isCliente = user && !isAdmin && !isEmpleado;
+  
+  // Páginas donde NO se debe mostrar el Navbar (login y register)
+  const hideNavbarPages = ['/login', '/register'];
+  const shouldShowNavbar = !hideNavbarPages.includes(location.pathname);
   
   return (
-    <div className="min-h-screen bg-base-200">
-      {user && <Navbar />}
-      <main className={user ? 'pt-16' : ''}>
-        {children}
-      </main>
+    <div className="min-h-screen bg-gray-900">
+      {user ? (
+        <>
+          {/* Administradores y Empleados usan Sidebar */}
+          {(isAdmin || isEmpleado) ? (
+            <>
+              <Sidebar />
+              {/* Mobile menu button */}
+              <button
+                onClick={toggleSidebar}
+                className="md:hidden fixed top-4 left-4 z-30 p-2 bg-gray-800 text-white rounded-lg shadow-lg"
+              >
+                <Menu size={24} />
+              </button>
+              <main className={`transition-all duration-300 ${isCollapsed ? 'md:ml-16' : 'md:ml-64'}`}>
+                {children}
+              </main>
+            </>
+          ) : (
+            /* Clientes usan Navbar */
+            <>
+              {shouldShowNavbar && <Navbar />}
+              <main className={shouldShowNavbar ? 'pt-16' : ''}>
+                {children}
+              </main>
+            </>
+          )}
+        </>
+      ) : (
+        /* Usuarios no autenticados usan Navbar (excepto en login/register) */
+        <>
+          {shouldShowNavbar && <Navbar />}
+          <main className={shouldShowNavbar ? 'pt-16' : ''}>
+            {children}
+          </main>
+        </>
+      )}
     </div>
   );
 };
@@ -81,9 +127,10 @@ const AppLayout = ({ children }) => {
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <AppLayout>
-          <Routes>
+      <SidebarProvider>
+        <Router>
+          <AppLayout>
+            <Routes>
             {/* Public Routes */}
             <Route 
               path="/" 
@@ -120,16 +167,15 @@ function App() {
               } 
             />
 
-            {/* Empleados - ⚠️ DESHABILITADO: endpoints no implementados
+            {/* Usuarios (Empleados) - Solo Administradores */}
             <Route 
-              path="/empleados" 
+              path="/usuarios" 
               element={
                 <ProtectedRoute allowedRoles={['administrador']}>
                   <EmpleadosPage />
                 </ProtectedRoute>
               } 
             />
-            */}
             
             {/* Productos - Solo Empleados y Administradores */}
             <Route 
@@ -258,7 +304,8 @@ function App() {
             },
           }}
         />
-      </Router>
+        </Router>
+      </SidebarProvider>
     </AuthProvider>
   );
 }

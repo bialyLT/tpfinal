@@ -4,14 +4,14 @@ from .models import Servicio, Reserva
 
 @admin.register(Servicio)
 class ServicioAdmin(admin.ModelAdmin):
-    list_display = ('id_servicio', 'nombre', 'precio', 'duracion_estimada', 'activo')
-    list_filter = ('activo',)
+    list_display = ('id_servicio', 'nombre', 'tipo', 'precio', 'duracion_estimada', 'activo')
+    list_filter = ('activo', 'tipo')
     search_fields = ('nombre', 'descripcion')
     ordering = ('nombre',)
     
     fieldsets = (
-        ('Informacion Basica', {
-            'fields': ('nombre', 'descripcion')
+        ('Información Básica', {
+            'fields': ('nombre', 'tipo', 'descripcion')
         }),
         ('Detalles', {
             'fields': ('duracion_estimada', 'precio', 'activo')

@@ -3,6 +3,8 @@ from .models import Servicio, Reserva
 
 
 class ServicioSerializer(serializers.ModelSerializer):
+    tipo_display = serializers.CharField(source='get_tipo_display', read_only=True)
+    
     class Meta:
         model = Servicio
         fields = '__all__'

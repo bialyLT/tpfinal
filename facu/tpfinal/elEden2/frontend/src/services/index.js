@@ -113,6 +113,17 @@ export const serviciosService = {
     return response.data;
   },
   
+  // Reservas
+  createReserva: async (data) => {
+    const response = await api.post('/servicios/reservas/', data);
+    return response.data;
+  },
+
+  getReservas: async (params = {}) => {
+    const response = await api.get('/servicios/reservas/', { params });
+    return response.data;
+  },
+  
   iniciarServicio: async (id) => {
     const response = await api.post(`/servicios/servicios/${id}/iniciar_servicio/`);
     return response.data;
@@ -202,58 +213,39 @@ export const encuestasService = {
 
 // ⚠️ ADVERTENCIA: Los siguientes endpoints NO EXISTEN en el backend actual
 // Este servicio está aquí solo para mantener compatibilidad con EmpleadosPage
-// ⚠️ ADVERTENCIA: Las rutas /users/usuarios/* no están implementadas en el backend
-// Si necesitas gestionar empleados/usuarios, considera:
-// 1. Implementar estos endpoints en el backend (apps/users/views.py)
-// 2. O usar los endpoints específicos: /users/clientes/, /users/proveedores/
-/*
+// Users/Empleados Services
 export const usersService = {
-  getUsers: async (params = {}) => {
-    const response = await api.get('/users/usuarios/', { params });
-    return response.data;
-  },
-  
   getEmpleados: async (params = {}) => {
-    const response = await api.get('/users/usuarios/empleados/', { params });
-    return response.data;
-  },
-  
-  getClientes: async (params = {}) => {
-    const response = await api.get('/users/usuarios/clientes/', { params });
-    return response.data;
-  },
-  
-  getAdministradores: async (params = {}) => {
-    const response = await api.get('/users/usuarios/administradores/', { params });
-    return response.data;
-  },
-
-  createUser: async (data) => {
-    const response = await api.post('/users/usuarios/', data);
+    const response = await api.get('/users/empleados/', { params });
     return response.data;
   },
 
   createEmpleado: async (data) => {
-    const response = await api.post('/users/register-empleado/', data);
+    const response = await api.post('/users/empleados/', data);
     return response.data;
   },
 
-  updateUser: async (id, data) => {
-    const response = await api.put(`/users/usuarios/${id}/`, data);
+  updateEmpleado: async (id, data) => {
+    const response = await api.put(`/users/empleados/${id}/`, data);
+    return response.data;
+  },
+  
+  deleteEmpleado: async (id) => {
+    const response = await api.delete(`/users/empleados/${id}/`);
     return response.data;
   },
 
-  cambiarEstadoUsuario: async (id, estado) => {
-    const response = await api.post(`/users/usuarios/${id}/cambiar_estado/`, { estado });
+  activarEmpleado: async (id) => {
+    const response = await api.post(`/users/empleados/${id}/activar/`);
     return response.data;
   },
 
   resetearPassword: async (id) => {
-    const response = await api.post(`/users/usuarios/${id}/resetear_password/`);
+    const response = await api.post(`/users/empleados/${id}/resetear_password/`);
     return response.data;
   }
 };
-*/
+
 
 // Clientes Services (usar este en lugar de usersService para clientes)
 export const clientesService = {

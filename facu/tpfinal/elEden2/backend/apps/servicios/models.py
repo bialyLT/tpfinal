@@ -5,8 +5,19 @@ from django.utils import timezone
 
 class Servicio(models.Model):
     """Modelo para servicios según diagrama ER"""
+    TIPO_CHOICES = [
+        ('diseno', 'Diseño de jardines'),
+        ('mantenimiento', 'Mantenimiento'),
+    ]
+    
     id_servicio = models.AutoField(primary_key=True)
     nombre = models.CharField(max_length=200)
+    tipo = models.CharField(
+        max_length=20,
+        choices=TIPO_CHOICES,
+        default='diseno',
+        help_text="Tipo de servicio ofrecido"
+    )
     descripcion = models.TextField(blank=True, null=True)
     duracion_estimada = models.IntegerField(
         validators=[MinValueValidator(1)],

@@ -1,7 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Leaf, Users, MapPin, Smile } from 'lucide-react';
-import Navbar from '../../components/Navbar';
 
 const HomePage = () => {
   return (
@@ -13,10 +12,8 @@ const HomePage = () => {
       </div>
 
       <div className="relative z-10 flex flex-col min-h-screen">
-        {/* Navbar */}
-        <Navbar />
         {/* Main Content */}
-        <main className="flex-grow flex items-center pt-16">
+        <main className="flex-grow flex items-center">
           <div className="container mx-auto px-6 text-center md:text-left">
             <div className="max-w-3xl">
               <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">
