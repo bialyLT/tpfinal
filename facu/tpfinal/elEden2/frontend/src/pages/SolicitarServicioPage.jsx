@@ -20,11 +20,12 @@ import {
 
 const SolicitarServicioPage = () => {
   const { user } = useAuth();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
+  const [serviciosDisponibles, setServiciosDisponibles] = useState([]);
   const [formData, setFormData] = useState({
-    tipo_servicio: '', // Será 'diseno' o 'mantenimiento'
+    servicio: '', // ID del servicio del catálogo
     descripcion: '',
     fecha_preferida: '',
     direccion_servicio: '',
@@ -33,21 +34,6 @@ const SolicitarServicioPage = () => {
     imagenes_ideas: []
   });
 
-  const tiposServicio = [
-    { 
-      id: 'diseno', 
-      nombre: 'Diseño de jardines',
-      descripcion: 'Solicita una propuesta personalizada para diseñar tu espacio verde ideal',
-      icon: '🌻'
-    },
-    { 
-      id: 'mantenimiento', 
-      nombre: 'Mantenimiento',
-      descripcion: 'Programa el mantenimiento periódico de tu jardín',
-      icon: '🌿'
-    }
-  ];
-
   const steps = [
     { id: 1, title: 'Tipo de Servicio', icon: Settings },
     { id: 2, title: 'Detalles', icon: FileText },
@@ -55,8 +41,24 @@ const SolicitarServicioPage = () => {
     { id: 4, title: 'Confirmación', icon: CheckCircle }
   ];
 
-  // Cargar dirección del cliente al montar el componente
+  // Cargar servicios disponibles y dirección del cliente al montar el componente
   useEffect(() => {
+    const fetchServicios = async () => {
+      try {
+        setLoading(true);
+        const response = await serviciosService.getServicios();
+        // Filtrar solo servicios activos
+        const serviciosActivos = (response.results || response).filter(s => s.activo);
+        setServiciosDisponibles(serviciosActivos);
+      } catch (err) {
+        handleApiError(err, 'Error al cargar servicios');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchServicios();
+
     if (user?.cliente?.direccion_completa) {
       setFormData(prev => ({
         ...prev,
@@ -118,9 +120,10 @@ const SolicitarServicioPage = () => {
     });
   };
 
-  // Verificar si el tipo seleccionado es "Diseño de jardines"
+  // Verificar si el servicio seleccionado es "Diseño de jardines"
   const isDisenioJardines = () => {
-    return formData.tipo_servicio === 'diseno';
+    const servicioSeleccionado = serviciosDisponibles.find(s => s.id_servicio === parseInt(formData.servicio));
+    return servicioSeleccionado?.tipo === 'diseno';
   };
 
   const handleNext = () => {
@@ -136,7 +139,7 @@ const SolicitarServicioPage = () => {
   const validateStep = () => {
     switch (currentStep) {
       case 1:
-        if (!formData.tipo_servicio) {
+        if (!formData.servicio) {
           error('Por favor selecciona un tipo de servicio');
           return false;
         }
@@ -168,24 +171,35 @@ const SolicitarServicioPage = () => {
 
     setSubmitting(true);
     try {
+      const servicioSeleccionado = serviciosDisponibles.find(s => s.id_servicio === parseInt(formData.servicio));
+      
       // Preparar observaciones con toda la información
-      let observaciones = `Tipo de servicio: ${getSelectedServiceType()?.nombre}\n\n`;
-      observaciones += `${formData.descripcion}\n\n`;
+      let observaciones = `${formData.descripcion}\n\n`;
       observaciones += `Dirección: ${formData.direccion_servicio}\n\n`;
       
       if (formData.notas_adicionales) {
-        observaciones += `\nNotas adicionales: ${formData.notas_adicionales}`;
+        observaciones += `Notas adicionales: ${formData.notas_adicionales}`;
       }
 
-      // Crear la solicitud como una reserva pendiente
-      const solicitudData = {
-        tipo_servicio: formData.tipo_servicio,
-        fecha_reserva: formData.fecha_preferida,
-        observaciones: observaciones,
-        estado: 'pendiente'
-      };
+      // Crear FormData para enviar archivos
+      const formDataToSend = new FormData();
+      formDataToSend.append('servicio', parseInt(formData.servicio));
+      formDataToSend.append('fecha_reserva', formData.fecha_preferida);
+      formDataToSend.append('observaciones', observaciones);
+      formDataToSend.append('estado', 'pendiente');
+      formDataToSend.append('direccion', formData.direccion_servicio);
 
-      await serviciosService.createReserva(solicitudData);
+      // Agregar imágenes del jardín
+      formData.imagenes_jardin.forEach((imagen, index) => {
+        formDataToSend.append('imagenes_jardin', imagen.file);
+      });
+
+      // Agregar imágenes de ideas
+      formData.imagenes_ideas.forEach((imagen, index) => {
+        formDataToSend.append('imagenes_ideas', imagen.file);
+      });
+
+      await serviciosService.createReserva(formDataToSend);
       success('Solicitud enviada correctamente. Nos pondremos en contacto contigo pronto.');
       
       // Limpiar URLs de preview para evitar memory leaks
@@ -198,7 +212,7 @@ const SolicitarServicioPage = () => {
       
       // Reset form (manteniendo la dirección del cliente)
       setFormData({
-        tipo_servicio: '',
+        servicio: '',
         descripcion: '',
         fecha_preferida: '',
         direccion_servicio: user?.cliente?.direccion_completa || '',
@@ -215,7 +229,7 @@ const SolicitarServicioPage = () => {
   };
 
   const getSelectedServiceType = () => {
-    return tiposServicio.find(tipo => tipo.id === formData.tipo_servicio);
+    return serviciosDisponibles.find(s => s.id_servicio === parseInt(formData.servicio));
   };
 
   if (loading) {
@@ -287,26 +301,35 @@ const SolicitarServicioPage = () => {
           {/* Step 1: Service Type */}
           {currentStep === 1 && (
             <div>
-              <h2 className="text-xl font-semibold text-white mb-4">Selecciona el tipo de servicio</h2>
+              <h2 className="text-xl font-semibold text-white mb-4">Selecciona el servicio</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {tiposServicio.map(tipo => (
+                {serviciosDisponibles.map(servicio => (
                   <div
-                    key={tipo.id}
+                    key={servicio.id_servicio}
                     className={`p-6 border-2 rounded-lg cursor-pointer transition-all hover:scale-105 ${
-                      formData.tipo_servicio === tipo.id
+                      formData.servicio === servicio.id_servicio.toString()
                         ? 'border-green-500 bg-green-500/10 shadow-lg shadow-green-500/20'
                         : 'border-gray-600 hover:border-gray-500'
                     }`}
-                    onClick={() => setFormData({...formData, tipo_servicio: tipo.id, servicio_id: ''})}
+                    onClick={() => setFormData({...formData, servicio: servicio.id_servicio.toString()})}
                   >
                     <div className="text-center">
-                      <div className="text-5xl mb-4">{tipo.icon}</div>
-                      <h3 className="text-xl font-semibold text-white mb-2">{tipo.nombre}</h3>
-                      <p className="text-sm text-gray-400">{tipo.descripcion}</p>
+                      <div className="text-5xl mb-4">{servicio.tipo === 'diseno' ? '🌻' : '🌿'}</div>
+                      <h3 className="text-xl font-semibold text-white mb-2">{servicio.nombre}</h3>
+                      <p className="text-sm text-gray-400 mb-3">{servicio.descripcion || 'Servicio profesional de jardinería'}</p>
+                      <div className="mt-4 space-y-2">
+                        <p className="text-lg font-bold text-green-400">${parseFloat(servicio.precio).toFixed(2)}</p>
+                        <p className="text-xs text-gray-500">Duración estimada: {servicio.duracion_estimada} horas</p>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
+              {serviciosDisponibles.length === 0 && (
+                <div className="text-center py-12">
+                  <p className="text-gray-400">No hay servicios disponibles en este momento</p>
+                </div>
+              )}
             </div>
           )}
 

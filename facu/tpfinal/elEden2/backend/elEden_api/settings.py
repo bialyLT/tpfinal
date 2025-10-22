@@ -63,7 +63,8 @@ LOCAL_APPS = [
 # --------------------------------------------------
 # Logging (console output for development debugging)
 # --------------------------------------------------
-LOG_LEVEL = 'DEBUG' if DEBUG else 'INFO'
+# Cambiar a WARNING para reducir los logs de debug
+LOG_LEVEL = 'WARNING' if DEBUG else 'ERROR'
 
 LOGGING = {
     'version': 1,
@@ -89,15 +90,35 @@ LOGGING = {
             'handlers': ['console'],
             'level': LOG_LEVEL,
         },
+        'django.db.backends': {
+            'handlers': ['console'],
+            'level': 'WARNING',  # No mostrar queries SQL
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'WARNING',  # Solo errores de request
+            'propagate': False,
+        },
+        'django.server': {
+            'handlers': ['console'],
+            'level': 'INFO',  # Mantener INFO para ver requests HTTP
+            'propagate': False,
+        },
         # Project loggers
         'apps.users': {
             'handlers': ['console'],
-            'level': LOG_LEVEL,
+            'level': 'ERROR',  # Solo errores
+            'propagate': False,
+        },
+        'apps.servicios': {
+            'handlers': ['console'],
+            'level': 'ERROR',  # Solo errores
             'propagate': False,
         },
         'core': {
             'handlers': ['console'],
-            'level': LOG_LEVEL,
+            'level': 'ERROR',  # Solo errores
             'propagate': False,
         },
     },

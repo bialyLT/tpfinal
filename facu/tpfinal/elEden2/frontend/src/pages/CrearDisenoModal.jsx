@@ -3,9 +3,23 @@ import { X, Upload, Plus, Trash2, Palette, DollarSign, Calendar, Image as ImageI
 import { serviciosService, productosService } from '../services';
 import { success, error as showError } from '../utils/notifications';
 
-const CrearDisenoModal = ({ servicioId, isOpen, onClose, onDisenoCreated }) => {
+const CrearDisenoModal = ({ servicio: reserva, isOpen, onClose, onDisenoCreated }) => {
   const [loading, setLoading] = useState(false);
   const [productos, setProductos] = useState([]);
+  
+  // Extraer el ID de servicio de la reserva
+  const servicioId = reserva?.servicio || reserva?.id_servicio;
+  // Extraer el ID de la reserva
+  const reservaId = reserva?.id_reserva;
+  
+  // Debug: verificar que tenemos la reserva correctamente
+  useEffect(() => {
+    if (isOpen) {
+      console.log('📋 Reserva recibida en modal:', reserva);
+      console.log('🔑 Servicio ID:', servicioId);
+      console.log('🔑 Reserva ID:', reservaId);
+    }
+  }, [isOpen, reserva, servicioId, reservaId]);
   
   // Estados del formulario
   const [formData, setFormData] = useState({
@@ -85,13 +99,22 @@ const CrearDisenoModal = ({ servicioId, isOpen, onClose, onDisenoCreated }) => {
     setProductosSeleccionados([...productosSeleccionados, {
       producto_id: '',
       cantidad: 1,
-      costo_unitario: '',
+      precio_unitario: '',
       notas: ''
     }]);
   };
 
   const actualizarProducto = (index, campo, valor) => {
     const nuevosProductos = [...productosSeleccionados];
+    
+    // Si se está cambiando el producto, actualizar automáticamente el precio
+    if (campo === 'producto_id' && valor) {
+      const productoSeleccionado = productos.find(p => p.id_producto === parseInt(valor));
+      if (productoSeleccionado) {
+        nuevosProductos[index]['precio_unitario'] = productoSeleccionado.precio;
+      }
+    }
+    
     nuevosProductos[index][campo] = valor;
     setProductosSeleccionados(nuevosProductos);
   };
@@ -103,7 +126,7 @@ const CrearDisenoModal = ({ servicioId, isOpen, onClose, onDisenoCreated }) => {
 
   const calcularTotalProductos = () => {
     return productosSeleccionados.reduce((total, prod) => {
-      const subtotal = (prod.cantidad || 0) * (parseFloat(prod.costo_unitario) || 0);
+      const subtotal = (prod.cantidad || 0) * (parseFloat(prod.precio_unitario) || 0);
       return total + subtotal;
     }, 0);
   };
@@ -128,13 +151,18 @@ const CrearDisenoModal = ({ servicioId, isOpen, onClose, onDisenoCreated }) => {
       const formDataToSend = new FormData();
       
       // Agregar datos básicos
-      formDataToSend.append('servicio', servicioId);
-      formDataToSend.append('descripcion_tecnica', formData.descripcion_tecnica);
-      formDataToSend.append('presupuesto', formData.presupuesto || '0');
-      formDataToSend.append('presupuesto_final', calcularPresupuestoFinal());
+      formDataToSend.append('servicio_id', servicioId);
+      // Agregar el ID de la reserva si existe
+      if (reservaId) {
+        formDataToSend.append('reserva_id', reservaId);
+      }
+      formDataToSend.append('titulo', formData.descripcion_tecnica.substring(0, 100)); // Usar primeras 100 palabras como título
+      formDataToSend.append('descripcion', formData.descripcion_tecnica);
+      formDataToSend.append('presupuesto', calcularPresupuestoFinal());
       
+      // Agregar fecha propuesta si existe
       if (formData.fecha_estimada_realizacion) {
-        formDataToSend.append('fecha_estimada_realizacion', formData.fecha_estimada_realizacion);
+        formDataToSend.append('fecha_propuesta', formData.fecha_estimada_realizacion);
       }
       
       // Agregar imágenes
@@ -145,15 +173,20 @@ const CrearDisenoModal = ({ servicioId, isOpen, onClose, onDisenoCreated }) => {
       // Agregar productos como JSON string
       if (productosSeleccionados.length > 0) {
         const productosValidados = productosSeleccionados.filter(p => 
-          p.producto_id && p.cantidad && p.costo_unitario
+          p.producto_id && p.cantidad && p.precio_unitario
         );
         formDataToSend.append('productos', JSON.stringify(productosValidados));
       }
 
-      const response = await serviciosService.crearDisenoCompleto(servicioId, formDataToSend);
+      const response = await serviciosService.crearDisenoCompleto(formDataToSend);
       
       success('Diseño creado exitosamente');
-      onDisenoCreated(response);
+      
+      // Llamar al callback solo si está definido
+      if (onDisenoCreado && typeof onDisenoCreado === 'function') {
+        onDisenoCreado(response);
+      }
+      
       onClose();
       
     } catch (error) {
@@ -304,8 +337,8 @@ const CrearDisenoModal = ({ servicioId, isOpen, onClose, onDisenoCreated }) => {
                       >
                         <option value="">Seleccionar...</option>
                         {productos.map((prod) => (
-                          <option key={prod.id} value={prod.id}>
-                            {prod.nombre}
+                          <option key={prod.id_producto} value={prod.id_producto}>
+                            {prod.nombre} - ${parseFloat(prod.precio).toFixed(2)}
                           </option>
                         ))}
                       </select>
@@ -323,14 +356,13 @@ const CrearDisenoModal = ({ servicioId, isOpen, onClose, onDisenoCreated }) => {
                     </div>
                     
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Costo Unitario</label>
+                      <label className="block text-xs text-gray-400 mb-1">Precio Unitario</label>
                       <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={producto.costo_unitario}
-                        onChange={(e) => actualizarProducto(index, 'costo_unitario', e.target.value)}
-                        className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                        type="text"
+                        value={producto.precio_unitario ? `$${parseFloat(producto.precio_unitario).toFixed(2)}` : '$0.00'}
+                        readOnly
+                        className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-gray-300 text-sm cursor-not-allowed"
+                        title="El precio se toma automáticamente del producto"
                       />
                     </div>
                     
@@ -338,7 +370,7 @@ const CrearDisenoModal = ({ servicioId, isOpen, onClose, onDisenoCreated }) => {
                       <label className="block text-xs text-gray-400 mb-1">Subtotal</label>
                       <input
                         type="text"
-                        value={((producto.cantidad || 0) * (parseFloat(producto.costo_unitario) || 0)).toFixed(2)}
+                        value={`$${((producto.cantidad || 0) * (parseFloat(producto.precio_unitario) || 0)).toFixed(2)}`}
                         readOnly
                         className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-gray-300 text-sm cursor-not-allowed"
                       />

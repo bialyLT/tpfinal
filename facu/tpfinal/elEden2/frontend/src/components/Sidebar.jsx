@@ -6,7 +6,7 @@ import {
   Leaf, Menu, X, User, LogOut, Home, ShoppingCart, 
   Package, Users, Wrench, ClipboardList, Tag, Building2,
   FileText, Plus, ChevronDown, ChevronRight, LayoutDashboard,
-  ShoppingBag, ListChecks
+  ShoppingBag, ListChecks, Palette
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -44,6 +44,7 @@ const Sidebar = () => {
       return [
         { name: 'Inicio', href: '/', icon: Home },
         { name: 'Mis Servicios', href: '/mis-servicios', icon: FileText },
+        { name: 'Mis Diseños', href: '/mis-disenos', icon: Palette },
         { name: 'Solicitar Servicio', href: '/solicitar-servicio', icon: Plus },
         { name: 'Mi Perfil', href: '/mi-perfil', icon: User },
       ];
@@ -71,6 +72,7 @@ const Sidebar = () => {
           ]
         },
         { name: 'Servicios', href: '/servicios', icon: Wrench },
+        { name: 'Diseños', href: '/disenos', icon: Palette },
         { name: 'Mi Perfil', href: '/mi-perfil', icon: User },
       ];
     }
@@ -97,6 +99,7 @@ const Sidebar = () => {
           ]
         },
         { name: 'Servicios', href: '/servicios', icon: Wrench },
+        { name: 'Diseños', href: '/disenos', icon: Palette },
         { name: 'Encuestas', href: '/encuestas', icon: ListChecks },
         { name: 'Usuarios', href: '/usuarios', icon: Users },
       ];

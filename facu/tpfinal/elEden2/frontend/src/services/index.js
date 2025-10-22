@@ -123,6 +123,11 @@ export const serviciosService = {
     const response = await api.get('/servicios/reservas/', { params });
     return response.data;
   },
+
+  updateReserva: async (id, data) => {
+    const response = await api.patch(`/servicios/reservas/${id}/`, data);
+    return response.data;
+  },
   
   iniciarServicio: async (id) => {
     const response = await api.post(`/servicios/servicios/${id}/iniciar_servicio/`);
@@ -139,17 +144,62 @@ export const serviciosService = {
     return response.data;
   },
 
+  getReservaById: async (id) => {
+    const response = await api.get(`/servicios/reservas/${id}/`);
+    return response.data;
+  },
+
   updateServicio: async (id, data) => {
     const response = await api.put(`/servicios/servicios/${id}/`, data);
     return response.data;
   },
 
-  crearDisenoCompleto: async (servicioId, formData) => {
-    const response = await api.post(`/servicios/servicios/${servicioId}/crear_diseño/`, formData, {
+  crearDisenoCompleto: async (formData) => {
+    const response = await api.post(`/servicios/disenos/crear-completo/`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
+    return response.data;
+  },
+
+  getDisenos: async (params = {}) => {
+    const response = await api.get('/servicios/disenos/', { params });
+    return response.data;
+  },
+
+  getDisenoById: async (id) => {
+    const response = await api.get(`/servicios/disenos/${id}/`);
+    return response.data;
+  },
+
+  presentarDiseno: async (id) => {
+    const response = await api.post(`/servicios/disenos/${id}/presentar/`);
+    return response.data;
+  },
+
+  aceptarDiseno: async (id, observaciones = null) => {
+    const response = await api.post(`/servicios/disenos/${id}/aceptar/`, { observaciones });
+    return response.data;
+  },
+
+  rechazarDiseno: async (id, observaciones = null) => {
+    const response = await api.post(`/servicios/disenos/${id}/rechazar/`, { observaciones });
+    return response.data;
+  },
+
+  aceptarDisenoCliente: async (id) => {
+    const response = await api.post(`/servicios/disenos/${id}/aceptar_cliente/`);
+    return response.data;
+  },
+
+  rechazarDisenoCliente: async (id, feedback) => {
+    const response = await api.post(`/servicios/disenos/${id}/rechazar_cliente/`, { feedback });
+    return response.data;
+  },
+
+  presentarDiseno: async (id) => {
+    const response = await api.post(`/servicios/disenos/${id}/presentar/`);
     return response.data;
   },
 

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, User, MapPin, FileText, Image as ImageIcon, Palette, DollarSign } from 'lucide-react';
+import { X, Calendar, User, MapPin, FileText, Image as ImageIcon, Palette, DollarSign, Eye } from 'lucide-react';
 import { serviciosService } from '../services';
 import { error as showError } from '../utils/notifications';
 
-const ServicioDetalleModal = ({ servicioId, isOpen, onClose }) => {
+const ServicioDetalleModal = ({ servicioId, itemType, isOpen, onClose, onVerDiseno }) => {
   const [servicio, setServicio] = useState(null);
+  const [diseno, setDiseno] = useState(null);
   const [loading, setLoading] = useState(false);
 
   // Imagen placeholder base64 (1x1 pixel gris)
@@ -14,16 +15,38 @@ const ServicioDetalleModal = ({ servicioId, isOpen, onClose }) => {
     if (isOpen && servicioId) {
       fetchServicioDetalle();
     }
-  }, [isOpen, servicioId]);
+  }, [isOpen, servicioId, itemType]);
 
   const fetchServicioDetalle = async () => {
     try {
       setLoading(true);
-      const data = await serviciosService.getServicioById(servicioId);
+      let data;
+      
+      // Usar el endpoint correcto según el tipo
+      if (itemType === 'reserva') {
+        data = await serviciosService.getReservaById(servicioId);
+        
+        // Buscar el diseño asociado a esta reserva
+        try {
+          const disenosData = await serviciosService.getDisenos();
+          const disenosArray = disenosData.results || disenosData;
+          const disenoEncontrado = disenosArray.find(d => 
+            d.reserva === servicioId || d.reserva_id === servicioId
+          );
+          setDiseno(disenoEncontrado || null);
+        } catch (err) {
+          console.log('No se pudo cargar el diseño:', err);
+          setDiseno(null);
+        }
+      } else {
+        data = await serviciosService.getServicioById(servicioId);
+      }
+      
       setServicio(data);
-      console.log('Datos del servicio recibidos:', data); // Debug
+      console.log('Datos recibidos:', data); // Debug
+      console.log('Diseño encontrado:', diseno); // Debug
     } catch (error) {
-      showError('Error al cargar los detalles del servicio');
+      showError('Error al cargar los detalles');
       console.error(error);
     } finally {
       setLoading(false);
@@ -111,14 +134,23 @@ const ServicioDetalleModal = ({ servicioId, isOpen, onClose }) => {
                       <User className="w-4 h-4 text-gray-400" />
                       <span className="text-gray-300">Cliente:</span>
                       <span className="text-white font-medium">
-                        {servicio.cliente_nombre || 'N/A'}
+                        {servicio.cliente_nombre && servicio.cliente_apellido 
+                          ? `${servicio.cliente_nombre} ${servicio.cliente_apellido}` 
+                          : 'N/A'}
                       </span>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Palette className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-300">Tipo de servicio:</span>
+                      <span className="text-gray-300">Servicio:</span>
                       <span className="text-white font-medium">
-                        {servicio.tipo_servicio_nombre || servicio.tipo_servicio?.nombre || 'N/A'}
+                        {servicio.servicio_nombre || 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <DollarSign className="w-4 h-4 text-gray-400" />
+                      <span className="text-gray-300">Precio:</span>
+                      <span className="text-white font-medium">
+                        ${servicio.servicio_precio || '0.00'}
                       </span>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -137,22 +169,24 @@ const ServicioDetalleModal = ({ servicioId, isOpen, onClose }) => {
                         {servicio.fecha_solicitud ? new Date(servicio.fecha_solicitud).toLocaleDateString() : 'N/A'}
                       </span>
                     </div>
-                    {servicio.fecha_preferida && (
+                    {servicio.fecha_reserva && (
                       <div className="flex items-center space-x-2">
                         <Calendar className="w-4 h-4 text-gray-400" />
-                        <span className="text-gray-300">Fecha preferida:</span>
+                        <span className="text-gray-300">Fecha a realizarse el servicio:</span>
                         <span className="text-white">
-                          {new Date(servicio.fecha_preferida).toLocaleDateString()}
+                          {new Date(servicio.fecha_reserva).toLocaleDateString()}
                         </span>
                       </div>
                     )}
-                    <div className="flex items-center space-x-2">
-                      <MapPin className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-300">Dirección:</span>
-                      <span className="text-white">
-                        {servicio.direccion_servicio || 'No especificada'}
-                      </span>
-                    </div>
+                    {servicio.direccion && (
+                      <div className="flex items-start space-x-2">
+                        <MapPin className="w-4 h-4 text-gray-400 mt-1" />
+                        <div>
+                          <span className="text-gray-300">Dirección:</span>
+                          <p className="text-white">{servicio.direccion}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -176,82 +210,67 @@ const ServicioDetalleModal = ({ servicioId, isOpen, onClose }) => {
                   <Palette className="w-5 h-5 mr-2 text-green-400" />
                   Información del Diseño
                 </h3>
-                {servicio.diseño ? (
-                  <div className="space-y-3">
-                    {servicio.diseño.descripcion_deseada && (
+                {diseno ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-3">
+                        <div>
+                          <span className="text-gray-400 text-sm font-medium">Título:</span>
+                          <p className="text-white font-medium">{diseno.titulo}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-400 text-sm font-medium">Estado:</span>
+                          <p className="text-white capitalize">{diseno.estado?.replace('_', ' ')}</p>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        {diseno.disenador_nombre && (
+                          <div>
+                            <span className="text-gray-400 text-sm font-medium">Diseñador:</span>
+                            <p className="text-white">{diseno.disenador_nombre}</p>
+                          </div>
+                        )}
+                        {diseno.presupuesto && (
+                          <div>
+                            <span className="text-gray-400 text-sm font-medium">Presupuesto:</span>
+                            <p className="text-white font-medium">${diseno.presupuesto}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {diseno.descripcion && (
                       <div>
-                        <span className="text-gray-400 text-sm font-medium">Descripción deseada por el cliente:</span>
+                        <span className="text-gray-400 text-sm font-medium">Descripción:</span>
                         <p className="text-gray-300 mt-1 p-3 bg-gray-600 rounded">
-                          {servicio.diseño.descripcion_deseada}
+                          {diseno.descripcion}
                         </p>
                       </div>
                     )}
-                    {servicio.diseño.descripcion_tecnica ? (
-                      <div>
-                        <span className="text-gray-400 text-sm font-medium">Descripción técnica:</span>
-                        <p className="text-gray-300 mt-1 p-3 bg-gray-600 rounded">
-                          {servicio.diseño.descripcion_tecnica}
-                        </p>
-                      </div>
-                    ) : (
-                      <div>
-                        <span className="text-gray-400 text-sm font-medium">Descripción técnica:</span>
-                        <p className="text-gray-500 mt-1 p-3 bg-gray-600 rounded italic">
-                          Pendiente de elaboración por el diseñador
-                        </p>
-                      </div>
-                    )}
-                    {servicio.diseño.diseñador_nombre ? (
-                      <div className="flex items-center space-x-2">
-                        <User className="w-4 h-4 text-gray-400" />
-                        <span className="text-gray-300">Diseñador asignado:</span>
-                        <span className="text-white font-medium">
-                          {servicio.diseño.diseñador_nombre}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center space-x-2">
-                        <User className="w-4 h-4 text-gray-400" />
-                        <span className="text-gray-300">Diseñador asignado:</span>
-                        <span className="text-gray-500 italic">
-                          Por asignar
-                        </span>
-                      </div>
-                    )}
-                    {servicio.diseño.presupuesto ? (
-                      <div className="flex items-center space-x-2">
-                        <DollarSign className="w-4 h-4 text-gray-400" />
-                        <span className="text-gray-300">Presupuesto:</span>
-                        <span className="text-white font-medium">
-                          ${servicio.diseño.presupuesto}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center space-x-2">
-                        <DollarSign className="w-4 h-4 text-gray-400" />
-                        <span className="text-gray-300">Presupuesto:</span>
-                        <span className="text-gray-500 italic">
-                          Pendiente de cotización
-                        </span>
-                      </div>
-                    )}
-                    {servicio.diseño.motivo_rechazo && (
-                      <div>
-                        <span className="text-red-400 text-sm font-medium">Motivo de rechazo:</span>
-                        <p className="text-red-300 mt-1 p-3 bg-red-900 bg-opacity-20 rounded">
-                          {servicio.diseño.motivo_rechazo}
-                        </p>
-                      </div>
-                    )}
+                    
+                    {/* Botón para ver el diseño completo */}
+                    <div className="pt-2">
+                      <button
+                        onClick={() => {
+                          if (onVerDiseno) {
+                            onVerDiseno(diseno.id_diseno);
+                          }
+                        }}
+                        className="w-full flex items-center justify-center px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all transform hover:scale-105 shadow-lg"
+                      >
+                        <Eye className="w-5 h-5 mr-2" />
+                        Ver Diseño Completo
+                      </button>
+                    </div>
                   </div>
                 ) : (
-                  <div className="text-center py-6">
-                    <Palette className="w-12 h-12 text-gray-500 mx-auto mb-3" />
-                    <p className="text-gray-500 italic">
-                      {servicio.tipo_servicio_requiere_diseño === false 
-                        ? 'Este tipo de servicio no requiere diseño'
-                        : 'El diseño está pendiente de crear'
-                      }
+                  <div className="text-center py-8">
+                    <Palette className="w-16 h-16 text-gray-500 mx-auto mb-3" />
+                    <p className="text-gray-400 text-lg font-medium mb-2">
+                      No hay diseño disponible
+                    </p>
+                    <p className="text-gray-500 text-sm">
+                      El diseño está pendiente de creación o no ha sido asignado aún
                     </p>
                   </div>
                 )}

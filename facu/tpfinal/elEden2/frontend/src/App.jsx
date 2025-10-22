@@ -20,6 +20,8 @@ import EncuestasPage from './pages/EncuestasPage';
 import EmpleadosPage from './pages/EmpleadosPage';
 import SolicitarServicioPage from './pages/SolicitarServicioPage';
 import MiPerfil from './pages/MiPerfil';
+import DisenosPage from './pages/DisenosPage';
+import MisDisenosPage from './pages/MisDisenosPage';
 // ABM Pages
 import ComprasPage from './pages/ComprasPage';
 import CategoriasPage from './pages/CategoriasPage';
@@ -267,15 +269,28 @@ function App() {
               } 
             />
 
-            {/* Mi Perfil - Solo Clientes */}
+            {/* Mis Diseños - Solo Clientes (vista para aprobar/rechazar diseños) */}
             <Route 
-              path="/mi-perfil" 
+              path="/mis-disenos" 
               element={
                 <ProtectedRoute allowedRoles={['cliente']}>
-                  <MiPerfil />
+                  <MisDisenosPage />
                 </ProtectedRoute>
               } 
             />
+
+            {/* Diseños - Empleados y Administradores */}
+            <Route 
+              path="/disenos" 
+              element={
+                <ProtectedRoute allowedRoles={['empleado', 'diseñador', 'administrador']}>
+                  <DisenosPage />
+                </ProtectedRoute>
+              } 
+            />
+
+            {/* Fallback route */}
+            <Route path="*" element={<Navigate to="/" replace />} />
 
             {/* Catch all route */}
             <Route path="*" element={<Navigate to="/" replace />} />

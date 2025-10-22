@@ -7,10 +7,10 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.contrib.auth.models import User, Group
 
-from .models import Genero, TipoDocumento, Localidad, Persona, Cliente, Proveedor
+from .models import Genero, TipoDocumento, Localidad, Persona, Cliente, Empleado, Proveedor
 from .serializers import (
     GeneroSerializer, TipoDocumentoSerializer, LocalidadSerializer,
-    PersonaSerializer, ClienteSerializer, ProveedorSerializer,
+    PersonaSerializer, ClienteSerializer, EmpleadoSerializer, ProveedorSerializer,
     UserSerializer, CreateEmpleadoSerializer, UpdateEmpleadoSerializer
 )
 
@@ -30,9 +30,12 @@ class CurrentUserView(APIView):
                 'foto_perfil': request.build_absolute_uri(user.perfil.foto_perfil.url) if user.perfil.foto_perfil else None
             }
         
-        # Obtener información del cliente si existe
+        # Obtener información del cliente o empleado si existe
         cliente_data = None
+        empleado_data = None
         persona_data = None
+        
+        # Intentar obtener Cliente
         try:
             cliente = Cliente.objects.select_related('persona', 'persona__localidad', 'persona__genero', 'persona__tipo_documento').get(persona__email=user.email)
             persona = cliente.persona
@@ -78,7 +81,43 @@ class CurrentUserView(APIView):
                 } if persona.localidad else None
             }
         except Cliente.DoesNotExist:
-            pass
+            # Si no es cliente, intentar obtener Empleado
+            try:
+                empleado = Empleado.objects.select_related('persona', 'persona__localidad', 'persona__genero', 'persona__tipo_documento').get(persona__email=user.email)
+                persona = empleado.persona
+                
+                empleado_data = {
+                    'id_empleado': empleado.id_empleado,
+                    'cargo': empleado.cargo or '',
+                    'fecha_contratacion': empleado.fecha_contratacion,
+                    'telefono': persona.telefono,
+                    'nombre_completo': f"{persona.nombre} {persona.apellido}"
+                }
+                
+                # Datos completos de Persona para edición
+                persona_data = {
+                    'id_persona': persona.id_persona,
+                    'telefono': persona.telefono,
+                    'nro_documento': persona.nro_documento,
+                    'calle': persona.calle,
+                    'numero': persona.numero,
+                    'piso': persona.piso or '',
+                    'dpto': persona.dpto or '',
+                    'genero': {
+                        'id': persona.genero.id_genero,
+                        'nombre': persona.genero.genero
+                    } if persona.genero else None,
+                    'tipo_documento': {
+                        'id': persona.tipo_documento.id_tipo_documento,
+                        'nombre': persona.tipo_documento.tipo
+                    } if persona.tipo_documento else None,
+                    'localidad': {
+                        'id': persona.localidad.id_localidad,
+                        'nombre': persona.localidad.nombre_localidad
+                    } if persona.localidad else None
+                }
+            except Empleado.DoesNotExist:
+                pass
         
         return Response({
             'id': user.id,
@@ -91,6 +130,7 @@ class CurrentUserView(APIView):
             'groups': [group.name for group in user.groups.all()],
             'perfil': perfil_data,
             'cliente': cliente_data,
+            'empleado': empleado_data,
             'persona': persona_data,
             'last_login': user.last_login
         })
@@ -101,16 +141,24 @@ class CurrentUserView(APIView):
         data = request.data
         
         try:
-            # Primero buscar el cliente con el email actual antes de modificarlo
+            # Primero buscar el cliente o empleado con el email actual antes de modificarlo
             cliente = None
+            empleado = None
             persona = None
+            
             try:
                 # Usar el email actual del usuario (antes de actualizarlo)
                 old_email = user.email
                 cliente = Cliente.objects.select_related('persona').get(persona__email=old_email)
                 persona = cliente.persona
             except Cliente.DoesNotExist:
-                pass
+                # Si no es cliente, intentar empleado
+                try:
+                    old_email = user.email
+                    empleado = Empleado.objects.select_related('persona').get(persona__email=old_email)
+                    persona = empleado.persona
+                except Empleado.DoesNotExist:
+                    pass
             
             # Actualizar datos del User
             if 'first_name' in data:
@@ -154,9 +202,9 @@ class CurrentUserView(APIView):
             return self.get(request)
             
         except Exception as e:
-            import traceback
-            print(f"Error al actualizar perfil: {str(e)}")
-            print(traceback.format_exc())
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error al actualizar perfil: {str(e)}", exc_info=True)
             return Response(
                 {'error': f'Error al actualizar el perfil: {str(e)}'},
                 status=status.HTTP_400_BAD_REQUEST

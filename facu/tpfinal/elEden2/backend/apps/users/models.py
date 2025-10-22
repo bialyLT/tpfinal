@@ -105,6 +105,24 @@ class Cliente(models.Model):
         return f"Cliente: {self.persona.apellido}, {self.persona.nombre}"
 
 
+class Empleado(models.Model):
+    id_empleado = models.AutoField(primary_key=True)
+    persona = models.OneToOneField(Persona, on_delete=models.CASCADE, related_name='empleado')
+    fecha_contratacion = models.DateTimeField(auto_now_add=True)
+    activo = models.BooleanField(default=True)
+    cargo = models.CharField(max_length=100, blank=True, null=True)
+    observaciones = models.TextField(blank=True, null=True)
+    
+    class Meta:
+        verbose_name = 'Empleado'
+        verbose_name_plural = 'Empleados'
+        db_table = 'empleado'
+        ordering = ['-fecha_contratacion']
+
+    def __str__(self):
+        return f"Empleado: {self.persona.apellido}, {self.persona.nombre}"
+
+
 class Proveedor(models.Model):
     id_proveedor = models.AutoField(primary_key=True)
     razon_social = models.CharField(max_length=200)
