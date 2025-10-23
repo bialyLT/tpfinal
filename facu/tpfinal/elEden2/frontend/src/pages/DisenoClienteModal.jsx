@@ -8,9 +8,12 @@ const DisenoClienteModal = ({ isOpen, onClose, reservaId, onDisenoActualizado })
   const [disenoActual, setDisenoActual] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [showReagendamientoModal, setShowReagendamientoModal] = useState(false);
+  const [reagendamientoData, setReagendamientoData] = useState(null);
   const [feedback, setFeedback] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [procesando, setProcesando] = useState(false);
+  const [cancelarServicio, setCancelarServicio] = useState(false);
 
   useEffect(() => {
     if (isOpen && reservaId) {
@@ -54,17 +57,63 @@ const DisenoClienteModal = ({ isOpen, onClose, reservaId, onDisenoActualizado })
     
     try {
       setProcesando(true);
-      await serviciosService.aceptarDisenoCliente(disenoActual.id_diseno, {
+      const response = await serviciosService.aceptarDisenoCliente(disenoActual.id_diseno, {
+        feedback: observaciones || 'Diseño aceptado por el cliente',
         observaciones: observaciones || 'Diseño aceptado por el cliente'
       });
+      
+      // Verificar si requiere reagendamiento por falta de stock
+      if (response.requiere_reagendamiento) {
+        setReagendamientoData(response);
+        setShowReagendamientoModal(true);
+        setProcesando(false);
+        return;
+      }
+      
       success('¡Diseño aceptado! El servicio comenzará pronto.');
       if (onDisenoActualizado) onDisenoActualizado();
       onClose();
     } catch (error) {
-      handleApiError(error, 'Error al aceptar el diseño');
+      // Error 409 indica conflicto por stock
+      if (error.response && error.response.status === 409) {
+        const data = error.response.data;
+        setReagendamientoData(data);
+        setShowReagendamientoModal(true);
+      } else {
+        handleApiError(error, 'Error al aceptar el diseño');
+      }
     } finally {
       setProcesando(false);
     }
+  };
+
+  const handleAceptarReagendamiento = async () => {
+    if (!disenoActual || !reagendamientoData) return;
+    
+    try {
+      setProcesando(true);
+      await serviciosService.aceptarDisenoCliente(disenoActual.id_diseno, {
+        feedback: observaciones || 'Diseño aceptado con reagendamiento por falta de stock',
+        observaciones: observaciones || 'Diseño aceptado con reagendamiento',
+        acepta_reagendamiento: true,
+        nueva_fecha: reagendamientoData.fecha_propuesta
+      });
+      
+      success('¡Diseño aceptado! El servicio se realizará en la nueva fecha.');
+      setShowReagendamientoModal(false);
+      if (onDisenoActualizado) onDisenoActualizado();
+      onClose();
+    } catch (error) {
+      handleApiError(error, 'Error al aceptar el reagendamiento');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  const handleRechazarReagendamiento = () => {
+    setShowReagendamientoModal(false);
+    setCancelarServicio(true);
+    setShowFeedbackModal(true);
   };
 
   const handleRechazar = () => {
@@ -80,11 +129,19 @@ const DisenoClienteModal = ({ isOpen, onClose, reservaId, onDisenoActualizado })
     try {
       setProcesando(true);
       await serviciosService.rechazarDisenoCliente(disenoActual.id_diseno, {
-        feedback: feedback
+        feedback: feedback,
+        cancelar_servicio: cancelarServicio
       });
-      success('Diseño rechazado. El empleado recibirá tu feedback.');
+      
+      if (cancelarServicio) {
+        success('Diseño rechazado y servicio cancelado.');
+      } else {
+        success('Diseño rechazado. El empleado recibirá tu feedback para crear un nuevo diseño.');
+      }
+      
       setShowFeedbackModal(false);
       setFeedback('');
+      setCancelarServicio(false);
       if (onDisenoActualizado) onDisenoActualizado();
       onClose();
     } catch (error) {
@@ -165,10 +222,12 @@ const DisenoClienteModal = ({ isOpen, onClose, reservaId, onDisenoActualizado })
                         <p className="text-gray-400 text-sm">Fecha Propuesta para el Servicio</p>
                         <p className="text-white font-semibold">
                           {disenoActual.fecha_propuesta 
-                            ? new Date(disenoActual.fecha_propuesta).toLocaleDateString('es-AR', {
+                            ? new Date(disenoActual.fecha_propuesta).toLocaleString('es-AR', {
                                 year: 'numeric',
                                 month: 'long',
-                                day: 'numeric'
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
                               })
                             : 'No definida'}
                         </p>
@@ -344,38 +403,159 @@ const DisenoClienteModal = ({ isOpen, onClose, reservaId, onDisenoActualizado })
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[60]">
           <div className="bg-gray-800 rounded-lg max-w-md w-full p-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-white">¿Por qué rechazas este diseño?</h3>
+              <h3 className="text-xl font-bold text-white">
+                {cancelarServicio ? '¿Por qué cancelas el servicio?' : '¿Por qué rechazas este diseño?'}
+              </h3>
               <button
-                onClick={() => setShowFeedbackModal(false)}
+                onClick={() => {
+                  setShowFeedbackModal(false);
+                  setCancelarServicio(false);
+                }}
                 className="text-gray-400 hover:text-white"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <p className="text-gray-400 mb-4">
-              Tu feedback ayudará al diseñador a crear una propuesta que se ajuste mejor a tus expectativas.
+              {cancelarServicio 
+                ? 'Por favor cuéntanos el motivo de la cancelación.'
+                : 'Tu feedback ayudará al diseñador a crear una propuesta que se ajuste mejor a tus expectativas.'
+              }
             </p>
             <textarea
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
               className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4"
               rows="4"
-              placeholder="Ejemplo: Me gustaría más plantas nativas, el presupuesto es muy alto, prefiero un estilo más moderno..."
+              placeholder={cancelarServicio 
+                ? "Ejemplo: No puedo aceptar el reagendamiento, la fecha no me sirve..."
+                : "Ejemplo: Me gustaría más plantas nativas, el presupuesto es muy alto, prefiero un estilo más moderno..."
+              }
               required
             />
+            {!cancelarServicio && (
+              <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-600/30 rounded-lg">
+                <p className="text-yellow-400 text-sm">
+                  El diseño será rechazado y el empleado creará una nueva propuesta basada en tu feedback.
+                </p>
+              </div>
+            )}
+            {cancelarServicio && (
+              <div className="mb-4 p-3 bg-red-900/20 border border-red-600/30 rounded-lg">
+                <p className="text-red-400 text-sm">
+                  <AlertCircle className="w-4 h-4 inline mr-1" />
+                  El servicio será cancelado completamente.
+                </p>
+              </div>
+            )}
             <div className="flex gap-3">
               <button
-                onClick={() => setShowFeedbackModal(false)}
+                onClick={() => {
+                  setShowFeedbackModal(false);
+                  setCancelarServicio(false);
+                }}
                 className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors"
               >
-                Cancelar
+                Volver
               </button>
               <button
                 onClick={handleEnviarRechazo}
                 disabled={procesando || !feedback.trim()}
                 className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
               >
-                {procesando ? 'Enviando...' : 'Enviar Rechazo'}
+                {procesando ? 'Enviando...' : cancelarServicio ? 'Cancelar Servicio' : 'Enviar Rechazo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Reagendamiento por falta de stock */}
+      {showReagendamientoModal && reagendamientoData && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[60]">
+          <div className="bg-gray-800 rounded-lg max-w-2xl w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-white flex items-center">
+                <AlertCircle className="w-6 h-6 mr-2 text-yellow-400" />
+                Stock Insuficiente - Reagendamiento Necesario
+              </h3>
+            </div>
+            
+            <div className="mb-6">
+              <p className="text-gray-300 mb-4">
+                {reagendamientoData.mensaje}
+              </p>
+              
+              {/* Productos faltantes */}
+              <div className="bg-gray-900 rounded-lg p-4 mb-4">
+                <h4 className="text-white font-semibold mb-3 flex items-center">
+                  <Package className="w-5 h-5 mr-2 text-red-400" />
+                  Productos sin stock suficiente:
+                </h4>
+                <div className="space-y-2">
+                  {reagendamientoData.productos_faltantes.map((prod, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-sm">
+                      <span className="text-gray-300">{prod.producto} (ID: {prod.id_producto})</span>
+                      <span className="text-red-400">
+                        Faltan: {prod.faltante} unidad{prod.faltante > 1 ? 'es' : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Información de fechas */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="bg-gray-900 rounded-lg p-4">
+                  <p className="text-gray-400 text-sm mb-1">Fecha Original</p>
+                  <p className="text-white font-semibold">
+                    {new Date(reagendamientoData.fecha_actual).toLocaleString('es-AR', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </p>
+                </div>
+                <div className="bg-green-900/20 border border-green-600/30 rounded-lg p-4">
+                  <p className="text-gray-400 text-sm mb-1">Nueva Fecha Propuesta</p>
+                  <p className="text-green-400 font-semibold">
+                    {new Date(reagendamientoData.fecha_propuesta).toLocaleString('es-AR', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </p>
+                  <p className="text-green-300 text-xs mt-1">
+                    +{reagendamientoData.tiempo_espera_dias} días de espera para reabastecimiento
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-blue-900/20 border border-blue-600/30 rounded-lg p-4">
+                <p className="text-blue-300 text-sm">
+                  <strong>Nota:</strong> Este tiempo permitirá reabastecer el stock de los productos necesarios para tu servicio.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleRechazarReagendamiento}
+                disabled={procesando}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                No Acepto - Cancelar Servicio
+              </button>
+              <button
+                onClick={handleAceptarReagendamiento}
+                disabled={procesando}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+              >
+                {procesando ? 'Procesando...' : 'Acepto Nueva Fecha'}
               </button>
             </div>
           </div>

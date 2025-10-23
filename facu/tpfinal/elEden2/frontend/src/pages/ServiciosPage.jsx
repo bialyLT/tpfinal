@@ -78,6 +78,38 @@ const ServiciosPage = () => {
     }
   };
 
+  const handleFinalizarServicio = async (id) => {
+    if (!window.confirm('¿Está seguro de finalizar este servicio?')) {
+      return;
+    }
+    
+    try {
+      await serviciosService.finalizarServicio(id);
+      success('Servicio finalizado correctamente');
+      fetchData();
+    } catch (error) {
+      handleApiError(error, 'Error al finalizar el servicio');
+    }
+  };
+
+  // Función para verificar si el usuario actual puede finalizar el servicio
+  const puedeFinalizarServicio = (reserva) => {
+    // Administradores siempre pueden
+    if (isAdmin) {
+      return true;
+    }
+    
+    // Verificar si es empleado asignado
+    if (isEmpleado && reserva.empleados_asignados) {
+      const empleadoAsignado = reserva.empleados_asignados.find(
+        emp => emp.empleado_email === user.email
+      );
+      return !!empleadoAsignado;
+    }
+    
+    return false;
+  };
+
   const handleVerDetalle = (servicioId, tipo) => {
     setSelectedServicioId(servicioId);
     setSelectedItemType(tipo);
@@ -131,19 +163,25 @@ const ServiciosPage = () => {
 
   const getStatusColor = (status) => {
     const colors = {
+      // Estados de Reserva
+      'pendiente': 'bg-yellow-500',
+      'confirmada': 'bg-blue-500',
+      'en_curso': 'bg-cyan-500',
+      'completada': 'bg-green-500',
+      'cancelada': 'bg-red-500',
+      // Estados legacy (por compatibilidad)
       'solicitud': 'bg-blue-500',
       'en_revision': 'bg-yellow-500',
       'en_diseño': 'bg-purple-500',
       'diseño_enviado': 'bg-indigo-500',
       'revision_diseño': 'bg-orange-500',
       'aprobado': 'bg-green-500',
-      'en_curso': 'bg-cyan-500',
       'pausado': 'bg-gray-500',
-      'completado': 'bg-emerald-500',
-      'cancelado': 'bg-red-500',
+      'completado': 'bg-green-500', // Legacy, ahora es completada
+      'cancelado': 'bg-red-500', // Legacy, ahora es cancelada
       'rechazado': 'bg-red-700'
     };
-    return colors[status] || 'bg-gray-500';
+    return colors[status] || 'bg-gray-400';
   };
 
   const filteredData = activeTab === 'solicitudes' 
@@ -236,35 +274,12 @@ const ServiciosPage = () => {
               >
                 <option value="">Todos los estados</option>
                 <option value="pendiente">Pendiente</option>
+                <option value="confirmada">Confirmada</option>
                 <option value="en_curso">En Curso</option>
-                <option value="completado">Completado</option>
-                <option value="cancelado">Cancelado</option>
+                <option value="completada">Completada</option>
+                <option value="cancelada">Cancelada</option>
               </select>
             </div>
-          </div>
-
-          {/* Tabs */}
-          <div className="flex space-x-1 bg-gray-800 p-1 rounded-lg">
-            <button
-              onClick={() => setActiveTab('solicitudes')}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                activeTab === 'solicitudes'
-                  ? 'bg-green-600 text-white'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Solicitudes ({solicitudes.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('servicios')}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                activeTab === 'servicios'
-                  ? 'bg-green-600 text-white'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Servicios ({servicios.length})
-            </button>
           </div>
         </div>
 
@@ -400,18 +415,17 @@ const ServiciosPage = () => {
                                     Crear Diseño
                                   </button>
                                 )}
-                                {/* Select para cambiar estado de reserva */}
-                                <select
-                                  value={item.estado}
-                                  onChange={(e) => handleUpdateEstado(id, e.target.value)}
-                                  className="text-xs bg-gray-700 border border-gray-600 rounded px-2 py-1"
-                                >
-                                  <option value="pendiente">Pendiente</option>
-                                  <option value="confirmada">Confirmada</option>
-                                  <option value="en_curso">En Curso</option>
-                                  <option value="completada">Completada</option>
-                                  <option value="cancelada">Cancelada</option>
-                                </select>
+                                {/* Botón Finalizar Servicio - solo para empleados asignados y administradores */}
+                                {puedeFinalizarServicio(item) && item.estado !== 'completada' && item.estado !== 'cancelada' && (
+                                  <button
+                                    onClick={() => handleFinalizarServicio(id)}
+                                    className="inline-flex items-center px-2 py-1 text-xs font-medium rounded text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                                    title="Finalizar servicio"
+                                  >
+                                    <CheckCircle className="w-3 h-3 mr-1" />
+                                    Finalizar Servicio
+                                  </button>
+                                )}
                               </>
                             )}
                           </div>

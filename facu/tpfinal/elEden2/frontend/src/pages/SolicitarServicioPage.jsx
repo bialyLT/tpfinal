@@ -24,6 +24,7 @@ const SolicitarServicioPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [serviciosDisponibles, setServiciosDisponibles] = useState([]);
+  const [fechasBloqueadas, setFechasBloqueadas] = useState([]);
   const [formData, setFormData] = useState({
     servicio: '', // ID del servicio del catálogo
     descripcion: '',
@@ -67,6 +68,22 @@ const SolicitarServicioPage = () => {
     }
   }, [user]);
 
+  // Cargar fechas bloqueadas al montar el componente
+  useEffect(() => {
+    const fetchFechasBloqueadas = async () => {
+      try {
+        const hoy = new Date().toISOString().split('T')[0];
+        // Obtener fechas bloqueadas para los próximos 60 días
+        const response = await serviciosService.getFechasDisponibles(hoy);
+        setFechasBloqueadas(response.fechas_bloqueadas || []);
+      } catch (err) {
+        console.error('Error al cargar fechas bloqueadas:', err);
+      }
+    };
+
+    fetchFechasBloqueadas();
+  }, []);
+
   // Cleanup function para liberar URLs al desmontar el componente
   useEffect(() => {
     return () => {
@@ -80,10 +97,24 @@ const SolicitarServicioPage = () => {
   }, [formData.imagenes_jardin, formData.imagenes_ideas]);
 
   const handleChange = (e) => {
+    const { name, value } = e.target;
+    
+    // Si es la fecha, verificar si está bloqueada
+    if (name === 'fecha_preferida' && value) {
+      if (fechasBloqueadas.includes(value)) {
+        error('Esta fecha no está disponible. Todos los empleados están ocupados ese día.');
+        return;
+      }
+    }
+    
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [name]: value
     });
+  };
+
+  const isFechaBloqueada = (fecha) => {
+    return fechasBloqueadas.includes(fecha);
   };
 
   const handleImageUpload = (e, tipo) => {
@@ -515,11 +546,15 @@ const SolicitarServicioPage = () => {
                     value={formData.fecha_preferida}
                     onChange={handleChange}
                     min={new Date().toISOString().split('T')[0]}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    className={`w-full px-3 py-2 bg-gray-700 border rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500 ${
+                      formData.fecha_preferida && fechasBloqueadas.includes(formData.fecha_preferida) 
+                        ? 'border-red-500 focus:ring-red-500' 
+                        : 'border-gray-600'
+                    }`}
                   />
                   <p className="text-sm text-gray-400 mt-2">
                     <Clock className="w-4 h-4 inline mr-1" />
-                    Nos pondremos en contacto contigo para confirmar la disponibilidad
+                    Se asignarán empleados automáticamente al aceptar el diseño
                   </p>
                 </div>
               </div>

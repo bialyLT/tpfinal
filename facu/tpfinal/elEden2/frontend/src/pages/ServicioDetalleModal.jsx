@@ -174,7 +174,13 @@ const ServicioDetalleModal = ({ servicioId, itemType, isOpen, onClose, onVerDise
                         <Calendar className="w-4 h-4 text-gray-400" />
                         <span className="text-gray-300">Fecha a realizarse el servicio:</span>
                         <span className="text-white">
-                          {new Date(servicio.fecha_reserva).toLocaleDateString()}
+                          {new Date(servicio.fecha_reserva).toLocaleString('es-AR', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
                         </span>
                       </div>
                     )}

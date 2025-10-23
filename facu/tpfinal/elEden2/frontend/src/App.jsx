@@ -259,6 +259,16 @@ function App() {
               } 
             />
             
+            {/* Mi Perfil - Todos los usuarios autenticados */}
+            <Route 
+              path="/mi-perfil" 
+              element={
+                <BasicProtectedRoute>
+                  <MiPerfil />
+                </BasicProtectedRoute>
+              } 
+            />
+            
             {/* Mis Servicios - Solo Clientes (vista para ver sus solicitudes) */}
             <Route 
               path="/mis-servicios" 

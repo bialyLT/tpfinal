@@ -224,13 +224,6 @@ const ProductosPage = () => {
               </div>
             </div>
           </div>
-          
-          {/* Info Banner */}
-          <div className="mt-4 bg-blue-600/10 border border-blue-600/30 rounded-lg p-4">
-            <p className="text-blue-400 text-sm">
-              <span className="font-semibold">ℹ️ Información:</span> Estos productos son utilizados exclusivamente en los diseños de jardinería. Los clientes no pueden comprarlos directamente, sino que forman parte de los presupuestos de diseño que deben aprobar.
-            </p>
-          </div>
         </div>
 
         {/* Filters */}

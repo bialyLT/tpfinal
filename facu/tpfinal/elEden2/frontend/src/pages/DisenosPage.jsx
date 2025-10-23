@@ -466,10 +466,12 @@ const DisenoDetalleModal = ({ diseno, isOpen, onClose, onUpdate }) => {
               </div>
               <p className="text-gray-300">
                 {diseno.fecha_propuesta 
-                  ? new Date(diseno.fecha_propuesta).toLocaleDateString('es-AR', {
+                  ? new Date(diseno.fecha_propuesta).toLocaleString('es-AR', {
                       year: 'numeric',
                       month: 'long',
-                      day: 'numeric'
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
                     })
                   : 'No definida'}
               </p>

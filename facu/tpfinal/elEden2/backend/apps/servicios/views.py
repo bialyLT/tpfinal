@@ -2,11 +2,12 @@
 from rest_framework.decorators import action
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction
+from django.utils import timezone
 
-from .models import Servicio, Reserva, Diseno, DisenoProducto, ImagenDiseno, ImagenReserva
+from .models import Servicio, Reserva, Diseno, DisenoProducto, ImagenDiseno, ImagenReserva, ReservaEmpleado
 from .serializers import (
     ServicioSerializer, ReservaSerializer,
     DisenoSerializer, DisenoDetalleSerializer, CrearDisenoSerializer,
@@ -131,6 +132,180 @@ class ReservaViewSet(viewsets.ModelViewSet):
         
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+    
+    @action(detail=False, methods=['get'], url_path='empleados-disponibles')
+    def empleados_disponibles(self, request):
+        """
+        Obtener empleados disponibles para una fecha específica
+        Query params: fecha (YYYY-MM-DD)
+        """
+        from datetime import datetime
+        from apps.servicios.models import ReservaEmpleado
+        
+        fecha_str = request.query_params.get('fecha')
+        if not fecha_str:
+            return Response(
+                {'error': 'El parámetro fecha es requerido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+        except ValueError:
+            return Response(
+                {'error': 'Formato de fecha inválido. Use YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Obtener reservas activas en esa fecha
+        reservas_en_fecha = Reserva.objects.filter(
+            fecha_reserva__date=fecha,
+            estado__in=['confirmada', 'en_curso']
+        ).values_list('id_reserva', flat=True)
+        
+        # Obtener empleados asignados como operadores en esas reservas
+        empleados_ocupados = ReservaEmpleado.objects.filter(
+            reserva__in=reservas_en_fecha,
+            rol='operador'
+        ).values_list('empleado_id', flat=True)
+        
+        # Obtener empleados disponibles (no ocupados)
+        empleados_disponibles = Empleado.objects.exclude(
+            id_empleado__in=empleados_ocupados
+        ).select_related('persona')
+        
+        data = [{
+            'id': emp.id_empleado,
+            'nombre': emp.persona.nombre,
+            'apellido': emp.persona.apellido,
+            'email': emp.persona.email,
+        } for emp in empleados_disponibles]
+        
+        return Response({
+            'fecha': fecha_str,
+            'empleados_disponibles': data,
+            'total_disponibles': len(data)
+        })
+    
+    @action(detail=False, methods=['get'], url_path='fechas-disponibles')
+    def fechas_disponibles(self, request):
+        """
+        Verificar si una fecha tiene empleados disponibles
+        Query params: fecha_inicio, fecha_fin (opcional)
+        """
+        from datetime import datetime, timedelta
+        from apps.servicios.models import ReservaEmpleado
+        
+        fecha_inicio_str = request.query_params.get('fecha_inicio')
+        fecha_fin_str = request.query_params.get('fecha_fin')
+        
+        if not fecha_inicio_str:
+            return Response(
+                {'error': 'El parámetro fecha_inicio es requerido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            fecha_inicio = datetime.strptime(fecha_inicio_str, '%Y-%m-%d').date()
+            if fecha_fin_str:
+                fecha_fin = datetime.strptime(fecha_fin_str, '%Y-%m-%d').date()
+            else:
+                fecha_fin = fecha_inicio + timedelta(days=30)  # 30 días por defecto
+        except ValueError:
+            return Response(
+                {'error': 'Formato de fecha inválido. Use YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Obtener total de empleados operadores
+        total_empleados = Empleado.objects.count()
+        
+        # Generar lista de fechas bloqueadas
+        fechas_bloqueadas = []
+        current_date = fecha_inicio
+        
+        while current_date <= fecha_fin:
+            # Contar reservas activas en esta fecha
+            reservas_en_fecha = Reserva.objects.filter(
+                fecha_reserva__date=current_date,
+                estado__in=['confirmada', 'en_curso']
+            ).values_list('id_reserva', flat=True)
+            
+            # Contar empleados ocupados
+            empleados_ocupados = ReservaEmpleado.objects.filter(
+                reserva__in=reservas_en_fecha,
+                rol='operador'
+            ).values('empleado_id').distinct().count()
+            
+            # Si todos los empleados están ocupados, bloquear la fecha
+            if empleados_ocupados >= total_empleados:
+                fechas_bloqueadas.append(current_date.strftime('%Y-%m-%d'))
+            
+            current_date += timedelta(days=1)
+        
+        return Response({
+            'fecha_inicio': fecha_inicio_str,
+            'fecha_fin': fecha_fin.strftime('%Y-%m-%d'),
+            'fechas_bloqueadas': fechas_bloqueadas,
+            'total_empleados': total_empleados
+        })
+    
+    @action(detail=True, methods=['post'], url_path='finalizar-servicio')
+    def finalizar_servicio(self, request, pk=None):
+        """
+        Finalizar un servicio (cambiar estado a completada)
+        Solo pueden hacerlo:
+        - Administradores
+        - Empleados asignados a la reserva
+        """
+        reserva = self.get_object()
+        user = request.user
+        
+        # Verificar permisos
+        es_admin = user.is_staff or user.is_superuser
+        
+        # Verificar si es empleado asignado
+        es_empleado_asignado = False
+        if not es_admin:
+            try:
+                empleado = Empleado.objects.get(persona__email=user.email)
+                # Verificar si está asignado a esta reserva
+                es_empleado_asignado = ReservaEmpleado.objects.filter(
+                    reserva=reserva,
+                    empleado=empleado
+                ).exists()
+            except Empleado.DoesNotExist:
+                pass
+        
+        # Si no es admin ni empleado asignado, denegar acceso
+        if not es_admin and not es_empleado_asignado:
+            return Response(
+                {'error': 'No tiene permisos para finalizar este servicio'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Verificar que el estado actual permita finalizarlo
+        if reserva.estado == 'completada':
+            return Response(
+                {'error': 'El servicio ya está finalizado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if reserva.estado == 'cancelada':
+            return Response(
+                {'error': 'No se puede finalizar un servicio cancelado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Cambiar estado a completada
+        reserva.estado = 'completada'
+        reserva.save()
+        
+        serializer = self.get_serializer(reserva)
+        return Response({
+            'message': 'Servicio finalizado exitosamente',
+            'reserva': serializer.data
+        })
 
 
 class DisenoViewSet(viewsets.ModelViewSet):
@@ -140,7 +315,7 @@ class DisenoViewSet(viewsets.ModelViewSet):
     filterset_fields = ['estado', 'servicio', 'disenador']
     search_fields = ['titulo', 'descripcion']
     ordering = ['-fecha_creacion']
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
     
     def get_queryset(self):
         """
@@ -263,7 +438,7 @@ class DisenoViewSet(viewsets.ModelViewSet):
             if isinstance(productos_data, str):
                 productos_data = json.loads(productos_data)
             
-            # Primero validar stock disponible
+            # Primero validar stock disponible (solo bloquear si no hay stock en absoluto)
             for prod in productos_data:
                 producto = Producto.objects.get(id_producto=prod['producto_id'])
                 cantidad_solicitada = int(prod['cantidad'])
@@ -271,11 +446,12 @@ class DisenoViewSet(viewsets.ModelViewSet):
                 # Obtener stock del producto
                 try:
                     stock = Stock.objects.get(producto=producto)
-                    if stock.cantidad < cantidad_solicitada:
+                    # Solo bloquear si no hay stock disponible (0 o menos)
+                    if stock.cantidad < 1:
                         return Response(
                             {
-                                'error': f'Stock insuficiente para {producto.nombre}',
-                                'detail': f'Stock disponible: {stock.cantidad}, solicitado: {cantidad_solicitada}'
+                                'error': f'El producto {producto.nombre} no tiene stock disponible',
+                                'detail': f'Stock disponible: {stock.cantidad} unidades. No se pueden crear diseños con productos sin stock.'
                             },
                             status=status.HTTP_400_BAD_REQUEST
                         )
@@ -330,16 +506,61 @@ class DisenoViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(diseno)
         return Response(serializer.data)
     
+    def _buscar_fecha_con_empleados_disponibles(self, fecha_inicial, empleados_necesarios=2, max_dias_busqueda=30):
+        """
+        Busca la siguiente fecha disponible donde haya al menos 'empleados_necesarios' empleados libres.
+        Comienza desde fecha_inicial + 7 días (para dar tiempo al reabastecimiento).
+        """
+        from datetime import timedelta
+        
+        # Empezar a buscar desde 7 días después de la fecha inicial (tiempo mínimo para reabastecer)
+        fecha_candidata = fecha_inicial + timedelta(days=7)
+        dias_buscados = 0
+        
+        while dias_buscados < max_dias_busqueda:
+            # Obtener reservas activas en esa fecha
+            reservas_en_fecha = Reserva.objects.filter(
+                fecha_reserva__date=fecha_candidata.date(),
+                estado__in=['confirmada', 'en_curso']
+            ).values_list('id_reserva', flat=True)
+            
+            # Obtener empleados ocupados en esa fecha
+            empleados_ocupados = ReservaEmpleado.objects.filter(
+                reserva__in=reservas_en_fecha,
+                rol='operador'
+            ).values_list('empleado_id', flat=True)
+            
+            # Contar empleados disponibles
+            empleados_disponibles = Empleado.objects.exclude(
+                id_empleado__in=empleados_ocupados
+            ).count()
+            
+            # Si hay suficientes empleados disponibles, retornar esta fecha
+            if empleados_disponibles >= empleados_necesarios:
+                return fecha_candidata
+            
+            # Si no, probar el día siguiente
+            fecha_candidata += timedelta(days=1)
+            dias_buscados += 1
+        
+        # Si no encuentra fecha disponible en max_dias_busqueda, retornar fecha_inicial + 7 días por defecto
+        return fecha_inicial + timedelta(days=7)
+    
     @action(detail=True, methods=['post'])
     @transaction.atomic
     def aceptar_cliente(self, request, pk=None):
         """
         Aceptar el diseño desde el cliente.
+        - Verifica stock de productos
+        - Si no hay stock y el servicio es en la semana actual, propone reagendar +1 semana
+        - Si acepta_reagendamiento=True, reagenda y acepta
+        - Si hay stock o acepta reagendamiento, descuenta stock y acepta
         - Cambia estado del diseño a 'aceptado'
         - Cambia estado de la reserva a 'en_curso'
-        - Descuenta el stock de los productos
+        - Asigna empleados automáticamente
         """
         from apps.productos.models import Stock
+        from datetime import datetime, timedelta
         
         diseno = self.get_object()
         
@@ -349,6 +570,20 @@ class DisenoViewSet(viewsets.ModelViewSet):
                 {'error': 'El diseño debe estar en estado "presentado" para ser aceptado'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        # Si acepta reagendamiento, actualizar las fechas primero
+        acepta_reagendamiento = request.data.get('acepta_reagendamiento', False)
+        
+        if acepta_reagendamiento:
+            nueva_fecha_str = request.data.get('nueva_fecha')
+            if nueva_fecha_str:
+                nueva_fecha = datetime.fromisoformat(nueva_fecha_str.replace('Z', '+00:00'))
+                if diseno.fecha_propuesta:
+                    diseno.fecha_propuesta = nueva_fecha
+                if diseno.reserva:
+                    diseno.reserva.fecha_reserva = nueva_fecha
+                    diseno.reserva.save()
+                diseno.save()
         
         # Verificar stock antes de descontar
         productos_diseno = diseno.productos.all()
@@ -360,44 +595,124 @@ class DisenoViewSet(viewsets.ModelViewSet):
                 if stock.cantidad < dp.cantidad:
                     stock_insuficiente.append({
                         'producto': dp.producto.nombre,
+                        'id_producto': dp.producto.id_producto,
                         'disponible': stock.cantidad,
-                        'requerido': dp.cantidad
+                        'requerido': dp.cantidad,
+                        'faltante': dp.cantidad - stock.cantidad
                     })
             except Stock.DoesNotExist:
                 stock_insuficiente.append({
                     'producto': dp.producto.nombre,
+                    'id_producto': dp.producto.id_producto,
                     'disponible': 0,
-                    'requerido': dp.cantidad
+                    'requerido': dp.cantidad,
+                    'faltante': dp.cantidad
                 })
         
-        if stock_insuficiente:
-            return Response(
-                {
-                    'error': 'Stock insuficiente para algunos productos',
-                    'productos': stock_insuficiente
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        # Si hay stock insuficiente Y NO acepta reagendamiento
+        if stock_insuficiente and not acepta_reagendamiento:
+            # Primera vez que se detecta falta de stock
+            fecha_servicio = diseno.fecha_propuesta or diseno.reserva.fecha_reserva
+            hoy = timezone.now()
+            una_semana = hoy + timedelta(days=7)
+            
+            servicio_en_semana_actual = fecha_servicio <= una_semana
+            
+            if servicio_en_semana_actual:
+                # Buscar la siguiente fecha disponible con empleados libres
+                nueva_fecha = self._buscar_fecha_con_empleados_disponibles(fecha_servicio)
+                dias_diferencia = (nueva_fecha.date() - fecha_servicio.date()).days
+                
+                return Response({
+                    'requiere_reagendamiento': True,
+                    'mensaje': f'Stock insuficiente. El servicio debe reagendarse para dar tiempo al reabastecimiento. La próxima fecha disponible con empleados libres es en {dias_diferencia} días.',
+                    'productos_faltantes': stock_insuficiente,
+                    'fecha_actual': fecha_servicio.isoformat(),
+                    'fecha_propuesta': nueva_fecha.isoformat(),
+                    'tiempo_espera_dias': dias_diferencia
+                }, status=status.HTTP_409_CONFLICT)
+            # Si el servicio NO está en la semana actual, continuar normalmente
+            # (hay tiempo para reabastecer, el stock quedará negativo)
         
-        # Si hay stock suficiente, descontar
+        # Si llegamos aquí, hay stock suficiente o se aceptó reagendamiento
+        # Descontar stock (puede quedar negativo si se aceptó reagendamiento con stock insuficiente)
         for dp in productos_diseno:
             stock = Stock.objects.get(producto=dp.producto)
             stock.cantidad -= dp.cantidad
             stock.save()
         
-        # Aceptar el diseño
+        # Guardar feedback del cliente
+        feedback = request.data.get('feedback', '')
         observaciones = request.data.get('observaciones', '')
-        diseno.aceptar(observaciones)
         
-        # Cambiar estado de la reserva a 'en_curso'
+        if feedback:
+            diseno.observaciones_cliente = feedback
+        elif observaciones:
+            diseno.observaciones_cliente = observaciones
+        
+        # Aceptar el diseño
+        diseno.aceptar(feedback or observaciones)
+        
+        # Cambiar estado de la reserva a 'en_curso' y asignar empleados automáticamente
         if diseno.reserva:
+            from apps.servicios.models import ReservaEmpleado
+            
+            # Actualizar fecha_reserva con fecha_propuesta si existe
+            if diseno.fecha_propuesta:
+                diseno.reserva.fecha_reserva = diseno.fecha_propuesta
+            
             diseno.reserva.estado = 'en_curso'
             diseno.reserva.save()
+            
+            # Asignar empleados disponibles automáticamente
+            fecha_reserva = diseno.reserva.fecha_reserva.date()
+            
+            # Obtener reservas activas en esa fecha
+            reservas_en_fecha = Reserva.objects.filter(
+                fecha_reserva__date=fecha_reserva,
+                estado__in=['confirmada', 'en_curso']
+            ).exclude(id_reserva=diseno.reserva.id_reserva).values_list('id_reserva', flat=True)
+            
+            # Obtener empleados ya ocupados en esa fecha
+            empleados_ocupados = ReservaEmpleado.objects.filter(
+                reserva__in=reservas_en_fecha,
+                rol='operador'
+            ).values_list('empleado_id', flat=True)
+            
+            # Obtener empleados disponibles
+            empleados_disponibles = Empleado.objects.exclude(
+                id_empleado__in=empleados_ocupados
+            ).select_related('persona')
+            
+            # Asignar hasta 2 empleados como operadores
+            empleados_asignados = []
+            for empleado in empleados_disponibles[:2]:
+                asignacion, created = ReservaEmpleado.objects.get_or_create(
+                    reserva=diseno.reserva,
+                    empleado=empleado,
+                    defaults={
+                        'rol': 'operador',
+                        'notas': 'Asignado automáticamente al aceptar el diseño'
+                    }
+                )
+                if created:
+                    empleados_asignados.append({
+                        'nombre': f"{empleado.persona.nombre} {empleado.persona.apellido}",
+                        'email': empleado.persona.email
+                    })
+            
+            mensaje = 'Diseño aceptado exitosamente. Stock descontado.'
+            if empleados_asignados:
+                mensaje += f' Se asignaron {len(empleados_asignados)} empleado(s) automáticamente.'
+        else:
+            mensaje = 'Diseño aceptado exitosamente. Stock descontado.'
+            empleados_asignados = []
         
         serializer = self.get_serializer(diseno)
         return Response({
-            'message': 'Diseño aceptado exitosamente. Stock descontado.',
-            'diseno': serializer.data
+            'message': mensaje,
+            'diseno': serializer.data,
+            'empleados_asignados': empleados_asignados
         }, status=status.HTTP_200_OK)
     
     @action(detail=True, methods=['post'])
@@ -406,8 +721,8 @@ class DisenoViewSet(viewsets.ModelViewSet):
         """
         Rechazar el diseño desde el cliente.
         - Cambia estado del diseño a 'rechazado'
-        - Cambia estado de la reserva a 'pendiente'
-        - Guarda feedback del cliente (por ahora solo en observaciones)
+        - Cambia estado de la reserva a 'pendiente' o 'cancelada' según lo indique el cliente
+        - Guarda feedback del cliente
         """
         diseno = self.get_object()
         
@@ -420,18 +735,30 @@ class DisenoViewSet(viewsets.ModelViewSet):
         
         # Obtener feedback del cliente
         feedback = request.data.get('feedback', '')
+        cancelar_servicio = request.data.get('cancelar_servicio', False)
+        
+        # Guardar feedback en observaciones_cliente
+        if feedback:
+            diseno.observaciones_cliente = feedback
         
         # Rechazar el diseño con el feedback
         diseno.rechazar(feedback)
         
-        # Cambiar estado de la reserva a 'pendiente'
+        # Cambiar estado de la reserva según lo que decida el cliente
         if diseno.reserva:
-            diseno.reserva.estado = 'pendiente'
+            if cancelar_servicio:
+                diseno.reserva.estado = 'cancelada'
+                mensaje = 'Diseño rechazado y servicio cancelado.'
+            else:
+                diseno.reserva.estado = 'pendiente'
+                mensaje = 'Diseño rechazado. La reserva volvió a estado pendiente para un nuevo diseño.'
             diseno.reserva.save()
+        else:
+            mensaje = 'Diseño rechazado exitosamente.'
         
         serializer = self.get_serializer(diseno)
         return Response({
-            'message': 'Diseño rechazado. La reserva volvió a estado pendiente.',
+            'message': mensaje,
             'diseno': serializer.data
         }, status=status.HTTP_200_OK)
     

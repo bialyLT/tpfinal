@@ -128,6 +128,11 @@ export const serviciosService = {
     const response = await api.patch(`/servicios/reservas/${id}/`, data);
     return response.data;
   },
+
+  finalizarServicio: async (id) => {
+    const response = await api.post(`/servicios/reservas/${id}/finalizar-servicio/`);
+    return response.data;
+  },
   
   iniciarServicio: async (id) => {
     const response = await api.post(`/servicios/servicios/${id}/iniciar_servicio/`);
@@ -188,13 +193,29 @@ export const serviciosService = {
     return response.data;
   },
 
-  aceptarDisenoCliente: async (id) => {
-    const response = await api.post(`/servicios/disenos/${id}/aceptar_cliente/`);
+  aceptarDisenoCliente: async (id, data = {}) => {
+    const response = await api.post(`/servicios/disenos/${id}/aceptar_cliente/`, data);
     return response.data;
   },
 
   rechazarDisenoCliente: async (id, feedback) => {
     const response = await api.post(`/servicios/disenos/${id}/rechazar_cliente/`, { feedback });
+    return response.data;
+  },
+
+  getEmpleadosDisponibles: async (fecha) => {
+    const response = await api.get('/servicios/reservas/empleados-disponibles/', { 
+      params: { fecha } 
+    });
+    return response.data;
+  },
+
+  getFechasDisponibles: async (fecha_inicio, fecha_fin = null) => {
+    const params = { fecha_inicio };
+    if (fecha_fin) {
+      params.fecha_fin = fecha_fin;
+    }
+    const response = await api.get('/servicios/reservas/fechas-disponibles/', { params });
     return response.data;
   },
 
