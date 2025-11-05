@@ -5,8 +5,9 @@ import { handleApiError } from '../utils/notifications';
 import { 
   Palette, Search, Filter, Eye, Calendar, 
   User, DollarSign, CheckCircle, XCircle, 
-  Clock, Package, Image as ImageIcon 
+  Clock, Package, Image as ImageIcon, Edit
 } from 'lucide-react';
+import CrearDisenoModal from './CrearDisenoModal';
 
 const DisenosPage = () => {
   const [disenos, setDisenos] = useState([]);
@@ -15,9 +16,12 @@ const DisenosPage = () => {
   const [estadoFilter, setEstadoFilter] = useState('');
   const [selectedDiseno, setSelectedDiseno] = useState(null);
   const [isDetalleModalOpen, setIsDetalleModalOpen] = useState(false);
+  const [isDisenoModalOpen, setIsDisenoModalOpen] = useState(false);
+  const [disenoParaEditar, setDisenoParaEditar] = useState(null);
   const { user } = useAuth();
 
   const isAdmin = user?.groups?.includes('Administradores');
+  const isEmpleado = user?.groups?.includes('Empleados');
 
   useEffect(() => {
     fetchDisenos();
@@ -33,6 +37,26 @@ const DisenosPage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEditarDiseno = (diseno) => {
+    console.log('🔧 handleEditarDiseno llamado con:', diseno);
+    console.log('🔧 isDisenoModalOpen antes:', isDisenoModalOpen);
+    setDisenoParaEditar(diseno);
+    setIsDisenoModalOpen(true);
+    console.log('🔧 Estado actualizado - isDisenoModalOpen debería ser true');
+  };
+
+  const handleCloseDisenoModal = () => {
+    console.log('🔧 handleCloseDisenoModal llamado');
+    setIsDisenoModalOpen(false);
+    setDisenoParaEditar(null);
+    fetchDisenos(); // Recargar lista después de editar
+  };
+
+  const handleDisenoActualizado = () => {
+    console.log('🔧 handleDisenoActualizado llamado');
+    fetchDisenos(); // Recargar lista después de actualizar
   };
 
   const getEstadoColor = (estado) => {
@@ -324,6 +348,26 @@ const DisenosPage = () => {
                           Ver Detalle
                         </button>
                         
+                        {/* Botón Editar - Solo para diseños en borrador y si el usuario es el creador o admin */}
+                        {diseno.estado === 'borrador' && (isAdmin || isEmpleado) && (() => {
+                          // Los admins siempre pueden editar
+                          if (isAdmin) return true;
+                          
+                          // Los empleados solo pueden editar si son el creador
+                          const empleadoId = user?.perfil?.empleado_id || user?.empleado?.id_empleado;
+                          if (!empleadoId) return false;
+                          
+                          return diseno.disenador_id === empleadoId;
+                        })() && (
+                          <button
+                            onClick={() => handleEditarDiseno(diseno)}
+                            className="inline-flex items-center px-3 py-1 text-sm font-medium rounded text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+                          >
+                            <Edit className="w-4 h-4 mr-1" />
+                            Editar
+                          </button>
+                        )}
+                        
                         {/* Botón Presentar Propuesta - Solo para diseños en borrador */}
                         {diseno.estado === 'borrador' && (
                           <button
@@ -356,6 +400,16 @@ const DisenosPage = () => {
             onUpdate={fetchDisenos}
           />
         )}
+
+        {/* Modal de Editar Diseño */}
+        {console.log('🔧 Renderizando modal - isOpen:', isDisenoModalOpen, 'diseno:', disenoParaEditar)}
+        <CrearDisenoModal
+          servicio={null}
+          diseno={disenoParaEditar}
+          isOpen={isDisenoModalOpen}
+          onClose={handleCloseDisenoModal}
+          onDisenoCreado={handleDisenoActualizado}
+        />
       </div>
     </div>
   );
@@ -445,14 +499,6 @@ const DisenoDetalleModal = ({ diseno, isOpen, onClose, onUpdate }) => {
 
             <div className="bg-gray-700 rounded-lg p-4">
               <div className="flex items-center mb-2">
-                <DollarSign className="w-5 h-5 mr-2 text-green-400" />
-                <h3 className="font-semibold text-white">Presupuesto</h3>
-              </div>
-              <p className="text-xl font-bold text-green-400">{formatCurrency(diseno.presupuesto)}</p>
-            </div>
-
-            <div className="bg-gray-700 rounded-lg p-4">
-              <div className="flex items-center mb-2">
                 <Calendar className="w-5 h-5 mr-2 text-gray-400" />
                 <h3 className="font-semibold text-white">Servicio</h3>
               </div>
@@ -484,24 +530,48 @@ const DisenoDetalleModal = ({ diseno, isOpen, onClose, onUpdate }) => {
             <p className="text-gray-300 whitespace-pre-wrap">{diseno.descripcion || 'Sin descripción'}</p>
           </div>
 
-          {/* Productos */}
-          {diseno.productos && diseno.productos.length > 0 && (
-            <div className="bg-gray-700 rounded-lg p-4">
-              <div className="flex items-center mb-3">
-                <Package className="w-5 h-5 mr-2 text-gray-400" />
-                <h3 className="font-semibold text-white">Productos Utilizados</h3>
+          {/* Feedback del Cliente (si existe y el diseño fue rechazado o tiene observaciones) */}
+          {diseno.observaciones_cliente && (
+            <div className={`rounded-lg p-4 ${
+              diseno.estado === 'rechazado' 
+                ? 'bg-red-900 bg-opacity-30 border border-red-500' 
+                : 'bg-blue-900 bg-opacity-30 border border-blue-500'
+            }`}>
+              <div className="flex items-start mb-2">
+                <User className={`w-5 h-5 mr-2 mt-0.5 ${
+                  diseno.estado === 'rechazado' ? 'text-red-400' : 'text-blue-400'
+                }`} />
+                <div className="flex-1">
+                  <h3 className={`font-semibold mb-1 ${
+                    diseno.estado === 'rechazado' ? 'text-red-300' : 'text-blue-300'
+                  }`}>
+                    {diseno.estado === 'rechazado' ? 'Motivo del Rechazo' : 'Observaciones del Cliente'}
+                  </h3>
+                  <p className="text-gray-300 whitespace-pre-wrap">
+                    {(() => {
+                      try {
+                        // Intentar parsear como JSON por si viene el objeto completo
+                        const parsed = JSON.parse(diseno.observaciones_cliente);
+                        return parsed.feedback || diseno.observaciones_cliente;
+                      } catch {
+                        // Si no es JSON, mostrar el texto directamente
+                        return diseno.observaciones_cliente;
+                      }
+                    })()}
+                  </p>
+                </div>
               </div>
-              <div className="space-y-2">
-                {diseno.productos.map((producto, index) => (
-                  <div key={index} className="flex justify-between items-center bg-gray-600 rounded p-3">
-                    <div>
-                      <p className="text-white font-medium">{producto.producto_nombre}</p>
-                      <p className="text-sm text-gray-400">Cantidad: {producto.cantidad}</p>
-                    </div>
-                    <p className="text-white font-medium">{formatCurrency(producto.precio_unitario)}</p>
-                  </div>
-                ))}
-              </div>
+              {diseno.fecha_respuesta && (
+                <p className="text-xs text-gray-400 mt-2">
+                  Fecha de respuesta: {new Date(diseno.fecha_respuesta).toLocaleString('es-AR', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </p>
+              )}
             </div>
           )}
 
@@ -514,14 +584,120 @@ const DisenoDetalleModal = ({ diseno, isOpen, onClose, onUpdate }) => {
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {diseno.imagenes.map((imagen) => (
-                  <div key={imagen.id_imagen} className="relative aspect-square rounded-lg overflow-hidden">
+                  <div key={imagen.id_imagen} className="relative aspect-square rounded-lg overflow-hidden group">
                     <img
                       src={imagen.imagen}
                       alt={imagen.descripcion || 'Imagen del diseño'}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover cursor-pointer hover:opacity-75 transition-opacity"
+                      onClick={() => window.open(imagen.imagen, '_blank')}
                     />
+                    {imagen.descripcion && (
+                      <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white text-xs p-2 rounded-b-lg">
+                        {imagen.descripcion}
+                      </div>
+                    )}
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Productos */}
+          {diseno.productos && diseno.productos.length > 0 && (
+            <div className="bg-gray-700 rounded-lg p-4">
+              <div className="flex items-center mb-3">
+                <Package className="w-5 h-5 mr-2 text-gray-400" />
+                <h3 className="font-semibold text-white">Productos Utilizados</h3>
+              </div>
+              <div className="space-y-3">
+                {diseno.productos.map((producto, index) => {
+                  const cantidad = parseInt(producto.cantidad) || 0;
+                  const precioUnitario = parseFloat(producto.precio_unitario) || 0;
+                  const subtotal = cantidad * precioUnitario;
+                  
+                  return (
+                    <div key={index} className="bg-gray-600 rounded-lg p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1">
+                          <p className="text-white font-semibold text-lg">{producto.producto_nombre}</p>
+                          {producto.producto_codigo && (
+                            <p className="text-xs text-gray-400 mt-1">Código: {producto.producto_codigo}</p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-4 mt-3 pt-3 border-t border-gray-500">
+                        <div>
+                          <p className="text-xs text-gray-400 mb-1">Cantidad</p>
+                          <p className="text-white font-medium">{cantidad} unidad{cantidad !== 1 ? 'es' : ''}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-400 mb-1">Precio Unitario</p>
+                          <p className="text-white font-medium">{formatCurrency(precioUnitario)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-gray-400 mb-1">Subtotal</p>
+                          <p className="text-green-400 font-bold text-lg">{formatCurrency(subtotal)}</p>
+                        </div>
+                      </div>
+                      
+                      {producto.notas && (
+                        <div className="mt-3 pt-3 border-t border-gray-500">
+                          <p className="text-xs text-gray-400 mb-1">Notas</p>
+                          <p className="text-gray-300 text-sm">{producto.notas}</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {/* Total de Productos */}
+              <div className="mt-4 pt-4 border-t border-gray-600">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-300 font-medium">Subtotal Productos:</span>
+                  <span className="text-white font-bold text-lg">
+                    {formatCurrency(
+                      diseno.productos.reduce((total, prod) => {
+                        const cantidad = parseInt(prod.cantidad) || 0;
+                        const precio = parseFloat(prod.precio_unitario) || 0;
+                        return total + (cantidad * precio);
+                      }, 0)
+                    )}
+                  </span>
+                </div>
+              </div>
+              
+              {/* Costo de Mano de Obra (Presupuesto - Subtotal Productos) */}
+              <div className="mt-3 pt-3 border-t border-gray-600">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center">
+                    <DollarSign className="w-5 h-5 mr-2 text-blue-400" />
+                    <span className="text-gray-300 font-medium">Mano de Obra:</span>
+                  </div>
+                  <span className="text-white font-bold text-lg">
+                    {formatCurrency(
+                      Math.max(0, (parseFloat(diseno.presupuesto) || 0) - diseno.productos.reduce((total, prod) => {
+                        const cantidad = parseInt(prod.cantidad) || 0;
+                        const precio = parseFloat(prod.precio_unitario) || 0;
+                        return total + (cantidad * precio);
+                      }, 0))
+                    )}
+                  </span>
+                </div>
+              </div>
+              
+              {/* Total Final de la Propuesta */}
+              <div className="mt-4 pt-4 border-t-2 border-green-500 bg-gradient-to-r from-gray-600 to-gray-700 rounded-lg p-4">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center">
+                    <DollarSign className="w-6 h-6 mr-2 text-green-400" />
+                    <span className="text-white font-bold text-lg">TOTAL DE LA PROPUESTA:</span>
+                  </div>
+                  <span className="text-green-400 font-bold text-2xl">
+                    {formatCurrency(parseFloat(diseno.presupuesto) || 0)}
+                  </span>
+                </div>
               </div>
             </div>
           )}

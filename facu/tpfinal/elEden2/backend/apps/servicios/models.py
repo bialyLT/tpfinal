@@ -5,29 +5,10 @@ from django.utils import timezone
 
 class Servicio(models.Model):
     """Modelo para servicios según diagrama ER"""
-    TIPO_CHOICES = [
-        ('diseno', 'Diseño de jardines'),
-        ('mantenimiento', 'Mantenimiento'),
-    ]
     
     id_servicio = models.AutoField(primary_key=True)
     nombre = models.CharField(max_length=200)
-    tipo = models.CharField(
-        max_length=20,
-        choices=TIPO_CHOICES,
-        default='diseno',
-        help_text="Tipo de servicio ofrecido"
-    )
     descripcion = models.TextField(blank=True, null=True)
-    duracion_estimada = models.IntegerField(
-        validators=[MinValueValidator(1)],
-        help_text="Duración estimada en horas"
-    )
-    precio = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        validators=[MinValueValidator(0)]
-    )
     activo = models.BooleanField(default=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
@@ -61,6 +42,7 @@ class Reserva(models.Model):
     fecha_solicitud = models.DateTimeField(auto_now_add=True)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
     observaciones = models.TextField(blank=True, null=True)
+    direccion = models.CharField(max_length=500, blank=True, null=True, help_text='Dirección donde se realizará el servicio')
     
     # Relaciones según diagrama ER
     cliente = models.ForeignKey(

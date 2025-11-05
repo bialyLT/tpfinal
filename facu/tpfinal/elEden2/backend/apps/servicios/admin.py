@@ -31,17 +31,19 @@ class ImagenDisenoInline(admin.TabularInline):
 
 @admin.register(Servicio)
 class ServicioAdmin(admin.ModelAdmin):
-    list_display = ('id_servicio', 'nombre', 'tipo', 'precio', 'duracion_estimada', 'activo')
-    list_filter = ('activo', 'tipo')
+    list_display = ('id_servicio', 'nombre', 'activo', 'fecha_creacion')
+    list_filter = ('activo',)
     search_fields = ('nombre', 'descripcion')
     ordering = ('nombre',)
+    readonly_fields = ('fecha_creacion', 'fecha_actualizacion')
     
     fieldsets = (
         ('Información Básica', {
-            'fields': ('nombre', 'tipo', 'descripcion')
+            'fields': ('nombre', 'descripcion', 'activo')
         }),
-        ('Detalles', {
-            'fields': ('duracion_estimada', 'precio', 'activo')
+        ('Fechas', {
+            'fields': ('fecha_creacion', 'fecha_actualizacion'),
+            'classes': ('collapse',)
         }),
     )
 

@@ -173,8 +173,22 @@ export const serviciosService = {
     return response.data;
   },
 
+  getDiseno: async (id) => {
+    const response = await api.get(`/servicios/disenos/${id}/`);
+    return response.data;
+  },
+
   getDisenoById: async (id) => {
     const response = await api.get(`/servicios/disenos/${id}/`);
+    return response.data;
+  },
+
+  updateDiseno: async (id, formData) => {
+    const response = await api.put(`/servicios/disenos/${id}/`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response.data;
   },
 

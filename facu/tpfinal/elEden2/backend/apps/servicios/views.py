@@ -21,7 +21,7 @@ class ServicioViewSet(viewsets.ModelViewSet):
     queryset = Servicio.objects.all()
     serializer_class = ServicioSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['activo', 'tipo']
+    filterset_fields = ['activo']
     search_fields = ['nombre', 'descripcion']
     ordering = ['nombre']
 
@@ -110,24 +110,45 @@ class ReservaViewSet(viewsets.ModelViewSet):
         imagenes_jardin = request.FILES.getlist('imagenes_jardin')
         imagenes_ideas = request.FILES.getlist('imagenes_ideas')
         
+        # Extraer descripciones (vienen como JSON array)
+        import json
+        descripciones_jardin = []
+        descripciones_ideas = []
+        
+        try:
+            if 'descripciones_jardin' in request.data:
+                descripciones_jardin = json.loads(request.data.get('descripciones_jardin', '[]'))
+        except json.JSONDecodeError:
+            descripciones_jardin = []
+        
+        try:
+            if 'descripciones_ideas' in request.data:
+                descripciones_ideas = json.loads(request.data.get('descripciones_ideas', '[]'))
+        except json.JSONDecodeError:
+            descripciones_ideas = []
+        
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
         reserva = serializer.save()
         
-        # Guardar imágenes del jardín
-        for imagen in imagenes_jardin:
+        # Guardar imágenes del jardín con sus descripciones
+        for index, imagen in enumerate(imagenes_jardin):
+            descripcion = descripciones_jardin[index] if index < len(descripciones_jardin) else ''
             ImagenReserva.objects.create(
                 reserva=reserva,
                 imagen=imagen,
-                tipo_imagen='jardin'
+                tipo_imagen='jardin',
+                descripcion=descripcion
             )
         
-        # Guardar imágenes de ideas
-        for imagen in imagenes_ideas:
+        # Guardar imágenes de ideas con sus descripciones
+        for index, imagen in enumerate(imagenes_ideas):
+            descripcion = descripciones_ideas[index] if index < len(descripciones_ideas) else ''
             ImagenReserva.objects.create(
                 reserva=reserva,
                 imagen=imagen,
-                tipo_imagen='ideas'
+                tipo_imagen='ideas',
+                descripcion=descripcion
             )
         
         headers = self.get_success_headers(serializer.data)
@@ -321,7 +342,7 @@ class DisenoViewSet(viewsets.ModelViewSet):
         """
         Filtrar diseños según el tipo de usuario:
         - Administradores: ven todos los diseños
-        - Empleados: solo ven los diseños que ellos crearon
+        - Empleados: ven diseños que crearon O de reservas donde están asignados
         - Clientes: ven los diseños de sus reservas
         """
         user = self.request.user
@@ -336,11 +357,16 @@ class DisenoViewSet(viewsets.ModelViewSet):
         # Verificar si es empleado
         try:
             empleado = Empleado.objects.get(persona__email=user.email)
-            # Empleados solo ven sus propios diseños
+            # Empleados ven:
+            # 1. Diseños que ellos crearon
+            # 2. Diseños de reservas donde están asignados
+            from django.db.models import Q
             return Diseno.objects.select_related(
                 'servicio', 'disenador', 'disenador__persona',
                 'reserva', 'reserva__cliente__persona'
-            ).prefetch_related('productos', 'imagenes').filter(disenador=empleado)
+            ).prefetch_related('productos', 'imagenes').filter(
+                Q(disenador=empleado) | Q(reserva__asignaciones__empleado=empleado)
+            ).distinct()
         except Empleado.DoesNotExist:
             pass
         
@@ -488,6 +514,89 @@ class DisenoViewSet(viewsets.ModelViewSet):
         # Retornar el diseño creado con todos sus detalles
         output_serializer = DisenoDetalleSerializer(diseno, context={'request': request})
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
+    
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        """
+        Actualizar un diseño existente (solo si está en borrador y el usuario es el creador o admin)
+        PUT/PATCH /api/v1/servicios/disenos/<id>/
+        """
+        import logging
+        import json
+        logger = logging.getLogger(__name__)
+        
+        diseno = self.get_object()
+        user = request.user
+        
+        # Solo permitir actualizar diseños en borrador
+        if diseno.estado != 'borrador':
+            return Response(
+                {'error': 'Solo se pueden editar diseños en estado borrador'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Verificar permisos: solo el creador o administradores pueden editar
+        if not user.is_staff:
+            try:
+                empleado = Empleado.objects.get(persona__email=user.email)
+                if diseno.disenador != empleado:
+                    return Response(
+                        {'error': 'Solo el creador del diseño puede editarlo'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            except Empleado.DoesNotExist:
+                return Response(
+                    {'error': 'No tiene permisos para editar este diseño'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        # Actualizar campos básicos
+        if 'titulo' in request.data:
+            diseno.titulo = request.data['titulo']
+        if 'descripcion' in request.data:
+            diseno.descripcion = request.data['descripcion']
+        if 'presupuesto' in request.data:
+            diseno.presupuesto = float(request.data['presupuesto'])
+        if 'fecha_propuesta' in request.data:
+            diseno.fecha_propuesta = request.data['fecha_propuesta']
+        if 'notas_internas' in request.data:
+            diseno.notas_internas = request.data['notas_internas']
+        
+        diseno.save()
+        
+        # Actualizar productos (eliminar los antiguos y crear nuevos)
+        if 'productos' in request.data:
+            # Eliminar productos anteriores
+            diseno.productos.all().delete()
+            
+            # Crear nuevos productos
+            productos_data = json.loads(request.data['productos']) if isinstance(request.data['productos'], str) else request.data['productos']
+            
+            for prod in productos_data:
+                producto = Producto.objects.get(id_producto=prod['producto_id'])
+                DisenoProducto.objects.create(
+                    diseno=diseno,
+                    producto=producto,
+                    cantidad=prod['cantidad'],
+                    precio_unitario=prod['precio_unitario'],
+                    notas=prod.get('notas', '')
+                )
+        
+        # Agregar nuevas imágenes (no eliminar las existentes)
+        imagenes = request.FILES.getlist('imagenes_diseño')
+        if imagenes:
+            ultimo_orden = diseno.imagenes.count()
+            for idx, imagen in enumerate(imagenes):
+                ImagenDiseno.objects.create(
+                    diseno=diseno,
+                    imagen=imagen,
+                    orden=ultimo_orden + idx,
+                    descripcion=f"Imagen {ultimo_orden + idx + 1}"
+                )
+        
+        # Retornar el diseño actualizado con todos sus detalles
+        output_serializer = DisenoDetalleSerializer(diseno, context={'request': request})
+        return Response(output_serializer.data)
     
     @action(detail=True, methods=['post'])
     def presentar(self, request, pk=None):
@@ -741,8 +850,8 @@ class DisenoViewSet(viewsets.ModelViewSet):
         if feedback:
             diseno.observaciones_cliente = feedback
         
-        # Rechazar el diseño con el feedback
-        diseno.rechazar(feedback)
+        # Rechazar el diseño SIN pasar el feedback (ya se guardó arriba)
+        diseno.rechazar()
         
         # Cambiar estado de la reserva según lo que decida el cliente
         if diseno.reserva:

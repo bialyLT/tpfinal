@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { serviciosService } from '../services';
 import { useAuth } from '../context/AuthContext';
 import { success, handleApiError } from '../utils/notifications';
-import { Calendar, Clock, CheckCircle, XCircle, Users, Filter, Search, Eye, Palette } from 'lucide-react';
+import { Calendar, Clock, CheckCircle, XCircle, Users, Filter, Search, Eye, Palette, MapPin } from 'lucide-react';
 import ServicioDetalleModal from './ServicioDetalleModal';
 import CrearDisenoModal from './CrearDisenoModal';
 import DisenoClienteModal from './DisenoClienteModal';
@@ -315,15 +315,21 @@ const ServiciosPage = () => {
                       <tr key={id} className="bg-gray-800 border-b border-gray-700 hover:bg-gray-600">
                         <td className="px-6 py-4">
                           <div>
-                            <p className="font-medium text-white">
-                              {nombre || 'Sin título'}
-                            </p>
-                            <p className="text-xs text-gray-400 mt-1">
+                            <p className="font-bold text-white text-lg">
                               #{id}
                             </p>
+                            <p className="text-sm text-gray-300 mt-1">
+                              {nombre || 'Sin título'}
+                            </p>
                             {item.observaciones && (
-                              <p className="text-xs text-gray-500 mt-1 truncate max-w-xs">
+                              <p className="text-xs text-gray-400 mt-1 truncate max-w-xs">
                                 {item.observaciones}
+                              </p>
+                            )}
+                            {item.direccion && (
+                              <p className="text-sm text-blue-400 mt-1 flex items-center">
+                                <MapPin className="w-3 h-3 mr-1" />
+                                {item.direccion}
                               </p>
                             )}
                           </div>
@@ -404,8 +410,18 @@ const ServiciosPage = () => {
                             </button>
                             {(isAdmin || isEmpleado) && esReserva && (
                               <>
-                                {/* Botón crear diseño para reservas */}
-                                {!item.diseno && (
+                                {/* Botón crear diseño para reservas - solo si no hay diseño o fue rechazado */}
+                                {(() => {
+                                  // Verificar si hay diseños
+                                  const tieneDisenos = item.disenos && item.disenos.length > 0;
+                                  
+                                  // Si no hay diseños, mostrar botón
+                                  if (!tieneDisenos) return true;
+                                  
+                                  // Si hay diseños, verificar que todos estén rechazados
+                                  const todosRechazados = item.disenos.every(d => d.estado === 'rechazado');
+                                  return todosRechazados;
+                                })() && (
                                   <button
                                     onClick={() => handleCrearDiseno(item)}
                                     className="inline-flex items-center px-2 py-1 text-xs font-medium rounded text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
@@ -415,6 +431,7 @@ const ServiciosPage = () => {
                                     Crear Diseño
                                   </button>
                                 )}
+                                
                                 {/* Botón Finalizar Servicio - solo para empleados asignados y administradores */}
                                 {puedeFinalizarServicio(item) && item.estado !== 'completada' && item.estado !== 'cancelada' && (
                                   <button

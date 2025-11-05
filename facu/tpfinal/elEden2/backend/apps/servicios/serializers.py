@@ -3,8 +3,6 @@ from .models import Servicio, Reserva, Diseno, DisenoProducto, ImagenDiseno, Ima
 
 
 class ServicioSerializer(serializers.ModelSerializer):
-    tipo_display = serializers.CharField(source='get_tipo_display', read_only=True)
-    
     class Meta:
         model = Servicio
         fields = '__all__'
@@ -47,16 +45,28 @@ class ReservaSerializer(serializers.ModelSerializer):
     cliente_nombre = serializers.CharField(source='cliente.persona.nombre', read_only=True)
     cliente_apellido = serializers.CharField(source='cliente.persona.apellido', read_only=True)
     servicio_nombre = serializers.CharField(source='servicio.nombre', read_only=True)
-    servicio_tipo = serializers.CharField(source='servicio.tipo', read_only=True)
-    servicio_precio = serializers.DecimalField(source='servicio.precio', max_digits=10, decimal_places=2, read_only=True)
     estado_display = serializers.CharField(source='get_estado_display', read_only=True)
     empleados_asignados = EmpleadoAsignadoSerializer(source='asignaciones', many=True, read_only=True)
     imagenes = ImagenReservaSerializer(many=True, read_only=True)
+    # Incluir diseños relacionados con información básica
+    disenos = serializers.SerializerMethodField()
     
     class Meta:
         model = Reserva
         fields = '__all__'
         read_only_fields = ('fecha_solicitud',)
+    
+    def get_disenos(self, obj):
+        """Retorna los diseños asociados a esta reserva con información básica"""
+        disenos = obj.disenos.all()
+        return [{
+            'id_diseno': d.id_diseno,
+            'estado': d.estado,
+            'titulo': d.titulo,
+            'presupuesto': str(d.presupuesto),
+            'disenador_id': d.disenador.id_empleado if d.disenador else None,
+            'disenador_nombre': f"{d.disenador.persona.nombre} {d.disenador.persona.apellido}" if d.disenador else None
+        } for d in disenos]
 
 
 class ImagenDisenoSerializer(serializers.ModelSerializer):
@@ -99,6 +109,7 @@ class DisenoSerializer(serializers.ModelSerializer):
     reserva_id = serializers.IntegerField(source='reserva.id_reserva', read_only=True)
     reserva_fecha_reserva = serializers.DateTimeField(source='reserva.fecha_reserva', read_only=True)
     cliente_nombre = serializers.SerializerMethodField()
+    disenador_id = serializers.IntegerField(source='disenador.id_empleado', read_only=True, allow_null=True)
     disenador_nombre = serializers.SerializerMethodField()
     
     class Meta:
@@ -106,7 +117,7 @@ class DisenoSerializer(serializers.ModelSerializer):
         fields = [
             'id_diseno', 'titulo', 'descripcion', 'presupuesto', 'estado', 'estado_display',
             'reserva', 'reserva_id', 'reserva_fecha_reserva', 'servicio', 'servicio_nombre', 
-            'cliente_nombre', 'disenador', 'disenador_nombre',
+            'cliente_nombre', 'disenador', 'disenador_id', 'disenador_nombre',
             'fecha_creacion', 'fecha_presentacion', 'fecha_respuesta', 'fecha_propuesta'
         ]
         read_only_fields = ['id_diseno', 'fecha_creacion', 'fecha_presentacion', 'fecha_respuesta']

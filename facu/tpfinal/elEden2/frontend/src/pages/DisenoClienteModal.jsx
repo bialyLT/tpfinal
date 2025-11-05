@@ -200,27 +200,22 @@ const DisenoClienteModal = ({ isOpen, onClose, reservaId, onDisenoActualizado })
                 {/* Diseño Actual */}
                 <div className="bg-gray-900 rounded-lg p-6 mb-6">
                   <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h3 className="text-2xl font-bold text-white mb-2">{disenoActual.titulo}</h3>
-                      <p className="text-gray-400">{disenoActual.descripcion}</p>
+                    <div className="flex-1">
+                      <h3 className="text-2xl font-bold text-white mb-2">Propuesta de Diseño</h3>
+                      <p className="text-gray-300 whitespace-pre-wrap">{disenoActual.descripcion}</p>
                     </div>
-                    {getEstadoBadge(disenoActual.estado)}
+                    <div className="ml-4">
+                      {getEstadoBadge(disenoActual.estado)}
+                    </div>
                   </div>
 
-                  {/* Info del diseño */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                    <div className="flex items-center">
-                      <DollarSign className="w-5 h-5 text-green-400 mr-2" />
-                      <div>
-                        <p className="text-gray-400 text-sm">Presupuesto</p>
-                        <p className="text-white font-semibold">${disenoActual.presupuesto}</p>
-                      </div>
-                    </div>
+                  {/* Fecha Propuesta */}
+                  <div className="mb-6 bg-gray-800 rounded-lg p-4">
                     <div className="flex items-center">
                       <Calendar className="w-5 h-5 text-purple-400 mr-2" />
                       <div>
                         <p className="text-gray-400 text-sm">Fecha Propuesta para el Servicio</p>
-                        <p className="text-white font-semibold">
+                        <p className="text-white font-semibold text-lg">
                           {disenoActual.fecha_propuesta 
                             ? new Date(disenoActual.fecha_propuesta).toLocaleString('es-AR', {
                                 year: 'numeric',
@@ -268,50 +263,90 @@ const DisenoClienteModal = ({ isOpen, onClose, reservaId, onDisenoActualizado })
                         <Package className="w-5 h-5 mr-2" />
                         Productos Incluidos
                       </h4>
-                      <div className="bg-gray-800 rounded-lg overflow-hidden">
-                        <table className="min-w-full divide-y divide-gray-700">
-                          <thead className="bg-gray-700">
-                            <tr>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                                Producto
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                                Cantidad
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                                Precio Unit.
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                                Subtotal
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-700">
-                            {disenoActual.productos.map((producto) => (
-                              <tr key={producto.id_diseno_producto}>
-                                <td className="px-4 py-3 text-white">
-                                  {producto.producto_nombre}
-                                  {producto.notas && (
-                                    <p className="text-sm text-gray-400">{producto.notas}</p>
+                      <div className="space-y-3">
+                        {disenoActual.productos.map((producto) => {
+                          const cantidad = parseInt(producto.cantidad) || 0;
+                          const precioUnitario = parseFloat(producto.precio_unitario) || 0;
+                          const subtotal = cantidad * precioUnitario;
+                          
+                          return (
+                            <div key={producto.id_diseno_producto} className="bg-gray-800 rounded-lg p-4">
+                              <div className="flex justify-between items-start mb-2">
+                                <div className="flex-1">
+                                  <p className="text-white font-semibold text-lg">{producto.producto_nombre}</p>
+                                  {producto.producto_codigo && (
+                                    <p className="text-xs text-gray-400 mt-1">Código: {producto.producto_codigo}</p>
                                   )}
-                                </td>
-                                <td className="px-4 py-3 text-white">{producto.cantidad}</td>
-                                <td className="px-4 py-3 text-white">${producto.precio_unitario}</td>
-                                <td className="px-4 py-3 text-white font-semibold">${producto.subtotal}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                          <tfoot className="bg-gray-700">
-                            <tr>
-                              <td colSpan="3" className="px-4 py-3 text-right text-white font-semibold">
-                                Total:
-                              </td>
-                              <td className="px-4 py-3 text-white font-bold text-lg">
-                                ${disenoActual.total_productos || disenoActual.presupuesto}
-                              </td>
-                            </tr>
-                          </tfoot>
-                        </table>
+                                </div>
+                              </div>
+                              
+                              <div className="grid grid-cols-3 gap-4 mt-3 pt-3 border-t border-gray-700">
+                                <div>
+                                  <p className="text-xs text-gray-400 mb-1">Cantidad</p>
+                                  <p className="text-white font-medium">{cantidad} unidad{cantidad !== 1 ? 'es' : ''}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-400 mb-1">Precio Unitario</p>
+                                  <p className="text-white font-medium">${precioUnitario.toFixed(2)}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-xs text-gray-400 mb-1">Subtotal</p>
+                                  <p className="text-green-400 font-bold text-lg">${subtotal.toFixed(2)}</p>
+                                </div>
+                              </div>
+                              
+                              {producto.notas && (
+                                <div className="mt-3 pt-3 border-t border-gray-700">
+                                  <p className="text-xs text-gray-400 mb-1">Notas</p>
+                                  <p className="text-gray-300 text-sm">{producto.notas}</p>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* Desglose de Costos */}
+                      <div className="mt-4 bg-gray-800 rounded-lg p-4 space-y-3">
+                        {/* Subtotal Productos */}
+                        <div className="flex justify-between items-center pb-3 border-b border-gray-700">
+                          <span className="text-gray-300 font-medium">Subtotal Productos:</span>
+                          <span className="text-white font-bold text-lg">
+                            ${disenoActual.productos.reduce((total, prod) => {
+                              const cantidad = parseInt(prod.cantidad) || 0;
+                              const precio = parseFloat(prod.precio_unitario) || 0;
+                              return total + (cantidad * precio);
+                            }, 0).toFixed(2)}
+                          </span>
+                        </div>
+                        
+                        {/* Costo de Mano de Obra */}
+                        <div className="flex justify-between items-center pb-3 border-b border-gray-700">
+                          <div className="flex items-center">
+                            <DollarSign className="w-5 h-5 mr-2 text-blue-400" />
+                            <span className="text-gray-300 font-medium">Mano de Obra:</span>
+                          </div>
+                          <span className="text-white font-bold text-lg">
+                            ${Math.max(0, (parseFloat(disenoActual.presupuesto) || 0) - disenoActual.productos.reduce((total, prod) => {
+                              const cantidad = parseInt(prod.cantidad) || 0;
+                              const precio = parseFloat(prod.precio_unitario) || 0;
+                              return total + (cantidad * precio);
+                            }, 0)).toFixed(2)}
+                          </span>
+                        </div>
+                        
+                        {/* Total de la Propuesta */}
+                        <div className="pt-3 bg-gradient-to-r from-gray-700 to-gray-600 rounded-lg p-4">
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center">
+                              <DollarSign className="w-6 h-6 mr-2 text-green-400" />
+                              <span className="text-white font-bold text-lg">TOTAL DE LA PROPUESTA:</span>
+                            </div>
+                            <span className="text-green-400 font-bold text-2xl">
+                              ${parseFloat(disenoActual.presupuesto).toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}

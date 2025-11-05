@@ -121,11 +121,13 @@ const SolicitarServicioPage = () => {
     const files = Array.from(e.target.files);
     const campo = tipo === 'jardin' ? 'imagenes_jardin' : 'imagenes_ideas';
     
-    // Crear objetos con archivo y URL de preview
+    // Crear objetos con archivo, URL de preview, descripción vacía y un ID único
     const filesWithPreview = files.map(file => ({
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // ID único
       file: file,
       preview: URL.createObjectURL(file),
-      name: file.name
+      name: file.name,
+      descripcion: ''
     }));
     
     setFormData(prev => ({
@@ -134,19 +136,30 @@ const SolicitarServicioPage = () => {
     }));
   };
 
-  const removeImage = (index, tipo) => {
+  const handleImageDescriptionChange = (imageId, tipo, descripcion) => {
+    const campo = tipo === 'jardin' ? 'imagenes_jardin' : 'imagenes_ideas';
+    
+    setFormData(prev => ({
+      ...prev,
+      [campo]: prev[campo].map(img => 
+        img.id === imageId ? { ...img, descripcion } : img
+      )
+    }));
+  };
+
+  const removeImage = (imageId, tipo) => {
     const campo = tipo === 'jardin' ? 'imagenes_jardin' : 'imagenes_ideas';
     
     setFormData(prev => {
-      // Revoke the URL to prevent memory leaks
-      const imageToRemove = prev[campo][index];
+      // Encontrar la imagen a eliminar y revocar su URL
+      const imageToRemove = prev[campo].find(img => img.id === imageId);
       if (imageToRemove?.preview) {
         URL.revokeObjectURL(imageToRemove.preview);
       }
       
       return {
         ...prev,
-        [campo]: prev[campo].filter((_, i) => i !== index)
+        [campo]: prev[campo].filter(img => img.id !== imageId)
       };
     });
   };
@@ -154,7 +167,8 @@ const SolicitarServicioPage = () => {
   // Verificar si el servicio seleccionado es "Diseño de jardines"
   const isDisenioJardines = () => {
     const servicioSeleccionado = serviciosDisponibles.find(s => s.id_servicio === parseInt(formData.servicio));
-    return servicioSeleccionado?.tipo === 'diseno';
+    // Verificar si el nombre del servicio contiene "diseño" (case insensitive)
+    return servicioSeleccionado?.nombre?.toLowerCase().includes('diseño');
   };
 
   const handleNext = () => {
@@ -204,9 +218,8 @@ const SolicitarServicioPage = () => {
     try {
       const servicioSeleccionado = serviciosDisponibles.find(s => s.id_servicio === parseInt(formData.servicio));
       
-      // Preparar observaciones con toda la información
+      // Preparar observaciones con la información del cliente
       let observaciones = `${formData.descripcion}\n\n`;
-      observaciones += `Dirección: ${formData.direccion_servicio}\n\n`;
       
       if (formData.notas_adicionales) {
         observaciones += `Notas adicionales: ${formData.notas_adicionales}`;
@@ -225,10 +238,18 @@ const SolicitarServicioPage = () => {
         formDataToSend.append('imagenes_jardin', imagen.file);
       });
 
+      // Agregar descripciones de imágenes del jardín como JSON
+      const descripcionesJardin = formData.imagenes_jardin.map(img => img.descripcion || '');
+      formDataToSend.append('descripciones_jardin', JSON.stringify(descripcionesJardin));
+
       // Agregar imágenes de ideas
       formData.imagenes_ideas.forEach((imagen, index) => {
         formDataToSend.append('imagenes_ideas', imagen.file);
       });
+
+      // Agregar descripciones de imágenes de ideas como JSON
+      const descripcionesIdeas = formData.imagenes_ideas.map(img => img.descripcion || '');
+      formDataToSend.append('descripciones_ideas', JSON.stringify(descripcionesIdeas));
 
       await serviciosService.createReserva(formDataToSend);
       success('Solicitud enviada correctamente. Nos pondremos en contacto contigo pronto.');
@@ -345,13 +366,9 @@ const SolicitarServicioPage = () => {
                     onClick={() => setFormData({...formData, servicio: servicio.id_servicio.toString()})}
                   >
                     <div className="text-center">
-                      <div className="text-5xl mb-4">{servicio.tipo === 'diseno' ? '🌻' : '🌿'}</div>
+                      <div className="text-5xl mb-4">🌻</div>
                       <h3 className="text-xl font-semibold text-white mb-2">{servicio.nombre}</h3>
                       <p className="text-sm text-gray-400 mb-3">{servicio.descripcion || 'Servicio profesional de jardinería'}</p>
-                      <div className="mt-4 space-y-2">
-                        <p className="text-lg font-bold text-green-400">${parseFloat(servicio.precio).toFixed(2)}</p>
-                        <p className="text-xs text-gray-500">Duración estimada: {servicio.duracion_estimada} horas</p>
-                      </div>
                     </div>
                   </div>
                 ))}
@@ -416,21 +433,34 @@ const SolicitarServicioPage = () => {
                         
                         <div className="flex flex-wrap gap-3 mb-3">
                           {formData.imagenes_jardin.map((imagen, index) => (
-                            <div key={index} className="relative">
-                              <div className="w-20 h-20 rounded-lg overflow-hidden border border-gray-600">
-                                <img 
-                                  src={imagen.preview} 
-                                  alt={`Jardín ${index + 1}`}
-                                  className="w-full h-full object-cover"
-                                />
+                            <div key={imagen.id} className="relative bg-gray-700 p-3 rounded-lg" style={{ width: '180px' }}>
+                              <div className="relative mb-2">
+                                <div className="w-full h-32 rounded-lg overflow-hidden border border-gray-600">
+                                  <img 
+                                    src={imagen.preview} 
+                                    alt={`Jardín ${index + 1}`}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => removeImage(imagen.id, 'jardin')}
+                                  className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-600 z-10"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => removeImage(index, 'jardin')}
-                                className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-600"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
+                              <textarea
+                                placeholder="Descripción (opcional)"
+                                value={imagen.descripcion || ''}
+                                onChange={(e) => handleImageDescriptionChange(imagen.id, 'jardin', e.target.value)}
+                                maxLength={200}
+                                rows={3}
+                                className="w-full px-2 py-1 bg-gray-600 border border-gray-500 rounded text-white text-xs placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                              />
+                              <p className="text-xs text-gray-400 mt-1 text-right">
+                                {(imagen.descripcion || '').length}/200
+                              </p>
                             </div>
                           ))}
                           
@@ -457,21 +487,34 @@ const SolicitarServicioPage = () => {
                         
                         <div className="flex flex-wrap gap-3 mb-3">
                           {formData.imagenes_ideas.map((imagen, index) => (
-                            <div key={index} className="relative">
-                              <div className="w-20 h-20 rounded-lg overflow-hidden border border-gray-600">
-                                <img 
-                                  src={imagen.preview} 
-                                  alt={`Idea ${index + 1}`}
-                                  className="w-full h-full object-cover"
-                                />
+                            <div key={imagen.id} className="relative bg-gray-700 p-3 rounded-lg" style={{ width: '180px' }}>
+                              <div className="relative mb-2">
+                                <div className="w-full h-32 rounded-lg overflow-hidden border border-gray-600">
+                                  <img 
+                                    src={imagen.preview} 
+                                    alt={`Idea ${index + 1}`}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => removeImage(imagen.id, 'ideas')}
+                                  className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-600 z-10"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => removeImage(index, 'ideas')}
-                                className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-600"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
+                              <textarea
+                                placeholder="Descripción (opcional)"
+                                value={imagen.descripcion || ''}
+                                onChange={(e) => handleImageDescriptionChange(imagen.id, 'ideas', e.target.value)}
+                                maxLength={200}
+                                rows={3}
+                                className="w-full px-2 py-1 bg-gray-600 border border-gray-500 rounded text-white text-xs placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                              />
+                              <p className="text-xs text-gray-400 mt-1 text-right">
+                                {(imagen.descripcion || '').length}/200
+                              </p>
                             </div>
                           ))}
                           
