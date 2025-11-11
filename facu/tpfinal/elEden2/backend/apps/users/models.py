@@ -52,6 +52,7 @@ class Localidad(models.Model):
 
 class Persona(models.Model):
     id_persona = models.AutoField(primary_key=True)
+    user = models.OneToOneField('auth.User', on_delete=models.CASCADE, related_name='persona', null=True, blank=True)
     nombre = models.CharField(max_length=100)
     apellido = models.CharField(max_length=100)
     email = models.EmailField(unique=True)

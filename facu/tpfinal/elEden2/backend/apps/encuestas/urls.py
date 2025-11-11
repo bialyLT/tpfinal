@@ -9,5 +9,5 @@ router.register(r'encuestas-respuestas', EncuestaRespuestaViewSet)
 router.register(r'respuestas', RespuestaViewSet)
 
 urlpatterns = [
-    path('encuestas/', include(router.urls)),
+    path('', include(router.urls)),
 ]

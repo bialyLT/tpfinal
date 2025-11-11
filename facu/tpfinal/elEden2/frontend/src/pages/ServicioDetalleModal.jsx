@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, User, MapPin, FileText, Image as ImageIcon, Palette, DollarSign, Eye } from 'lucide-react';
+import { X, Calendar, User, MapPin, FileText, Image as ImageIcon, Palette, DollarSign, Eye, CreditCard, CheckCircle, XCircle, Clock, ExternalLink } from 'lucide-react';
 import { serviciosService } from '../services';
 import { error as showError } from '../utils/notifications';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +9,7 @@ const ServicioDetalleModal = ({ servicioId, itemType, isOpen, onClose, onVerDise
   const [servicio, setServicio] = useState(null);
   const [diseno, setDiseno] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [procesandoPago, setProcesandoPago] = useState(false);
 
   // Verificar roles de usuario (igual que en Sidebar.jsx)
   const isAdmin = user && (user.is_staff || user.is_superuser || user.perfil?.tipo_usuario === 'administrador' || user.groups?.includes('Administradores'));
@@ -31,7 +32,17 @@ const ServicioDetalleModal = ({ servicioId, itemType, isOpen, onClose, onVerDise
       
       // Usar el endpoint correcto según el tipo
       if (itemType === 'reserva') {
-        data = await serviciosService.getReservaById(servicioId);
+        try {
+          data = await serviciosService.getReservaById(servicioId);
+        } catch (err) {
+          if (err.response?.status === 404) {
+            showError(`La reserva #${servicioId} no existe o no tienes permisos para verla`);
+            console.error(`❌ Reserva #${servicioId} no encontrada`);
+            onClose();
+            return;
+          }
+          throw err;
+        }
         
         // Buscar el diseño asociado a esta reserva
         try {
@@ -55,8 +66,35 @@ const ServicioDetalleModal = ({ servicioId, itemType, isOpen, onClose, onVerDise
     } catch (error) {
       showError('Error al cargar los detalles');
       console.error(error);
+      onClose(); // Cerrar el modal si hay error
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePagarReserva = async (tipoPago) => {
+    try {
+      setProcesandoPago(true);
+      
+      // Llamar al servicio correspondiente según el tipo de pago
+      let response;
+      if (tipoPago === 'sena') {
+        response = await serviciosService.crearPreferenciaSena(servicioId);
+      } else if (tipoPago === 'final') {
+        response = await serviciosService.crearPreferenciaFinal(servicioId);
+      }
+      
+      if (response && response.init_point) {
+        // Redirigir a MercadoPago
+        window.location.href = response.init_point;
+      } else {
+        showError('No se pudo obtener el enlace de pago');
+      }
+    } catch (error) {
+      showError('Error al procesar el pago');
+      console.error(error);
+    } finally {
+      setProcesandoPago(false);
     }
   };
 
@@ -196,6 +234,212 @@ const ServicioDetalleModal = ({ servicioId, itemType, isOpen, onClose, onVerDise
                   </div>
                 </div>
               </div>
+
+              {/* Información de Pago */}
+              {itemType === 'reserva' && (
+                <div className="bg-gray-700 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+                    <CreditCard className="w-5 h-5 mr-2 text-green-400" />
+                    Información de Pago
+                  </h3>
+                  
+                  {/* Pago de Seña */}
+                  <div className="space-y-4">
+                    <div className="bg-gray-800 rounded-lg p-4 border-l-4 border-blue-500">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-md font-semibold text-white">Pago de Seña</h4>
+                        {servicio.estado_pago_sena === 'aprobado' || servicio.estado_pago_sena === 'sena_pagada' ? (
+                          <span className="flex items-center px-3 py-1 bg-green-500 text-white text-sm rounded-full">
+                            <CheckCircle className="w-4 h-4 mr-1" />
+                            Pagado
+                          </span>
+                        ) : servicio.estado_pago_sena === 'rechazado' ? (
+                          <span className="flex items-center px-3 py-1 bg-red-500 text-white text-sm rounded-full">
+                            <XCircle className="w-4 h-4 mr-1" />
+                            Rechazado
+                          </span>
+                        ) : (
+                          <span className="flex items-center px-3 py-1 bg-yellow-500 text-white text-sm rounded-full">
+                            <Clock className="w-4 h-4 mr-1" />
+                            Pendiente
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <span className="text-gray-400">Monto:</span>
+                          <p className="text-white font-semibold text-lg">
+                            ${servicio.monto_sena ? Number(servicio.monto_sena).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'} ARS
+                          </p>
+                        </div>
+                        
+                        {servicio.fecha_pago_sena && (
+                          <div>
+                            <span className="text-gray-400">Fecha de pago:</span>
+                            <p className="text-white font-medium">
+                              {new Date(servicio.fecha_pago_sena).toLocaleString('es-AR', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </p>
+                          </div>
+                        )}
+                        
+                        {servicio.payment_id_sena && (
+                          <div className="md:col-span-2">
+                            <span className="text-gray-400">ID de Transacción:</span>
+                            <p className="text-white font-mono text-xs bg-gray-900 px-2 py-1 rounded mt-1 break-all">
+                              {servicio.payment_id_sena}
+                            </p>
+                            
+                            {/* Link al comprobante de MercadoPago */}
+                            <a
+                              href={`https://www.mercadopago.com.ar/activities?q=${servicio.payment_id_sena}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                            >
+                              <ExternalLink className="w-4 h-4 mr-2" />
+                              Ver Comprobante en MercadoPago
+                            </a>
+                          </div>
+                        )}
+                        
+                        {/* Botón para pagar la seña - Solo si está pendiente y es cliente */}
+                        {isCliente && (servicio.estado_pago_sena === 'pendiente_pago_sena' || servicio.estado_pago_sena === 'pendiente') && (
+                          <div className="md:col-span-2">
+                            <button
+                              onClick={() => handlePagarReserva('sena')}
+                              disabled={procesandoPago}
+                              className="w-full flex items-center justify-center px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold rounded-lg transition-all transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                            >
+                              {procesandoPago ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                                  Procesando...
+                                </>
+                              ) : (
+                                <>
+                                  <CreditCard className="w-5 h-5 mr-2" />
+                                  Pagar Seña con MercadoPago
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Pago Final */}
+                    {(servicio.monto_final > 0 || servicio.estado_pago_final !== 'pendiente') && (
+                      <div className="bg-gray-800 rounded-lg p-4 border-l-4 border-purple-500">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="text-md font-semibold text-white">Pago Final</h4>
+                          {servicio.estado_pago_final === 'aprobado' ? (
+                            <span className="flex items-center px-3 py-1 bg-green-500 text-white text-sm rounded-full">
+                              <CheckCircle className="w-4 h-4 mr-1" />
+                              Pagado
+                            </span>
+                          ) : servicio.estado_pago_final === 'rechazado' ? (
+                            <span className="flex items-center px-3 py-1 bg-red-500 text-white text-sm rounded-full">
+                              <XCircle className="w-4 h-4 mr-1" />
+                              Rechazado
+                            </span>
+                          ) : (
+                            <span className="flex items-center px-3 py-1 bg-yellow-500 text-white text-sm rounded-full">
+                              <Clock className="w-4 h-4 mr-1" />
+                              Pendiente
+                            </span>
+                          )}
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <span className="text-gray-400">Monto:</span>
+                            <p className="text-white font-semibold text-lg">
+                              ${servicio.monto_final ? Number(servicio.monto_final).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'} ARS
+                            </p>
+                          </div>
+                          
+                          {servicio.fecha_pago_final && (
+                            <div>
+                              <span className="text-gray-400">Fecha de pago:</span>
+                              <p className="text-white font-medium">
+                                {new Date(servicio.fecha_pago_final).toLocaleString('es-AR', {
+                                  year: 'numeric',
+                                  month: 'long',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </p>
+                            </div>
+                          )}
+                          
+                          {servicio.payment_id_final && (
+                            <div className="md:col-span-2">
+                              <span className="text-gray-400">ID de Transacción:</span>
+                              <p className="text-white font-mono text-xs bg-gray-900 px-2 py-1 rounded mt-1 break-all">
+                                {servicio.payment_id_final}
+                              </p>
+                              
+                              {/* Link al comprobante de MercadoPago */}
+                              <a
+                                href={`https://www.mercadopago.com.ar/activities?q=${servicio.payment_id_final}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                              >
+                                <ExternalLink className="w-4 h-4 mr-2" />
+                                Ver Comprobante en MercadoPago
+                              </a>
+                            </div>
+                          )}
+                          
+                          {/* Botón para pagar el monto final - Solo si está pendiente y es cliente */}
+                          {isCliente && servicio.estado_pago_final === 'pendiente' && (
+                            <div className="md:col-span-2">
+                              <button
+                                onClick={() => handlePagarReserva('final')}
+                                disabled={procesandoPago}
+                                className="w-full flex items-center justify-center px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold rounded-lg transition-all transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                              >
+                                {procesandoPago ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                                    Procesando...
+                                  </>
+                                ) : (
+                                  <>
+                                    <CreditCard className="w-5 h-5 mr-2" />
+                                    Pagar Monto Final con MercadoPago
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Resumen Total */}
+                    {servicio.monto_total > 0 && (
+                      <div className="bg-gradient-to-r from-green-600 to-green-700 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-white font-semibold">Monto Total del Servicio:</span>
+                          <span className="text-white font-bold text-2xl">
+                            ${Number(servicio.monto_total).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ARS
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Descripción del Usuario/Observaciones */}
               {servicio.observaciones && (

@@ -8,9 +8,15 @@ import {
   Clock, Package, Image as ImageIcon, Edit
 } from 'lucide-react';
 import CrearDisenoModal from './CrearDisenoModal';
+import Pagination from '../components/Pagination';
 
 const DisenosPage = () => {
-  const [disenos, setDisenos] = useState([]);
+  const [disenosData, setDisenosData] = useState({
+    results: [],
+    count: 0,
+    total_pages: 0,
+    current_page: 1
+  });
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [estadoFilter, setEstadoFilter] = useState('');
@@ -18,20 +24,53 @@ const DisenosPage = () => {
   const [isDetalleModalOpen, setIsDetalleModalOpen] = useState(false);
   const [isDisenoModalOpen, setIsDisenoModalOpen] = useState(false);
   const [disenoParaEditar, setDisenoParaEditar] = useState(null);
+  const [disenosPage, setDisenosPage] = useState(1);
+  const [disenosPageSize, setDisenosPageSize] = useState(10);
   const { user } = useAuth();
 
   const isAdmin = user?.groups?.includes('Administradores');
   const isEmpleado = user?.groups?.includes('Empleados');
 
+  // Debounce para búsqueda
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (disenosPage !== 1) {
+        setDisenosPage(1); // Resetear a primera página cuando se busca
+      } else {
+        fetchDisenos();
+      }
+    }, 500); // Esperar 500ms después de que el usuario deje de escribir
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, estadoFilter]);
+
   useEffect(() => {
     fetchDisenos();
-  }, []);
+  }, [disenosPage, disenosPageSize]);
 
   const fetchDisenos = async () => {
     try {
       setLoading(true);
-      const data = await serviciosService.getDisenos();
-      setDisenos(data.results || data);
+      const params = {
+        page: disenosPage,
+        page_size: disenosPageSize
+      };
+      
+      if (searchTerm) {
+        params.search = searchTerm;
+      }
+      
+      if (estadoFilter) {
+        params.estado = estadoFilter;
+      }
+      
+      const data = await serviciosService.getDisenos(params);
+      setDisenosData({
+        results: data.results || [],
+        count: data.count || 0,
+        total_pages: data.total_pages || 1,
+        current_page: data.current_page || 1
+      });
     } catch (error) {
       handleApiError(error, 'Error al cargar los diseños');
     } finally {
@@ -134,17 +173,6 @@ const DisenosPage = () => {
     }
   };
 
-  const filteredDisenos = disenos.filter(diseno => {
-    const matchesSearch = 
-      diseno.titulo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      diseno.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      diseno.cliente_nombre?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesEstado = !estadoFilter || diseno.estado === estadoFilter;
-    
-    return matchesSearch && matchesEstado;
-  });
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -210,12 +238,12 @@ const DisenosPage = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-gray-800 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-400 text-sm">Total Diseños</p>
-              <p className="text-2xl font-bold text-white">{disenos.length}</p>
+              <p className="text-2xl font-bold text-white">{disenosData.count}</p>
             </div>
             <Palette className="w-8 h-8 text-purple-400" />
           </div>
@@ -223,34 +251,12 @@ const DisenosPage = () => {
         <div className="bg-gray-800 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-400 text-sm">Presentados</p>
+              <p className="text-gray-400 text-sm">En esta página</p>
               <p className="text-2xl font-bold text-white">
-                {disenos.filter(d => d.estado === 'presentado').length}
+                {disenosData.results.length}
               </p>
             </div>
-            <Clock className="w-8 h-8 text-blue-400" />
-          </div>
-        </div>
-        <div className="bg-gray-800 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-400 text-sm">Aceptados</p>
-              <p className="text-2xl font-bold text-white">
-                {disenos.filter(d => d.estado === 'aceptado').length}
-              </p>
-            </div>
-            <CheckCircle className="w-8 h-8 text-green-400" />
-          </div>
-        </div>
-        <div className="bg-gray-800 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-400 text-sm">Rechazados</p>
-              <p className="text-2xl font-bold text-white">
-                {disenos.filter(d => d.estado === 'rechazado').length}
-              </p>
-            </div>
-            <XCircle className="w-8 h-8 text-red-400" />
+            <Package className="w-8 h-8 text-blue-400" />
           </div>
         </div>
       </div>
@@ -287,7 +293,7 @@ const DisenosPage = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-700">
-              {filteredDisenos.length === 0 ? (
+              {disenosData.results.length === 0 ? (
                 <tr>
                   <td colSpan={isAdmin ? 7 : 6} className="px-6 py-8 text-center text-gray-400">
                     <Palette className="w-12 h-12 mx-auto mb-2 opacity-50" />
@@ -295,7 +301,7 @@ const DisenosPage = () => {
                   </td>
                 </tr>
               ) : (
-                filteredDisenos.map((diseno) => (
+                disenosData.results.map((diseno) => (
                   <tr key={diseno.id_diseno} className="bg-gray-800 hover:bg-gray-700 transition-colors">
                     <td className="px-6 py-4">
                       <div>
@@ -386,6 +392,17 @@ const DisenosPage = () => {
             </tbody>
           </table>
         </div>
+        
+        {/* Paginación */}
+        <Pagination
+          currentPage={disenosData.current_page}
+          totalPages={disenosData.total_pages}
+          totalItems={disenosData.count}
+          pageSize={disenosPageSize}
+          onPageChange={setDisenosPage}
+          onPageSizeChange={setDisenosPageSize}
+          loading={loading}
+        />
       </div>
 
         {/* Modal de Detalle */}

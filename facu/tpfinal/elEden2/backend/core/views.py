@@ -5,6 +5,10 @@ from rest_framework import status
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from .serializers import CustomTokenObtainPairSerializer, RegisterSerializer
+from apps.emails import EmailService
+import logging
+
+logger = logging.getLogger(__name__)
 
 class HealthCheckView(APIView):
     """Vista simple para verificar el estado de la API"""
@@ -30,6 +34,19 @@ class RegisterView(APIView):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
+            
+            # Enviar email de bienvenida
+            try:
+                user_name = f"{user.first_name} {user.last_name}".strip() or user.username
+                EmailService.send_welcome_email(
+                    user_email=user.email,
+                    user_name=user_name,
+                    username=user.username
+                )
+                logger.info(f"Email de bienvenida enviado a {user.email}")
+            except Exception as e:
+                # No fallar el registro si el email falla
+                logger.error(f"Error al enviar email de bienvenida: {str(e)}")
             
             # Generar tokens JWT para el nuevo usuario
             refresh = RefreshToken.for_user(user)

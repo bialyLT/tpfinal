@@ -6,6 +6,7 @@ import { Calendar, Clock, CheckCircle, XCircle, Users, Filter, Search, Eye, Pale
 import ServicioDetalleModal from './ServicioDetalleModal';
 import CrearDisenoModal from './CrearDisenoModal';
 import DisenoClienteModal from './DisenoClienteModal';
+import Pagination from '../components/Pagination';
 
 const ServiciosPage = () => {
   const [servicios, setServicios] = useState([]);
@@ -25,36 +26,79 @@ const ServiciosPage = () => {
   const [reservaSeleccionada, setReservaSeleccionada] = useState(null);
   const { user } = useAuth();
 
+  // Estados de paginación
+  const [solicitudesPagination, setSolicitudesPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    pageSize: 5
+  });
+  const [disenosPagination, setDisenosPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    pageSize: 10
+  });
+
   const isAdmin = user?.groups?.includes('Administradores');
   const isEmpleado = user?.groups?.includes('Empleados');
   const isCliente = !isAdmin && !isEmpleado;
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [solicitudesPagination.currentPage, solicitudesPagination.pageSize, disenosPagination.currentPage, disenosPagination.pageSize]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
       const promises = [
         serviciosService.getServicios(),
-        serviciosService.getReservas()
+        serviciosService.getReservas({
+          page: solicitudesPagination.currentPage,
+          page_size: solicitudesPagination.pageSize
+        })
       ];
       
       // Si es cliente, también obtener sus diseños
       if (isCliente) {
-        promises.push(serviciosService.getDisenos());
+        promises.push(serviciosService.getDisenos({
+          page: disenosPagination.currentPage,
+          page_size: disenosPagination.pageSize
+        }));
       }
       
       const results = await Promise.all(promises);
       const [serviciosData, reservasData, disenosData] = results;
       
       setServicios(serviciosData.results || serviciosData);
-      setSolicitudes(reservasData.results || reservasData);
       setTiposServicio(serviciosData.results || serviciosData);
       
+      // Actualizar solicitudes con datos de paginación
+      if (reservasData.results) {
+        setSolicitudes(reservasData.results);
+        setSolicitudesPagination(prev => ({
+          ...prev,
+          totalPages: reservasData.total_pages || 1,
+          totalItems: reservasData.count || 0,
+          currentPage: reservasData.current_page || prev.currentPage
+        }));
+      } else {
+        setSolicitudes(reservasData);
+      }
+      
+      // Actualizar diseños con datos de paginación
       if (disenosData) {
-        setDisenos(disenosData.results || disenosData);
+        if (disenosData.results) {
+          setDisenos(disenosData.results);
+          setDisenosPagination(prev => ({
+            ...prev,
+            totalPages: disenosData.total_pages || 1,
+            totalItems: disenosData.count || 0,
+            currentPage: disenosData.current_page || prev.currentPage
+          }));
+        } else {
+          setDisenos(disenosData);
+        }
       }
     } catch (error) {
       handleApiError(error, 'Error al cargar los datos');
@@ -111,6 +155,7 @@ const ServiciosPage = () => {
   };
 
   const handleVerDetalle = (servicioId, tipo) => {
+    console.log('🔍 Abriendo detalle:', { servicioId, tipo });
     setSelectedServicioId(servicioId);
     setSelectedItemType(tipo);
     setIsDetalleModalOpen(true);
@@ -460,6 +505,31 @@ const ServiciosPage = () => {
               </tbody>
             </table>
           </div>
+
+          {/* Paginación */}
+          {activeTab === 'solicitudes' && (
+            <Pagination
+              currentPage={solicitudesPagination.currentPage}
+              totalPages={solicitudesPagination.totalPages}
+              totalItems={solicitudesPagination.totalItems}
+              pageSize={solicitudesPagination.pageSize}
+              onPageChange={(page) => setSolicitudesPagination(prev => ({ ...prev, currentPage: page }))}
+              onPageSizeChange={(pageSize) => setSolicitudesPagination(prev => ({ ...prev, pageSize, currentPage: 1 }))}
+              loading={loading}
+            />
+          )}
+
+          {activeTab === 'disenos' && isCliente && (
+            <Pagination
+              currentPage={disenosPagination.currentPage}
+              totalPages={disenosPagination.totalPages}
+              totalItems={disenosPagination.totalItems}
+              pageSize={disenosPagination.pageSize}
+              onPageChange={(page) => setDisenosPagination(prev => ({ ...prev, currentPage: page }))}
+              onPageSizeChange={(pageSize) => setDisenosPagination(prev => ({ ...prev, pageSize, currentPage: 1 }))}
+              loading={loading}
+            />
+          )}
         </div>
       </div>
 

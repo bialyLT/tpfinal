@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { error } from '../../utils/notifications';
 import { Leaf, ArrowLeft } from 'lucide-react';
 import api from '../../services/api';
+import GoogleLoginButton from '../../components/GoogleLoginButton';
 
 const RegisterPage = () => {
   const [formData, setFormData] = useState({
@@ -369,6 +370,19 @@ const RegisterPage = () => {
                 {isLoading ? 'Creando cuenta...' : 'Crear Cuenta'}
               </button>
             </div>
+
+            {/* Divider */}
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-700"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-gray-900 text-gray-400">O regístrate con</span>
+              </div>
+            </div>
+
+            {/* Google Login Button */}
+            <GoogleLoginButton isRegister={true} />
           </form>
           
           <div className="text-center mt-6 lg:hidden">

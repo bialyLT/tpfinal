@@ -5,8 +5,17 @@ import { useAuth } from '../context/AuthContext';
 const ProtectedRoute = ({ children, allowedRoles = [], redirectTo = '/mis-servicios' }) => {
   const { user, loading } = useAuth();
 
+  // Log para debugging
+  console.log('🔒 ProtectedRoute - Checking access:', {
+    path: window.location.pathname,
+    user: user ? user.email : 'No user',
+    loading,
+    allowedRoles
+  });
+
   // Mostrar loading mientras se verifica la autenticación
   if (loading) {
+    console.log('🔒 ProtectedRoute - Loading...');
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-white">Cargando...</div>
@@ -16,6 +25,7 @@ const ProtectedRoute = ({ children, allowedRoles = [], redirectTo = '/mis-servic
 
   // Si no hay usuario, redirigir al login
   if (!user) {
+    console.log('🔒 ProtectedRoute - No user, redirecting to login');
     return <Navigate to="/login" replace />;
   }
 

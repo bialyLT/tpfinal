@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Leaf, Home, Mail, Lock, ArrowLeft } from 'lucide-react';
+import GoogleLoginButton from '../../components/GoogleLoginButton';
 
 const LoginPage = () => {
   const [formData, setFormData] = useState({
@@ -9,8 +10,12 @@ const LoginPage = () => {
     password: ''
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [searchParams] = useSearchParams();
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  // Verificar si hay un parámetro de redirección
+  const redirectTo = searchParams.get('redirect');
 
   const handleChange = (e) => {
     setFormData({
@@ -26,7 +31,13 @@ const LoginPage = () => {
     try {
       // Asumimos que el backend puede manejar el email como nombre de usuario
       await login(formData.email, formData.password);
-      navigate('/dashboard');
+      
+      // Redirigir según el parámetro
+      if (redirectTo === 'profile') {
+        navigate('/perfil');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (error) {
       // El error ya se maneja en AuthContext, no necesitamos duplicar el toast aquí
     } finally {
@@ -62,6 +73,13 @@ const LoginPage = () => {
                 Regístrate aquí
               </Link>
             </p>
+            {redirectTo === 'profile' && (
+              <div className="mt-4 p-3 bg-blue-900 bg-opacity-30 border border-blue-500 rounded-lg">
+                <p className="text-sm text-blue-300">
+                  👋 ¡Bienvenido! Por favor inicia sesión para completar tu perfil.
+                </p>
+              </div>
+            )}
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -116,6 +134,19 @@ const LoginPage = () => {
                 {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
               </button>
             </div>
+
+            {/* Divider */}
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-700"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-gray-900 text-gray-400">O continúa con</span>
+              </div>
+            </div>
+
+            {/* Google Login Button */}
+            <GoogleLoginButton isRegister={false} />
           </form>
         </div>
       </div>

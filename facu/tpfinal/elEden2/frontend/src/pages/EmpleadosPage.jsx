@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { usersService } from '../services';
+import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { handleApiError, success } from '../utils/notifications';
 import { 
@@ -24,6 +25,10 @@ const EmpleadosPage = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedEmpleado, setSelectedEmpleado] = useState(null);
   const { user } = useAuth();
+  
+  // Reference data
+  const [generos, setGeneros] = useState([]);
+  const [tiposDocumento, setTiposDocumento] = useState([]);
 
   // Form data for new/edit employee
   const [formData, setFormData] = useState({
@@ -32,6 +37,9 @@ const EmpleadosPage = () => {
     first_name: '',
     last_name: '',
     password: '',
+    nro_documento: '',
+    tipo_documento_id: '',
+    genero_id: '',
     is_active: true,
     groups: ['Empleados']
   });
@@ -48,8 +56,24 @@ const EmpleadosPage = () => {
   useEffect(() => {
     if (isAdmin) {
       fetchEmpleados();
+      fetchReferenceData();
     }
   }, [isAdmin]);
+
+  const fetchReferenceData = async () => {
+    try {
+      console.log('🔍 Fetching reference data...');
+      const response = await api.get('/reference-data/');
+      console.log('📦 Reference data response:', response.data);
+      setGeneros(response.data.generos || []);
+      setTiposDocumento(response.data.tipos_documento || []);
+      console.log('✅ Géneros cargados:', response.data.generos?.length || 0);
+      console.log('✅ Tipos documento cargados:', response.data.tipos_documento?.length || 0);
+    } catch (error) {
+      console.error('❌ Error al cargar datos de referencia:', error);
+      console.error('Error details:', error.response?.data);
+    }
+  };
 
   const fetchEmpleados = async () => {
     try {
@@ -80,11 +104,14 @@ const EmpleadosPage = () => {
         password: formData.password,
         first_name: formData.first_name,
         last_name: formData.last_name,
+        nro_documento: formData.nro_documento,
+        tipo_documento_id: parseInt(formData.tipo_documento_id),
+        genero_id: parseInt(formData.genero_id),
         is_active: formData.is_active
       };
       
       await usersService.createEmpleado(empleadoData);
-      success('Empleado creado exitosamente');
+      success('Empleado creado exitosamente. Se ha enviado un email con las credenciales e instrucciones para completar su perfil.');
       setShowAddModal(false);
       setFormData({
         username: '',
@@ -92,6 +119,9 @@ const EmpleadosPage = () => {
         first_name: '',
         last_name: '',
         password: '',
+        nro_documento: '',
+        tipo_documento_id: '',
+        genero_id: '',
         is_active: true,
         groups: ['Empleados']
       });
@@ -386,14 +416,18 @@ const EmpleadosPage = () => {
 
         {/* Add Employee Modal */}
         {showAddModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
-              <h3 className="text-xl font-bold text-white mb-4">Agregar Nuevo Empleado</h3>
+              <h3 className="text-2xl font-bold text-white mb-4">Agregar Nuevo Empleado</h3>
+              <p className="text-sm text-gray-400 mb-6">
+                El empleado recibirá un email con sus credenciales e instrucciones para completar su perfil.
+              </p>
               <form onSubmit={handleAddEmpleado}>
                 <div className="space-y-4">
+                  {/* Datos de Autenticación */}
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">
-                      Usuario
+                      Usuario *
                     </label>
                     <input
                       type="text"
@@ -404,9 +438,10 @@ const EmpleadosPage = () => {
                       className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
                     />
                   </div>
+                  
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">
-                      Email
+                      Email *
                     </label>
                     <input
                       type="email"
@@ -414,38 +449,45 @@ const EmpleadosPage = () => {
                       value={formData.email}
                       onChange={handleInputChange}
                       required
+                      autoComplete="email"
                       className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
                     />
+                    <p className="text-xs text-gray-400 mt-1">Se usará para iniciar sesión</p>
                   </div>
+                  
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-1">
-                        Nombre
+                        Nombre *
                       </label>
                       <input
                         type="text"
                         name="first_name"
                         value={formData.first_name}
                         onChange={handleInputChange}
+                        required
                         className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
                       />
                     </div>
+                    
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-1">
-                        Apellido
+                        Apellido *
                       </label>
                       <input
                         type="text"
                         name="last_name"
                         value={formData.last_name}
                         onChange={handleInputChange}
+                        required
                         className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
                       />
                     </div>
                   </div>
+                  
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">
-                      Contraseña
+                      Contraseña *
                     </label>
                     <input
                       type="password"
@@ -453,21 +495,101 @@ const EmpleadosPage = () => {
                       value={formData.password}
                       onChange={handleInputChange}
                       required
+                      minLength="8"
+                      autoComplete="new-password"
                       className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
                     />
+                    <p className="text-xs text-gray-400 mt-1">Mínimo 8 caracteres. Se enviará por email.</p>
                   </div>
-                  <div className="flex items-center">
+
+                  {/* Datos Personales */}
+                  <div className="pt-4 border-t border-gray-700">
+                    <h4 className="text-sm font-semibold text-gray-300 mb-3">Datos Personales</h4>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">
+                          Tipo de Documento *
+                        </label>
+                        <select
+                          name="tipo_documento_id"
+                          value={formData.tipo_documento_id}
+                          onChange={handleInputChange}
+                          required
+                          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        >
+                          <option value="" className="bg-gray-700 text-gray-400">Seleccionar...</option>
+                          {tiposDocumento.map(tipo => (
+                            <option key={tipo.id} value={tipo.id} className="bg-gray-700 text-white">
+                              {tipo.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">
+                          Número de Documento *
+                        </label>
+                        <input
+                          type="text"
+                          name="nro_documento"
+                          value={formData.nro_documento}
+                          onChange={handleInputChange}
+                          required
+                          maxLength="20"
+                          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mt-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">
+                          Género *
+                        </label>
+                        <select
+                          name="genero_id"
+                          value={formData.genero_id}
+                          onChange={handleInputChange}
+                          required
+                          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        >
+                          <option value="" className="bg-gray-700 text-gray-400">Seleccionar...</option>
+                          {generos.map(genero => (
+                            <option key={genero.id} value={genero.id} className="bg-gray-700 text-white">
+                              {genero.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center pt-2">
                     <input
                       type="checkbox"
                       name="is_active"
                       checked={formData.is_active}
                       onChange={handleInputChange}
-                      className="mr-2 text-green-600 focus:ring-green-500"
+                      className="mr-2 text-green-600 focus:ring-green-500 w-4 h-4"
                     />
                     <label className="text-sm text-gray-300">Usuario activo</label>
                   </div>
+
+                  <div className="bg-blue-900 bg-opacity-30 border border-blue-500 rounded-lg p-3 mt-4">
+                    <p className="text-xs text-blue-300">
+                      📧 El empleado recibirá un email con:
+                    </p>
+                    <ul className="text-xs text-blue-200 mt-2 ml-4 space-y-1">
+                      <li>• Credenciales de acceso</li>
+                      <li>• Link directo a su perfil</li>
+                      <li>• Instrucciones para completar sus datos</li>
+                    </ul>
+                  </div>
                 </div>
-                <div className="flex gap-4 mt-6">
+                
+                <div className="flex gap-4 mt-6 pt-6 border-t border-gray-700">
                   <button
                     type="button"
                     onClick={() => setShowAddModal(false)}

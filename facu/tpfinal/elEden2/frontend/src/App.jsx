@@ -17,11 +17,15 @@ import DashboardPage from './pages/DashboardPage';
 import ProductosPage from './pages/ProductosPage';
 import ServiciosPage from './pages/ServiciosPage';
 import EncuestasPage from './pages/EncuestasPage';
+import GestionEncuestasPage from './pages/GestionEncuestasPage';
 import EmpleadosPage from './pages/EmpleadosPage';
 import SolicitarServicioPage from './pages/SolicitarServicioPage';
 import MiPerfil from './pages/MiPerfil';
 import DisenosPage from './pages/DisenosPage';
 import MisDisenosPage from './pages/MisDisenosPage';
+import PagoExitoso from './pages/reservas/PagoExitoso';
+// ❌ DEPRECADO - Ya no se usa
+// import ConfirmarPrereserva from './pages/reservas/ConfirmarPrereserva';
 // ABM Pages
 import ComprasPage from './pages/ComprasPage';
 import CategoriasPage from './pages/CategoriasPage';
@@ -209,6 +213,16 @@ function App() {
               } 
             />
 
+            {/* Gestión de Encuestas - Solo Administradores */}
+            <Route 
+              path="/gestion-encuestas" 
+              element={
+                <ProtectedRoute allowedRoles={['administrador']}>
+                  <GestionEncuestasPage />
+                </ProtectedRoute>
+              } 
+            />
+
             {/* Compras - Solo Empleados y Administradores */}
             <Route 
               path="/compras" 
@@ -258,6 +272,20 @@ function App() {
                 </ProtectedRoute>
               } 
             />
+
+            {/* Pago Exitoso - Página de confirmación después del pago en MercadoPago */}
+            {/* NOTA: Esta ruta NO está protegida para permitir redirección desde MercadoPago */}
+            <Route 
+              path="/reservas/pago-exitoso" 
+              element={<PagoExitoso />} 
+            />
+
+            {/* ❌ RUTA DEPRECADA - Ya no se usa ConfirmarPrereserva */}
+            {/* Ahora todo el flujo usa PagoExitoso (tanto desde modal como desde solicitud) */}
+            {/* <Route 
+              path="/reservas/confirmar-prereserva" 
+              element={<ConfirmarPrereserva />} 
+            /> */}
             
             {/* Mi Perfil - Todos los usuarios autenticados */}
             <Route 

@@ -1,5 +1,36 @@
 ﻿from django.contrib import admin
-from .models import Servicio, Reserva, Diseno, DisenoProducto, ImagenDiseno, ImagenReserva, ReservaEmpleado
+from .models import (
+    Servicio, Reserva, Diseno, DisenoProducto, ImagenDiseno, 
+    ImagenReserva, ReservaEmpleado, ConfiguracionPago
+)
+
+
+@admin.register(ConfiguracionPago)
+class ConfiguracionPagoAdmin(admin.ModelAdmin):
+    list_display = ('id', 'monto_sena', 'porcentaje_sena', 'fecha_actualizacion', 'actualizado_por')
+    readonly_fields = ('fecha_actualizacion',)
+    
+    fieldsets = (
+        ('Configuración de Seña', {
+            'fields': ('monto_sena', 'porcentaje_sena'),
+            'description': 'Configure el monto de seña requerido para las reservas. Use monto fijo O porcentaje (no ambos).'
+        }),
+        ('Información', {
+            'fields': ('actualizado_por', 'fecha_actualizacion'),
+        }),
+    )
+    
+    def save_model(self, request, obj, form, change):
+        obj.actualizado_por = request.user
+        super().save_model(request, obj, form, change)
+    
+    def has_add_permission(self, request):
+        # Solo permitir una configuración
+        return not ConfiguracionPago.objects.exists()
+    
+    def has_delete_permission(self, request, obj=None):
+        # No permitir eliminar la configuración
+        return False
 
 
 class ReservaEmpleadoInline(admin.TabularInline):
@@ -50,26 +81,42 @@ class ServicioAdmin(admin.ModelAdmin):
 
 @admin.register(Reserva)
 class ReservaAdmin(admin.ModelAdmin):
-    list_display = ('id_reserva', 'cliente', 'servicio', 'fecha_reserva', 'fecha_solicitud', 'estado')
-    list_filter = ('estado', 'fecha_reserva', 'fecha_solicitud')
+    list_display = ('id_reserva', 'cliente', 'servicio', 'fecha_reserva', 'estado', 'estado_pago_sena', 'estado_pago_final')
+    list_filter = ('estado', 'estado_pago_sena', 'estado_pago_final', 'fecha_reserva', 'fecha_solicitud')
     search_fields = ('cliente__persona__nombre', 'cliente__persona__apellido', 'servicio__nombre')
     ordering = ('-fecha_solicitud',)
     inlines = [ImagenReservaInline, ReservaEmpleadoInline]
     
     fieldsets = (
         ('Reserva', {
-            'fields': ('cliente', 'servicio', 'fecha_reserva')
+            'fields': ('cliente', 'servicio', 'fecha_reserva', 'direccion')
         }),
         ('Estado', {
             'fields': ('estado', 'observaciones')
         }),
+        ('💰 Pago Inicial (Seña)', {
+            'fields': ('monto_sena', 'estado_pago_sena', 'fecha_pago_sena', 'payment_id_sena'),
+            'classes': ('collapse',),
+            'description': 'Pago inicial requerido para confirmar la solicitud de servicio'
+        }),
+        ('💰 Pago Final', {
+            'fields': ('monto_total', 'monto_final', 'estado_pago_final', 'fecha_pago_final', 'payment_id_final'),
+            'classes': ('collapse',),
+            'description': 'Pago final al aceptar la propuesta de diseño (total - seña)'
+        }),
+        ('⚠️ Estado General', {
+            'fields': ('estado_pago',),
+            'classes': ('collapse',),
+            'description': 'Estado general de pago'
+        }),
         ('Fechas', {
-            'fields': ('fecha_solicitud',),
+            'fields': ('fecha_solicitud', 'fecha_creacion', 'fecha_actualizacion'),
             'classes': ('collapse',)
         }),
     )
     
-    readonly_fields = ('fecha_solicitud',)
+    readonly_fields = ('fecha_solicitud', 'fecha_creacion', 'fecha_actualizacion', 
+                      'monto_final', 'payment_id_sena', 'payment_id_final')
     
     actions = ['confirmar_reservas', 'cancelar_reservas']
     

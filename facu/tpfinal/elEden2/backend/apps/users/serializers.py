@@ -68,28 +68,28 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class CreateEmpleadoSerializer(serializers.Serializer):
-    """Serializer para crear empleados con Persona asociada"""
-    # Datos de autenticación
+    """Serializer para crear empleados - solo datos básicos requeridos"""
+    # Datos de autenticación (REQUERIDOS)
     username = serializers.CharField(required=True, max_length=150)
     email = serializers.EmailField(required=True)
     password = serializers.CharField(required=True, write_only=True, min_length=8)
     first_name = serializers.CharField(required=True, max_length=150)
     last_name = serializers.CharField(required=True, max_length=150)
     
-    # Datos de Persona
+    # Datos de Persona (REQUERIDOS para completar el registro)
     telefono = serializers.CharField(required=True, max_length=20)
     nro_documento = serializers.CharField(required=True, max_length=20)
-    tipo_documento_id = serializers.IntegerField(required=False)
-    genero_id = serializers.IntegerField(required=False)
+    tipo_documento_id = serializers.IntegerField(required=True)
+    genero_id = serializers.IntegerField(required=True)
     
-    # Dirección
-    calle = serializers.CharField(required=True, max_length=200)
-    numero = serializers.CharField(required=True, max_length=10)
+    # Dirección (OPCIONAL)
+    calle = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    numero = serializers.CharField(required=False, allow_blank=True, max_length=10)
     piso = serializers.CharField(required=False, allow_blank=True, max_length=10)
     dpto = serializers.CharField(required=False, allow_blank=True, max_length=10)
-    localidad_id = serializers.IntegerField(required=True)
+    localidad_id = serializers.IntegerField(required=False, allow_null=True)
     
-    # Datos de empleado
+    # Datos de empleado (OPCIONAL)
     cargo = serializers.CharField(required=False, allow_blank=True, max_length=100)
     is_active = serializers.BooleanField(default=True)
     
@@ -106,21 +106,22 @@ class CreateEmpleadoSerializer(serializers.Serializer):
         return value
     
     def validate_nro_documento(self, value):
-        if Persona.objects.filter(nro_documento=value).exists():
+        # Solo validar si se proporciona un número de documento
+        if value and Persona.objects.filter(nro_documento=value).exists():
             raise serializers.ValidationError("Este número de documento ya está registrado.")
         return value
     
     def create(self, validated_data):
-        # Extraer datos
+        # Extraer datos (ahora todos son requeridos excepto dirección)
         telefono = validated_data.pop('telefono')
         nro_documento = validated_data.pop('nro_documento')
-        calle = validated_data.pop('calle')
-        numero = validated_data.pop('numero')
+        calle = validated_data.pop('calle', 'PENDIENTE')
+        numero = validated_data.pop('numero', 'S/N')
         piso = validated_data.pop('piso', '')
         dpto = validated_data.pop('dpto', '')
-        localidad_id = validated_data.pop('localidad_id')
-        tipo_documento_id = validated_data.pop('tipo_documento_id', None)
-        genero_id = validated_data.pop('genero_id', None)
+        localidad_id = validated_data.pop('localidad_id', None)
+        tipo_documento_id = validated_data.pop('tipo_documento_id')
+        genero_id = validated_data.pop('genero_id')
         cargo = validated_data.pop('cargo', '')
         
         # Crear usuario
@@ -137,18 +138,19 @@ class CreateEmpleadoSerializer(serializers.Serializer):
         empleados_group, created = Group.objects.get_or_create(name='Empleados')
         user.groups.add(empleados_group)
         
-        # Obtener o crear valores por defecto para genero y tipo_documento
-        if not genero_id:
-            genero = Genero.objects.filter(genero='Prefiero no decir').first() or Genero.objects.first()
-        else:
-            genero = Genero.objects.get(id_genero=genero_id)
-            
-        if not tipo_documento_id:
-            tipo_documento = TipoDocumento.objects.filter(tipo='DNI').first() or TipoDocumento.objects.first()
-        else:
-            tipo_documento = TipoDocumento.objects.get(id_tipo_documento=tipo_documento_id)
+        # Obtener genero y tipo_documento (ahora son requeridos)
+        genero = Genero.objects.get(id_genero=genero_id)
+        tipo_documento = TipoDocumento.objects.get(id_tipo_documento=tipo_documento_id)
         
-        # Crear Persona
+        # Obtener localidad por defecto si no se proporciona
+        if not localidad_id:
+            localidad = Localidad.objects.first()
+            if not localidad:
+                raise serializers.ValidationError("No hay localidades disponibles en el sistema.")
+        else:
+            localidad = Localidad.objects.get(id_localidad=localidad_id)
+        
+        # Crear Persona con datos completos
         persona = Persona.objects.create(
             nombre=user.first_name,
             apellido=user.last_name,
@@ -159,7 +161,7 @@ class CreateEmpleadoSerializer(serializers.Serializer):
             numero=numero,
             piso=piso,
             dpto=dpto,
-            localidad_id=localidad_id,
+            localidad=localidad,
             genero=genero,
             tipo_documento=tipo_documento
         )
@@ -167,7 +169,7 @@ class CreateEmpleadoSerializer(serializers.Serializer):
         # Crear Empleado
         Empleado.objects.create(
             persona=persona,
-            cargo=cargo,
+            cargo=cargo or 'Sin especificar',
             activo=True
         )
         

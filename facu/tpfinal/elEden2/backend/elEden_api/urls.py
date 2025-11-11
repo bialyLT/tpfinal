@@ -20,6 +20,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenRefreshView, TokenBlacklistView
 from core.views import CustomTokenObtainPairView
+from apps.users.google_auth import google_login, google_callback
 
 urlpatterns = [
     # Admin
@@ -30,6 +31,10 @@ urlpatterns = [
     path('api/v1/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/v1/token/blacklist/', TokenBlacklistView.as_view(), name='token_blacklist'),
     
+    # Google OAuth
+    path('api/v1/auth/google/', google_login, name='google_login'),
+    path('api/v1/auth/google/callback/', google_callback, name='google_callback'),
+    
     # API
     path('api/v1/', include('core.urls')),
     path('api/v1/', include('apps.productos.urls')),
@@ -37,6 +42,7 @@ urlpatterns = [
     path('api/v1/', include('apps.servicios.urls')),
     path('api/v1/', include('apps.encuestas.urls')),
     path('api/v1/', include('apps.ventas.urls')),
+    path('api/v1/mercadopago/', include('apps.mercadopago.urls')),  # Nueva app de MercadoPago
 ]
 
 # Serve media files in development

@@ -119,6 +119,16 @@ export const serviciosService = {
     return response.data;
   },
 
+  // Solicitar servicio (crear reserva con FormData para imágenes)
+  solicitarServicio: async (formData) => {
+    const response = await api.post('/servicios/reservas/', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
   getReservas: async (params = {}) => {
     const response = await api.get('/servicios/reservas/', { params });
     return response.data;
@@ -153,6 +163,40 @@ export const serviciosService = {
     const response = await api.get(`/servicios/reservas/${id}/`);
     return response.data;
   },
+  
+  // MercadoPago - Crear preferencias
+  crearPreferenciaSena: async (reservaId) => {
+    const response = await api.post(`/mercadopago/reservas/${reservaId}/crear-pago-sena/`);
+    return response.data;
+  },
+  
+  crearPreferenciaFinal: async (reservaId) => {
+    const response = await api.post(`/mercadopago/reservas/${reservaId}/crear-pago-final/`);
+    return response.data;
+  },
+  
+  // MercadoPago - Confirmar pagos
+  confirmarPagoSena: async (reservaId, paymentData) => {
+    const response = await api.post(`/mercadopago/reservas/${reservaId}/confirmar-pago-sena/`, paymentData);
+    return response.data;
+  },
+  
+  confirmarPagoFinal: async (reservaId, paymentData) => {
+    const response = await api.post(`/mercadopago/reservas/${reservaId}/confirmar-pago-final/`, paymentData);
+    return response.data;
+  },
+
+  // ❌ DEPRECADO - Ya no se usa, ahora usamos solicitarServicio + crearPreferenciaSena
+  // crearPreferenciaPrereserva: async (data) => {
+  //   const response = await api.post('/mercadopago/crear-preferencia-prereserva/', data);
+  //   return response.data;
+  // },
+
+  // ❌ DEPRECADO - Ya no se usa, confirmación se hace con confirmarPagoSena
+  // crearReservaConPago: async (data) => {
+  //   const response = await api.post('/mercadopago/crear-reserva-con-pago/', data);
+  //   return response.data;
+  // },
 
   updateServicio: async (id, data) => {
     const response = await api.put(`/servicios/servicios/${id}/`, data);

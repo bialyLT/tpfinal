@@ -1,0 +1,69 @@
+# ============================================
+# ARCHIVOS DE CONFIGURACIÓN Y SECRETOS
+# ============================================
+# Variables de entorno (NUNCA subir a Git)
+.env
+.env.local
+.env.*.local
+
+# Archivos Docker temporales
+.env.docker
+
+# ============================================
+# PYTHON / DJANGO
+# ============================================
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Base de datos local
+*.sqlite3
+*.db
+
+# ============================================
+# NODE / REACT
+# ============================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ============================================
+# DOCKER
+# ============================================
+# No ignorar docker-compose.yml (debe estar en Git)
+# No ignorar Dockerfiles (deben estar en Git)
+
+# ============================================
+# IDEs y EDITORES
+# ============================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ============================================
+# LOGS
+# ============================================
+*.log
+logs/
+
+# ============================================
+# ARCHIVOS TEMPORALES
+# ============================================
+*.tmp
+*.bak
+*.cache

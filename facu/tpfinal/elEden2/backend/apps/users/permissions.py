@@ -130,11 +130,12 @@ class PuedeGestionarUsuarios(permissions.BasePermission):
         if isinstance(request.user, AnonymousUser):
             return False
         
-        try:
-            perfil = request.user.perfil
-            return perfil.tipo_usuario in ['administrador']
-        except:
-            return request.user.is_staff or request.user.is_superuser
+        # Solo verificar si es superuser
+        return request.user.is_superuser
+
+
+# Alias para compatibilidad
+IsAdmin = PuedeGestionarUsuarios
 
 
 class PuedeVerPagos(permissions.BasePermission):

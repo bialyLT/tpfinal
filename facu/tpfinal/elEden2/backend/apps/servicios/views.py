@@ -1,25 +1,32 @@
 ﻿from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.response import Response
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction
 from django.utils import timezone
+from decimal import Decimal
+import logging
 
-from .models import Servicio, Reserva, Diseno, DisenoProducto, ImagenDiseno, ImagenReserva, ReservaEmpleado
+from .models import Servicio, Reserva, Diseno, DisenoProducto, ImagenDiseno, ImagenReserva, ReservaEmpleado, ConfiguracionPago
 from .serializers import (
     ServicioSerializer, ReservaSerializer,
     DisenoSerializer, DisenoDetalleSerializer, CrearDisenoSerializer,
     DisenoProductoSerializer, ImagenDisenoSerializer
 )
+from .pagination import StandardResultsSetPagination, LargeResultsSetPagination, SmallResultsSetPagination
 from apps.users.models import Cliente, Empleado
 from apps.productos.models import Producto
+
+logger = logging.getLogger(__name__)
 
 
 class ServicioViewSet(viewsets.ModelViewSet):
     queryset = Servicio.objects.all()
     serializer_class = ServicioSerializer
+    pagination_class = StandardResultsSetPagination  # 10 items por página
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['activo']
     search_fields = ['nombre', 'descripcion']
@@ -29,6 +36,7 @@ class ServicioViewSet(viewsets.ModelViewSet):
 class ReservaViewSet(viewsets.ModelViewSet):
     queryset = Reserva.objects.select_related('cliente__persona', 'servicio').all()
     serializer_class = ReservaSerializer
+    pagination_class = SmallResultsSetPagination  # 5 items por página (para "Mis Reservas")
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['estado', 'servicio']
     search_fields = ['cliente__persona__nombre', 'cliente__persona__apellido', 'servicio__nombre']
@@ -38,29 +46,50 @@ class ReservaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """
         Filtrar reservas según el tipo de usuario:
-        - Clientes: solo ven sus propias reservas
-        - Empleados/Staff: ven todas las reservas
+        - Clientes: solo ven sus propias reservas (todos los estados)
+        - Empleados/Staff: ven todas las reservas EXCEPTO las que no han sido pagadas
+          (excluye: pendiente, pendiente_pago_sena)
         """
         user = self.request.user
         
-        # Si es staff o empleado, mostrar todas las reservas
+        # Si es staff, mostrar solo reservas pagadas (excluir pendiente y pendiente_pago_sena)
         if user.is_staff:
-            return Reserva.objects.select_related('cliente__persona', 'servicio').all()
+            return Reserva.objects.select_related('cliente__persona', 'servicio').exclude(
+                estado__in=['pendiente', 'pendiente_pago_sena']
+            )
         
         # Verificar si es empleado
         try:
             Empleado.objects.get(persona__email=user.email)
-            return Reserva.objects.select_related('cliente__persona', 'servicio').all()
+            # Empleados también solo ven reservas pagadas
+            return Reserva.objects.select_related('cliente__persona', 'servicio').exclude(
+                estado__in=['pendiente', 'pendiente_pago_sena']
+            )
         except Empleado.DoesNotExist:
             pass
         
-        # Si es cliente, filtrar solo sus reservas
+        # Si es cliente, filtrar solo sus reservas (sin restricción de estado)
         try:
             cliente = Cliente.objects.get(persona__email=user.email)
             return Reserva.objects.select_related('cliente__persona', 'servicio').filter(cliente=cliente)
         except Cliente.DoesNotExist:
             # Si no es cliente ni empleado, no mostrar nada
             return Reserva.objects.none()
+
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Sobrescribir retrieve para aplicar los filtros de permisos correctamente
+        """
+        try:
+            # Usar get_queryset() para aplicar los filtros de permisos
+            reserva = self.get_queryset().get(pk=kwargs['pk'])
+            serializer = self.get_serializer(reserva)
+            return Response(serializer.data)
+        except Reserva.DoesNotExist:
+            return Response(
+                {'error': 'Reserva no encontrada o no tienes permisos para verla'},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
     def create(self, request, *args, **kwargs):
         """
@@ -131,6 +160,10 @@ class ReservaViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         reserva = serializer.save()
         
+        # Asignar seña fija (no requiere monto_total en este punto)
+        reserva.asignar_sena()
+        reserva.save()
+        
         # Guardar imágenes del jardín con sus descripciones
         for index, imagen in enumerate(imagenes_jardin):
             descripcion = descripciones_jardin[index] if index < len(descripciones_jardin) else ''
@@ -151,8 +184,289 @@ class ReservaViewSet(viewsets.ModelViewSet):
                 descripcion=descripcion
             )
         
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        # Preparar respuesta con información de pago
+        response_data = dict(serializer.data)
+        response_data['pago_info'] = {
+            'monto_sena': str(reserva.monto_sena),
+            'estado_pago_sena': reserva.estado_pago_sena,
+            'mensaje': f"Reserva creada. Monto de seña: ${reserva.monto_sena}"
+        }
+        
+        headers = self.get_success_headers(response_data)
+        return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
+    
+    @action(detail=True, methods=['post'], url_path='confirmar-pago-sena')
+    def confirmar_pago_sena(self, request, pk=None):
+        """
+        Endpoint para confirmar el pago de seña desde el frontend.
+        Recibe el payment_id de MercadoPago y actualiza el estado de la reserva.
+        """
+        from apps.emails.services import EmailService
+        
+        reserva = self.get_object()
+        payment_id = request.data.get('payment_id')
+        
+        logger.info(f"🔵 Confirmar pago seña llamado para reserva {reserva.id_reserva}")
+        logger.info(f"💳 Payment ID recibido: {payment_id}")
+        
+        if not payment_id:
+            return Response(
+                {'error': 'payment_id es requerido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Actualizar estado de pago
+        reserva.payment_id_sena = payment_id
+        reserva.estado_pago_sena = 'sena_pagada'
+        reserva.fecha_pago_sena = timezone.now()
+        reserva.save()
+        
+        logger.info(f"✅ Pago de seña confirmado para reserva {reserva.id_reserva}: payment_id={payment_id}")
+        
+        # Enviar email de confirmación al cliente
+        try:
+            cliente = reserva.cliente
+            logger.info(f"📧 Intentando enviar email a: {cliente.persona.email}")
+            logger.info(f"👤 Cliente: {cliente.persona.nombre} {cliente.persona.apellido}")
+            
+            EmailService.send_payment_confirmation_email(
+                user_email=cliente.persona.email,
+                user_name=f"{cliente.persona.nombre} {cliente.persona.apellido}",
+                reserva_id=reserva.id_reserva,
+                servicio_nombre=reserva.servicio.nombre,
+                monto=reserva.monto_sena,
+                payment_id=payment_id,
+                tipo_pago='seña'
+            )
+            logger.info(f"✅ Email de confirmación enviado exitosamente a {cliente.persona.email}")
+        except Exception as e:
+            # No fallar el endpoint si el email falla
+            logger.error(f"❌ Error al enviar email de confirmación: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+        
+        return Response({
+            'success': True,
+            'mensaje': 'Pago de seña confirmado exitosamente',
+            'reserva': self.get_serializer(reserva).data
+        }, status=status.HTTP_200_OK)
+    
+    @action(detail=True, methods=['post'], url_path='confirmar-pago-final')
+    def confirmar_pago_final(self, request, pk=None):
+        """
+        Endpoint para confirmar el pago final desde el frontend.
+        Recibe el payment_id de MercadoPago y actualiza el estado de la reserva.
+        """
+        from apps.emails.services import EmailService
+        
+        reserva = self.get_object()
+        payment_id = request.data.get('payment_id')
+        
+        if not payment_id:
+            return Response(
+                {'error': 'payment_id es requerido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Actualizar estado de pago
+        reserva.payment_id_final = payment_id
+        reserva.estado_pago_final = 'pagado'
+        reserva.fecha_pago_final = timezone.now()
+        reserva.save()
+        
+        logger.info(f"Pago final confirmado para reserva {reserva.id_reserva}: payment_id={payment_id}")
+        
+        # Enviar email de confirmación al cliente
+        try:
+            cliente = reserva.cliente
+            EmailService.send_payment_confirmation_email(
+                user_email=cliente.persona.email,
+                user_name=f"{cliente.persona.nombre} {cliente.persona.apellido}",
+                reserva_id=reserva.id_reserva,
+                servicio_nombre=reserva.servicio.nombre,
+                monto=reserva.monto_final,
+                payment_id=payment_id,
+                tipo_pago='final'
+            )
+            logger.info(f"Email de confirmación de pago final enviado a {cliente.persona.email}")
+        except Exception as e:
+            # No fallar el endpoint si el email falla
+            logger.error(f"Error al enviar email de confirmación: {str(e)}")
+        
+        return Response({
+            'success': True,
+            'mensaje': 'Pago final confirmado exitosamente',
+            'reserva': self.get_serializer(reserva).data
+        }, status=status.HTTP_200_OK)
+    
+    @action(detail=True, methods=['post'], url_path='crear-preferencia-sena')
+    def crear_preferencia_sena(self, request, pk=None):
+        """
+        Crea una preferencia de MercadoPago para el pago de seña.
+        El frontend usará esta preferencia para redirigir al checkout de MP.
+        """
+        try:
+            import mercadopago
+        except ImportError:
+            logger.error("MercadoPago SDK no instalado: mercadopago")
+            return Response(
+                {'error': 'MercadoPago SDK no instalado en el servidor. Instale la librería \"mercadopago\".'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        from django.conf import settings
+        
+        reserva = self.get_object()
+        
+        # Validar que no haya sido pagada ya
+        if reserva.estado_pago_sena == 'sena_pagada':
+            return Response(
+                {'error': 'Esta seña ya ha sido pagada'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            sdk = mercadopago.SDK(settings.MERCADOPAGO_ACCESS_TOKEN)
+            
+            preference_data = {
+                "items": [
+                    {
+                        "id": f"SENA-{reserva.id_reserva}",
+                        "title": f"Seña - Reserva #{reserva.id_reserva} - {reserva.servicio.nombre}",
+                        "description": f"Pago de seña para reserva de {reserva.servicio.nombre}",
+                        "quantity": 1,
+                        "unit_price": float(reserva.monto_sena),
+                        "currency_id": "ARS",
+                        "category_id": "services"
+                    }
+                ],
+                "payer": {
+                    "name": reserva.cliente.persona.nombre,
+                    "surname": reserva.cliente.persona.apellido,
+                    "email": reserva.cliente.persona.email
+                },
+                "back_urls": {
+                    "success": f"{settings.FRONTEND_URL}/reservas/pago-exitoso?tipo=sena&reserva_id={reserva.id_reserva}",
+                    "failure": f"{settings.FRONTEND_URL}/mis-reservas",
+                    "pending": f"{settings.FRONTEND_URL}/mis-reservas"
+                },
+                "external_reference": f"SENA-{reserva.id_reserva}",
+                "statement_descriptor": "El Eden",
+                "payment_methods": {
+                    "excluded_payment_types": [],
+                    "installments": 12
+                }
+            }
+            
+            logger.info(f"🔵 Creando preferencia de MercadoPago para reserva {reserva.id_reserva}")
+            logger.info(f"💰 Monto: ${reserva.monto_sena}")
+            logger.info(f"👤 Cliente: {reserva.cliente.persona.email}")
+            
+            preference_response = sdk.preference().create(preference_data)
+            
+            logger.info(f"📦 Respuesta completa de MP: {preference_response}")
+            
+            # La respuesta puede venir en diferentes formatos según la versión del SDK
+            if "response" in preference_response:
+                preference = preference_response["response"]
+            else:
+                preference = preference_response
+            
+            logger.info(f"✅ Preferencia creada: {preference.get('id')}")
+            logger.info(f"🔗 Init point: {preference.get('init_point')}")
+            logger.info(f"🔗 Sandbox: {preference.get('sandbox_init_point')}")
+            
+            return Response({
+                "preference_id": preference.get("id"),
+                "init_point": preference.get("init_point"),
+                "sandbox_init_point": preference.get("sandbox_init_point"),
+                "monto": str(reserva.monto_sena)
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error al crear preferencia de MercadoPago: {str(e)}")
+        """
+        Crea una preferencia de MercadoPago para el pago final.
+        """
+        try:
+            import mercadopago
+        except ImportError:
+            logger.error("MercadoPago SDK no instalado: mercadopago")
+            return Response(
+                {'error': 'MercadoPago SDK no instalado en el servidor. Instale la librería \"mercadopago\".'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        from django.conf import settings
+    @action(detail=True, methods=['post'], url_path='crear-preferencia-final')
+    def crear_preferencia_final(self, request, pk=None):
+        """
+        Crea una preferencia de MercadoPago para el pago final.
+        """
+        import mercadopago
+        from django.conf import settings
+        
+        reserva = self.get_object()
+        
+        # Validar que la seña haya sido pagada
+        if reserva.estado_pago_sena != 'sena_pagada':
+            return Response(
+                {'error': 'Primero debe pagarse la seña'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validar que no haya sido pagado ya
+        if reserva.estado_pago_final == 'pagado':
+            return Response(
+                {'error': 'Este pago final ya ha sido completado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validar que exista un monto final
+        if reserva.monto_final <= 0:
+            return Response(
+                {'error': 'No hay monto final a pagar'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            sdk = mercadopago.SDK(settings.MERCADOPAGO_ACCESS_TOKEN)
+            
+            preference_data = {
+                "items": [
+                    {
+                        "title": f"Pago Final - Reserva #{reserva.id_reserva} - {reserva.servicio.nombre}",
+                        "quantity": 1,
+                        "unit_price": float(reserva.monto_final),
+                        "currency_id": "ARS"
+                    }
+                ],
+                "back_urls": {
+                    "success": f"{settings.FRONTEND_URL}/reservas/pago-exitoso?tipo=final&reserva_id={reserva.id_reserva}",
+                    "failure": f"{settings.FRONTEND_URL}/mis-reservas",
+                    "pending": f"{settings.FRONTEND_URL}/mis-reservas"
+                },
+                "external_reference": f"FINAL-{reserva.id_reserva}",
+                "statement_descriptor": "El Eden - Paisajismo",
+                "notification_url": f"{settings.BACKEND_URL}/api/v1/servicios/mercadopago/notificacion/",
+            }
+            
+            preference_response = sdk.preference().create(preference_data)
+            preference = preference_response["response"]
+            
+            logger.info(f"Preferencia de pago final creada para reserva {reserva.id_reserva}: {preference['id']}")
+            
+            return Response({
+                "preference_id": preference["id"],
+                "init_point": preference["init_point"],
+                "sandbox_init_point": preference.get("sandbox_init_point"),
+                "monto": str(reserva.monto_final)
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error al crear preferencia de pago final: {str(e)}")
+            return Response(
+                {'error': 'No se pudo crear la preferencia de pago', 'detalle': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     @action(detail=False, methods=['get'], url_path='empleados-disponibles')
     def empleados_disponibles(self, request):
@@ -327,14 +641,94 @@ class ReservaViewSet(viewsets.ModelViewSet):
             'message': 'Servicio finalizado exitosamente',
             'reserva': serializer.data
         })
+    
+    @action(detail=True, methods=['get'], url_path='comprobante-pago')
+    def comprobante_pago(self, request, pk=None):
+        """
+        Obtener comprobante de pago de una reserva
+        Query params: tipo (sena|final)
+        """
+        reserva = self.get_object()
+        tipo = request.query_params.get('tipo', 'sena')
+        
+        # Validar que el usuario sea el dueño de la reserva
+        try:
+            cliente = Cliente.objects.get(persona__email=request.user.email)
+            if reserva.cliente != cliente and not request.user.is_staff:
+                return Response(
+                    {'error': 'No tienes permiso para ver este comprobante'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        except Cliente.DoesNotExist:
+            if not request.user.is_staff:
+                return Response(
+                    {'error': 'Usuario no autorizado'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        # Preparar datos del comprobante según el tipo
+        if tipo == 'sena':
+            if not reserva.payment_id_sena:
+                return Response(
+                    {'error': 'No hay pago de seña registrado para esta reserva'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            comprobante = {
+                'reserva_id': reserva.id_reserva,
+                'tipo_pago': 'sena',
+                'tipo_pago_display': 'Seña Inicial',
+                'monto': str(reserva.monto_sena),
+                'estado': reserva.estado_pago_sena,
+                'fecha_pago': reserva.fecha_pago_sena,
+                'payment_id': reserva.payment_id_sena,
+            }
+        elif tipo == 'final':
+            if not reserva.payment_id_final:
+                return Response(
+                    {'error': 'No hay pago final registrado para esta reserva'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            comprobante = {
+                'reserva_id': reserva.id_reserva,
+                'tipo_pago': 'final',
+                'tipo_pago_display': 'Pago Final',
+                'monto': str(reserva.monto_final),
+                'estado': reserva.estado_pago_final,
+                'fecha_pago': reserva.fecha_pago_final,
+                'payment_id': reserva.payment_id_final,
+            }
+        else:
+            return Response(
+                {'error': 'Tipo de pago inválido. Use: sena o final'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Agregar información común
+        comprobante.update({
+            'cliente': {
+                'nombre': f"{reserva.cliente.persona.nombre} {reserva.cliente.persona.apellido}",
+                'email': reserva.cliente.persona.email
+            },
+            'servicio': {
+                'nombre': reserva.servicio.nombre,
+                'descripcion': reserva.servicio.descripcion
+            },
+            'fecha_solicitud': reserva.fecha_solicitud,
+            'fecha_reserva': reserva.fecha_reserva
+        })
+        
+        return Response(comprobante)
 
 
 class DisenoViewSet(viewsets.ModelViewSet):
     """ViewSet para gestión de diseños/propuestas"""
     queryset = Diseno.objects.select_related('servicio', 'disenador', 'disenador__persona', 'reserva', 'reserva__cliente__persona').prefetch_related('productos', 'imagenes').all()
+    pagination_class = StandardResultsSetPagination  # 10 items por página
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['estado', 'servicio', 'disenador']
-    search_fields = ['titulo', 'descripcion']
+    search_fields = ['titulo', 'descripcion', 'reserva__cliente__persona__nombre', 'reserva__cliente__persona__apellido']
     ordering = ['-fecha_creacion']
     parser_classes = [JSONParser, MultiPartParser, FormParser]
     
@@ -817,12 +1211,23 @@ class DisenoViewSet(viewsets.ModelViewSet):
             mensaje = 'Diseño aceptado exitosamente. Stock descontado.'
             empleados_asignados = []
         
+        # Informar sobre el pago final
+        if diseno.reserva:
+            mensaje += f' Procede al pago final de ${diseno.reserva.monto_final} para confirmar la reserva.'
+        
         serializer = self.get_serializer(diseno)
-        return Response({
+        response_data = {
             'message': mensaje,
             'diseno': serializer.data,
-            'empleados_asignados': empleados_asignados
-        }, status=status.HTTP_200_OK)
+            'empleados_asignados': empleados_asignados,
+            'pago_info': {
+                'monto_final': str(diseno.reserva.monto_final) if diseno.reserva else '0',
+                'monto_sena': str(diseno.reserva.monto_sena) if diseno.reserva else '0',
+                'estado_pago_sena': diseno.reserva.estado_pago_sena if diseno.reserva else 'pendiente'
+            }
+        }
+        
+        return Response(response_data, status=status.HTTP_200_OK)
     
     @action(detail=True, methods=['post'])
     @transaction.atomic

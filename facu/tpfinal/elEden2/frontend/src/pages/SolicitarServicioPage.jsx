@@ -225,36 +225,57 @@ const SolicitarServicioPage = () => {
         observaciones += `Notas adicionales: ${formData.notas_adicionales}`;
       }
 
-      // Crear FormData para enviar archivos
+      console.log('🔵 Iniciando proceso de pago...');
+
+      // Función auxiliar para convertir File a base64
+      const convertToBase64 = (file) => {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = (error) => reject(error);
+        });
+      };
+
+      // Crear FormData con TODOS los datos de la reserva (incluyendo imágenes)
       const formDataToSend = new FormData();
       formDataToSend.append('servicio', parseInt(formData.servicio));
-      formDataToSend.append('fecha_reserva', formData.fecha_preferida);
-      formDataToSend.append('observaciones', observaciones);
-      formDataToSend.append('estado', 'pendiente');
-      formDataToSend.append('direccion', formData.direccion_servicio);
-
-      // Agregar imágenes del jardín
-      formData.imagenes_jardin.forEach((imagen, index) => {
-        formDataToSend.append('imagenes_jardin', imagen.file);
-      });
-
-      // Agregar descripciones de imágenes del jardín como JSON
-      const descripcionesJardin = formData.imagenes_jardin.map(img => img.descripcion || '');
-      formDataToSend.append('descripciones_jardin', JSON.stringify(descripcionesJardin));
-
-      // Agregar imágenes de ideas
-      formData.imagenes_ideas.forEach((imagen, index) => {
-        formDataToSend.append('imagenes_ideas', imagen.file);
-      });
-
-      // Agregar descripciones de imágenes de ideas como JSON
-      const descripcionesIdeas = formData.imagenes_ideas.map(img => img.descripcion || '');
-      formDataToSend.append('descripciones_ideas', JSON.stringify(descripcionesIdeas));
-
-      await serviciosService.createReserva(formDataToSend);
-      success('Solicitud enviada correctamente. Nos pondremos en contacto contigo pronto.');
+      formDataToSend.append('descripcion', formData.descripcion || `Solicitud de ${servicioSeleccionado?.nombre || 'servicio'}`);
+      formDataToSend.append('fecha_preferida', formData.fecha_preferida);
+      formDataToSend.append('direccion_servicio', formData.direccion_servicio);
+      formDataToSend.append('notas_adicionales', formData.notas_adicionales || '');
       
-      // Limpiar URLs de preview para evitar memory leaks
+      // Agregar imágenes del jardín
+      formData.imagenes_jardin.forEach((img) => {
+        formDataToSend.append('imagenes_jardin[]', img.file);
+      });
+      
+      // Agregar imágenes de ideas
+      formData.imagenes_ideas.forEach((img) => {
+        formDataToSend.append('imagenes_ideas[]', img.file);
+      });
+      
+      success('Creando reserva...');
+      
+      // PASO 1: Crear la reserva (sin pago aún)
+      console.log('� Creando reserva...');
+      const reservaResponse = await serviciosService.solicitarServicio(formDataToSend);
+      
+      console.log('✅ Reserva creada:', reservaResponse);
+      const reservaId = reservaResponse.reserva?.id_reserva || reservaResponse.id_reserva;
+      console.log('📋 Reserva ID:', reservaId);
+      
+      if (!reservaId) {
+        throw new Error('No se recibió el ID de la reserva');
+      }
+      
+      // PASO 2: Crear la preferencia de pago usando el MISMO endpoint que funciona en el modal
+      console.log('💳 Creando preferencia de pago para la seña...');
+      const preferencia = await serviciosService.crearPreferenciaSena(reservaId);
+      
+      console.log('✅ Preferencia de pago creada:', preferencia);
+      
+      // Limpiar URLs de preview
       formData.imagenes_jardin.forEach(img => {
         if (img.preview) URL.revokeObjectURL(img.preview);
       });
@@ -262,19 +283,20 @@ const SolicitarServicioPage = () => {
         if (img.preview) URL.revokeObjectURL(img.preview);
       });
       
-      // Reset form (manteniendo la dirección del cliente)
-      setFormData({
-        servicio: '',
-        descripcion: '',
-        fecha_preferida: '',
-        direccion_servicio: user?.cliente?.direccion_completa || '',
-        notas_adicionales: '',
-        imagenes_jardin: [],
-        imagenes_ideas: []
-      });
-      setCurrentStep(1);
+      success('Redirigiendo a la página de pago...');
+      
+      // Redirigir a MercadoPago en la misma ventana
+      setTimeout(() => {
+        const redirectUrl = preferencia.sandbox_init_point || preferencia.init_point;
+        console.log('🌐 Redirigiendo a MercadoPago:', redirectUrl);
+        
+        // Redirigir en la misma ventana - MercadoPago devolverá a /reservas/pago-exitoso
+        window.location.href = redirectUrl;
+      }, 1000);
+      
     } catch (err) {
-      handleApiError(err, 'Error al enviar la solicitud');
+      console.error('❌ Error al crear reserva y pago:', err);
+      handleApiError(err, 'No se pudo crear la reserva o generar el link de pago');
     } finally {
       setSubmitting(false);
     }

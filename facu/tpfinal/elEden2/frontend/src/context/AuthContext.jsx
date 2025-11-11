@@ -56,17 +56,24 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const checkAuthStatus = async () => {
+    console.log('🔍 Verificando estado de autenticación...');
     const token = localStorage.getItem('accessToken');
+    console.log('🔑 Token encontrado:', token ? 'SÍ (len: ' + token.length + ')' : 'NO');
+    
     if (token) {
       try {
+        console.log('📡 Obteniendo usuario actual...');
         const user = await authService.getCurrentUser();
+        console.log('✅ Usuario autenticado:', user.email);
         dispatch({ type: 'LOGIN_SUCCESS', payload: user });
       } catch (error) {
+        console.error('❌ Error al verificar autenticación:', error);
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         dispatch({ type: 'LOGOUT' });
       }
     } else {
+      console.log('⚠️ No hay token, usuario no autenticado');
       dispatch({ type: 'SET_LOADING', payload: false });
     }
   };

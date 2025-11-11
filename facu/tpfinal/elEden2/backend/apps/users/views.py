@@ -6,6 +6,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.contrib.auth.models import User, Group
+from apps.emails import EmailService
+import logging
 
 from .models import Genero, TipoDocumento, Localidad, Persona, Cliente, Empleado, Proveedor
 from .serializers import (
@@ -13,6 +15,8 @@ from .serializers import (
     PersonaSerializer, ClienteSerializer, EmpleadoSerializer, ProveedorSerializer,
     UserSerializer, CreateEmpleadoSerializer, UpdateEmpleadoSerializer
 )
+
+logger = logging.getLogger(__name__)
 
 
 class CurrentUserView(APIView):
@@ -35,11 +39,19 @@ class CurrentUserView(APIView):
         empleado_data = None
         persona_data = None
         
-        # Intentar obtener Cliente
-        try:
-            cliente = Cliente.objects.select_related('persona', 'persona__localidad', 'persona__genero', 'persona__tipo_documento').get(persona__email=user.email)
-            persona = cliente.persona
-            
+        # Intentar obtener la Persona asociada al User
+        persona = None
+        if hasattr(user, 'persona'):
+            persona = user.persona
+        
+        # Si no tiene relación directa, buscar por email (usuarios antiguos)
+        if not persona:
+            try:
+                persona = Persona.objects.select_related('localidad', 'genero', 'tipo_documento').get(email=user.email)
+            except Persona.DoesNotExist:
+                pass
+        
+        if persona:
             # Construir dirección completa
             direccion_partes = [persona.calle, persona.numero]
             if persona.piso:
@@ -50,13 +62,6 @@ class CurrentUserView(APIView):
             direccion_completa = ", ".join(direccion_partes)
             if persona.localidad:
                 direccion_completa += f", {persona.localidad.nombre_localidad}, {persona.localidad.nombre_provincia}"
-            
-            cliente_data = {
-                'id_cliente': cliente.id_cliente,
-                'direccion_completa': direccion_completa,
-                'telefono': persona.telefono,
-                'nombre_completo': f"{persona.nombre} {persona.apellido}"
-            }
             
             # Datos completos de Persona para edición
             persona_data = {
@@ -80,44 +85,25 @@ class CurrentUserView(APIView):
                     'nombre': persona.localidad.nombre_localidad
                 } if persona.localidad else None
             }
-        except Cliente.DoesNotExist:
-            # Si no es cliente, intentar obtener Empleado
-            try:
-                empleado = Empleado.objects.select_related('persona', 'persona__localidad', 'persona__genero', 'persona__tipo_documento').get(persona__email=user.email)
-                persona = empleado.persona
-                
-                empleado_data = {
-                    'id_empleado': empleado.id_empleado,
-                    'cargo': empleado.cargo or '',
-                    'fecha_contratacion': empleado.fecha_contratacion,
+            
+            # Verificar si es Cliente
+            if hasattr(persona, 'cliente'):
+                cliente_data = {
+                    'id_cliente': persona.cliente.id_cliente,
+                    'direccion_completa': direccion_completa,
                     'telefono': persona.telefono,
                     'nombre_completo': f"{persona.nombre} {persona.apellido}"
                 }
-                
-                # Datos completos de Persona para edición
-                persona_data = {
-                    'id_persona': persona.id_persona,
+            
+            # Verificar si es Empleado
+            elif hasattr(persona, 'empleado'):
+                empleado_data = {
+                    'id_empleado': persona.empleado.id_empleado,
+                    'cargo': persona.empleado.cargo or '',
+                    'fecha_contratacion': persona.empleado.fecha_contratacion,
                     'telefono': persona.telefono,
-                    'nro_documento': persona.nro_documento,
-                    'calle': persona.calle,
-                    'numero': persona.numero,
-                    'piso': persona.piso or '',
-                    'dpto': persona.dpto or '',
-                    'genero': {
-                        'id': persona.genero.id_genero,
-                        'nombre': persona.genero.genero
-                    } if persona.genero else None,
-                    'tipo_documento': {
-                        'id': persona.tipo_documento.id_tipo_documento,
-                        'nombre': persona.tipo_documento.tipo
-                    } if persona.tipo_documento else None,
-                    'localidad': {
-                        'id': persona.localidad.id_localidad,
-                        'nombre': persona.localidad.nombre_localidad
-                    } if persona.localidad else None
+                    'nombre_completo': f"{persona.nombre} {persona.apellido}"
                 }
-            except Empleado.DoesNotExist:
-                pass
         
         return Response({
             'id': user.id,
@@ -287,6 +273,38 @@ class EmpleadoViewSet(viewsets.ModelViewSet):
         elif self.action in ['update', 'partial_update']:
             return UpdateEmpleadoSerializer
         return UserSerializer
+    
+    def create(self, request, *args, **kwargs):
+        """Crear empleado y enviar email de bienvenida"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        # Guardar la contraseña antes de crear (el serializer la hashea)
+        password_plain = request.data.get('password')
+        
+        # Crear el empleado
+        user = serializer.save()
+        
+        # Enviar email de bienvenida con credenciales
+        try:
+            user_name = f"{user.first_name} {user.last_name}".strip()
+            EmailService.send_employee_welcome_email(
+                user_email=user.email,
+                user_name=user_name,
+                username=user.email,  # Usamos el email para login
+                password=password_plain
+            )
+            logger.info(f"Email de bienvenida de empleado enviado a {user.email}")
+        except Exception as e:
+            # No fallar la creación si el email falla
+            logger.error(f"Error al enviar email de bienvenida a empleado: {str(e)}")
+        
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            UserSerializer(user).data,
+            status=status.HTTP_201_CREATED,
+            headers=headers
+        )
     
     def destroy(self, request, *args, **kwargs):
         """No permitir eliminar, solo desactivar"""

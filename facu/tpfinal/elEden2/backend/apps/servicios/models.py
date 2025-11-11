@@ -1,6 +1,63 @@
 ﻿from django.db import models
 from django.core.validators import MinValueValidator
 from django.utils import timezone
+from decimal import Decimal
+
+
+class ConfiguracionPago(models.Model):
+    """Configuración del monto de seña para reservas"""
+    monto_sena = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('50.00'),
+        validators=[MinValueValidator(Decimal('0'))],
+        help_text='Monto de seña requerido para realizar una reserva'
+    )
+    porcentaje_sena = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('0'),
+        validators=[MinValueValidator(Decimal('0'))],
+        help_text='Porcentaje de seña sobre el total (0 para usar monto fijo)'
+    )
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+    actualizado_por = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='configuraciones_pago'
+    )
+    
+    class Meta:
+        verbose_name = 'Configuración de Pago'
+        verbose_name_plural = 'Configuraciones de Pago'
+        db_table = 'configuracion_pago'
+    
+    def __str__(self):
+        if self.porcentaje_sena > 0:
+            return f"Seña: {self.porcentaje_sena}% del total"
+        return f"Seña: ${self.monto_sena}"
+    
+    @classmethod
+    def obtener_configuracion(cls):
+        """Obtiene la configuración activa o crea una por defecto"""
+        config, created = cls.objects.get_or_create(
+            pk=1,
+            defaults={'monto_sena': Decimal('50.00')}
+        )
+        return config
+    
+    def calcular_sena(self, monto_total=None):
+        """
+        Calcula el monto de seña según configuración.
+        - Si no hay monto_total (reserva inicial): usa monto fijo
+        - Si hay monto_total y porcentaje_sena > 0: calcula porcentaje
+        - Si hay monto_total y porcentaje_sena = 0: usa monto fijo
+        """
+        if self.porcentaje_sena > 0 and monto_total and monto_total > 0:
+            return (monto_total * self.porcentaje_sena / Decimal('100')).quantize(Decimal('0.01'))
+        return self.monto_sena
 
 
 class Servicio(models.Model):
@@ -36,6 +93,15 @@ class Reserva(models.Model):
         ('completada', 'Completada'),
         ('cancelada', 'Cancelada'),
     ]
+    
+    ESTADO_PAGO_CHOICES = [
+        ('pendiente', 'Pendiente'),
+        ('pendiente_pago_sena', 'Pendiente de Pago de Seña'),  # Reserva creada pero sin pago
+        ('sena_pagada', 'Seña Pagada'),
+        ('pagado', 'Pagado Completamente'),
+        ('rechazado', 'Rechazado'),
+        ('cancelado', 'Cancelado'),
+    ]
 
     id_reserva = models.AutoField(primary_key=True)
     fecha_reserva = models.DateTimeField()
@@ -43,6 +109,60 @@ class Reserva(models.Model):
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
     observaciones = models.TextField(blank=True, null=True)
     direccion = models.CharField(max_length=500, blank=True, null=True, help_text='Dirección donde se realizará el servicio')
+    
+    # Campos de pago simplificados - MercadoPago.js manejará el frontend
+    monto_sena = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0'),
+        validators=[MinValueValidator(Decimal('0'))],
+        help_text='Monto de seña para confirmar la reserva'
+    )
+    estado_pago_sena = models.CharField(
+        max_length=20,
+        choices=ESTADO_PAGO_CHOICES,
+        default='pendiente',
+        help_text='Estado del pago de seña'
+    )
+    payment_id_sena = models.CharField(
+        max_length=200, 
+        blank=True, 
+        null=True,
+        help_text='ID de pago de MercadoPago para la seña'
+    )
+    fecha_pago_sena = models.DateTimeField(blank=True, null=True)
+    
+    # Campos de pago final
+    monto_total = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0'),
+        validators=[MinValueValidator(Decimal('0'))],
+        help_text='Monto total del servicio'
+    )
+    monto_final = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0'),
+        validators=[MinValueValidator(Decimal('0'))],
+        help_text='Monto final a pagar (total - seña)'
+    )
+    estado_pago_final = models.CharField(
+        max_length=20,
+        choices=ESTADO_PAGO_CHOICES,
+        default='pendiente',
+        help_text='Estado del pago final'
+    )
+    payment_id_final = models.CharField(
+        max_length=200, 
+        blank=True, 
+        null=True,
+        help_text='ID de pago de MercadoPago para el pago final'
+    )
+    fecha_pago_final = models.DateTimeField(blank=True, null=True)
+    
+    # Campo de pago general (para compatibilidad)
+    estado_pago = models.CharField(max_length=20, choices=ESTADO_PAGO_CHOICES, default='pendiente')
     
     # Relaciones según diagrama ER
     cliente = models.ForeignKey(
@@ -79,6 +199,29 @@ class Reserva(models.Model):
 
     def __str__(self):
         return f"Reserva {self.id_reserva} - {self.cliente.persona.nombre_completo} - {self.servicio.nombre}"
+    
+    def calcular_monto_final(self):
+        """Calcula el monto final a pagar (total - seña)"""
+        if self.monto_total > 0:
+            self.monto_final = max(Decimal('0'), self.monto_total - self.monto_sena)
+        else:
+            self.monto_final = Decimal('0')
+        return self.monto_final
+    
+    def asignar_sena(self):
+        """
+        Asigna el monto de seña según configuración.
+        - En creación de reserva (sin monto_total): usa monto fijo
+        - Cuando se define monto_total: recalcula si es porcentaje
+        """
+        config = ConfiguracionPago.obtener_configuracion()
+        # Si no hay monto_total o es 0, siempre usa monto fijo
+        if not self.monto_total or self.monto_total == 0:
+            self.monto_sena = config.monto_sena
+        else:
+            # Si hay monto_total, usa calcular_sena (que puede ser fijo o porcentaje)
+            self.monto_sena = config.calcular_sena(self.monto_total)
+        self.calcular_monto_final()
 
     def confirmar(self):
         """Confirmar la reserva"""
@@ -239,17 +382,26 @@ class Diseno(models.Model):
             self.reserva.save()
     
     def aceptar(self, observaciones=None):
-        """Aceptar el diseño"""
+        """
+        Aceptar el diseño.
+        Al aceptar, el cliente deberá pagar el monto final (total - seña).
+        """
         self.estado = 'aceptado'
         self.fecha_respuesta = timezone.now()
         if observaciones:
             self.observaciones_cliente = observaciones
         self.save()
         
-        # Actualizar estado de la reserva si existe
+        # Actualizar reserva si existe
         if self.reserva:
-            self.reserva.estado = 'confirmada'
-            self.reserva.save()
+            # Asignar el monto total del presupuesto a la reserva
+            if self.presupuesto and self.presupuesto > 0:
+                self.reserva.monto_total = self.presupuesto
+                self.reserva.calcular_monto_final()
+                self.reserva.save()
+            
+            # El pago final se procesará cuando el cliente haga el pago
+            # La reserva se confirmará cuando el pago final sea aprobado
     
     def rechazar(self, observaciones=None):
         """Rechazar el diseño"""

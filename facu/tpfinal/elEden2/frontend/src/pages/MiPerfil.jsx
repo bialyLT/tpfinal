@@ -42,7 +42,9 @@ const MiPerfil = () => {
   }, []);
 
   useEffect(() => {
+    console.log('🔍 Usuario cargado en MiPerfil:', user);
     if (user && user.persona) {
+      console.log('✅ Persona encontrada:', user.persona);
       setProfileData({
         first_name: user.first_name || '',
         last_name: user.last_name || '',
@@ -57,6 +59,8 @@ const MiPerfil = () => {
         dpto: user.persona.dpto || '',
         localidad_id: user.persona.localidad?.id || ''
       });
+    } else {
+      console.log('❌ No se encontró persona en el usuario');
     }
   }, [user]);
 
