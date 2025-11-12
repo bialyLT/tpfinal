@@ -186,18 +186,6 @@ export const serviciosService = {
     return response.data;
   },
 
-  // ❌ DEPRECADO - Ya no se usa, ahora usamos solicitarServicio + crearPreferenciaSena
-  // crearPreferenciaPrereserva: async (data) => {
-  //   const response = await api.post('/mercadopago/crear-preferencia-prereserva/', data);
-  //   return response.data;
-  // },
-
-  // ❌ DEPRECADO - Ya no se usa, confirmación se hace con confirmarPagoSena
-  // crearReservaConPago: async (data) => {
-  //   const response = await api.post('/mercadopago/crear-reserva-con-pago/', data);
-  //   return response.data;
-  // },
-
   updateServicio: async (id, data) => {
     const response = await api.put(`/servicios/servicios/${id}/`, data);
     return response.data;
@@ -322,10 +310,6 @@ export const encuestasService = {
     return response.data;
   },
   
-  getEncuestaPublica: async (token) => {
-    const response = await api.get(`/encuestas/encuestas/publicas/?token=${token}`);
-    return response.data;
-  },
   
   completarEncuesta: async (id, respuestas) => {
     const response = await api.post(`/encuestas/encuestas/${id}/completar_encuesta/`, {

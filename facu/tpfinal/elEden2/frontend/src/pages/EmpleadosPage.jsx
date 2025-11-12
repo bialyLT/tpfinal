@@ -37,6 +37,7 @@ const EmpleadosPage = () => {
     first_name: '',
     last_name: '',
     password: '',
+    telefono: '',
     nro_documento: '',
     tipo_documento_id: '',
     genero_id: '',
@@ -104,10 +105,12 @@ const EmpleadosPage = () => {
         password: formData.password,
         first_name: formData.first_name,
         last_name: formData.last_name,
+        telefono: formData.telefono,
         nro_documento: formData.nro_documento,
         tipo_documento_id: parseInt(formData.tipo_documento_id),
         genero_id: parseInt(formData.genero_id),
-        is_active: formData.is_active
+        is_active: formData.is_active,
+        groups: formData.groups
       };
       
       await usersService.createEmpleado(empleadoData);
@@ -119,6 +122,7 @@ const EmpleadosPage = () => {
         first_name: '',
         last_name: '',
         password: '',
+        telefono: '',
         nro_documento: '',
         tipo_documento_id: '',
         genero_id: '',
@@ -562,6 +566,22 @@ const EmpleadosPage = () => {
                             </option>
                           ))}
                         </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">
+                          Teléfono *
+                        </label>
+                        <input
+                          type="tel"
+                          name="telefono"
+                          value={formData.telefono}
+                          onChange={handleInputChange}
+                          required
+                          maxLength="20"
+                          placeholder="Ej: 3815123456"
+                          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        />
                       </div>
                     </div>
                   </div>

@@ -1,9 +1,12 @@
 ﻿from rest_framework import viewsets, filters, status
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.utils import timezone
+from django.db import transaction
 from .models import Encuesta, Pregunta, EncuestaRespuesta, Respuesta
+from apps.users.models import Cliente
 from .serializers import (
     EncuestaSerializer,
     EncuestaDetalleSerializer,
@@ -12,6 +15,9 @@ from .serializers import (
     EncuestaRespuestaSerializer,
     RespuestaSerializer
 )
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class EncuestaViewSet(viewsets.ModelViewSet):
@@ -59,6 +65,178 @@ class EncuestaViewSet(viewsets.ModelViewSet):
             'total_preguntas': encuesta.preguntas.count()
         })
 
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def activa(self, request):
+        """Obtener la encuesta activa con sus preguntas"""
+        try:
+            encuesta_activa = Encuesta.obtener_activa()
+            if not encuesta_activa:
+                return Response(
+                    {'error': 'No hay ninguna encuesta activa en este momento.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            serializer = EncuestaDetalleSerializer(encuesta_activa)
+            return Response(serializer.data)
+        except Exception as e:
+            logger.error(f"Error al obtener encuesta activa: {str(e)}")
+            return Response(
+                {'error': 'Error al obtener la encuesta activa'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def responder(self, request):
+        """
+        Permite a un cliente responder una encuesta.
+        Espera:
+        {
+            "reserva_id": 123,
+            "respuestas": [
+                {"pregunta_id": 1, "valor_texto": "Respuesta", "valor_numero": null, ...},
+                ...
+            ]
+        }
+        """
+        try:
+            # Obtener datos de la request
+            reserva_id = request.data.get('reserva_id')
+            respuestas_data = request.data.get('respuestas', [])
+            
+            if not reserva_id:
+                return Response(
+                    {'error': 'El ID de la reserva es requerido'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verificar que el usuario es un cliente
+            try:
+                # El cliente se identifica por el email del usuario autenticado
+                cliente = Cliente.objects.get(persona__email=request.user.email)
+            except Cliente.DoesNotExist:
+                return Response(
+                    {'error': 'Solo los clientes pueden responder encuestas'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Obtener la encuesta activa
+            encuesta_activa = Encuesta.obtener_activa()
+            if not encuesta_activa:
+                return Response(
+                    {'error': 'No hay ninguna encuesta activa en este momento'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Verificar que la reserva pertenece al cliente
+            from apps.servicios.models import Reserva
+            try:
+                reserva = Reserva.objects.get(id_reserva=reserva_id, cliente=cliente)
+            except Reserva.DoesNotExist:
+                return Response(
+                    {'error': 'Reserva no encontrada o no pertenece al cliente'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Verificar si ya respondió esta encuesta para esta reserva
+            respuesta_existente = EncuestaRespuesta.objects.filter(
+                encuesta=encuesta_activa,
+                cliente=cliente,
+                reserva=reserva,
+                estado='completada'
+            ).exists()
+            
+            if respuesta_existente:
+                return Response(
+                    {'error': 'Ya has respondido esta encuesta para esta reserva'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Crear o actualizar la EncuestaRespuesta con transacción
+            with transaction.atomic():
+                encuesta_respuesta, created = EncuestaRespuesta.objects.get_or_create(
+                    encuesta=encuesta_activa,
+                    cliente=cliente,
+                    reserva=reserva,
+                    defaults={'fecha_inicio': timezone.now()}
+                )
+                
+                # Eliminar respuestas anteriores si existe (por si quedó incompleta)
+                encuesta_respuesta.respuestas.all().delete()
+                
+                # Validar que todas las preguntas obligatorias estén respondidas
+                preguntas_obligatorias = encuesta_activa.preguntas.filter(obligatoria=True)
+                preguntas_respondidas = [r.get('pregunta_id') for r in respuestas_data]
+                
+                for pregunta in preguntas_obligatorias:
+                    # Usar el PK correcto del modelo Pregunta
+                    if pregunta.id_pregunta not in preguntas_respondidas:
+                        return Response(
+                            {'error': f'La pregunta "{pregunta.texto}" es obligatoria'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                
+                # Crear las respuestas
+                for respuesta_data in respuestas_data:
+                    pregunta_id = respuesta_data.get('pregunta_id')
+                    if pregunta_id is None:
+                        pregunta_id = respuesta_data.get('id')
+                    if pregunta_id is None:
+                        continue
+                    try:
+                        pregunta = encuesta_activa.preguntas.get(id_pregunta=pregunta_id)
+                    except Pregunta.DoesNotExist:
+                        continue
+
+                    # Mapear valores a los campos reales del modelo Respuesta
+                    valor_texto = respuesta_data.get('valor_texto')
+                    # Aceptar varias claves numéricas y normalizarlas a valor_numerico
+                    valor_numerico = respuesta_data.get('valor_numerico')
+                    if valor_numerico is None:
+                        valor_numerico = respuesta_data.get('valor_numero')
+                    if valor_numerico is None:
+                        valor_numerico = respuesta_data.get('valor_escala')
+
+                    valor_boolean = respuesta_data.get('valor_boolean')
+                    # Para múltiples opciones, persistimos en valor_texto (como CSV o texto)
+                    if not valor_texto and respuesta_data.get('valor_multiple') is not None:
+                        vm = respuesta_data.get('valor_multiple')
+                        if isinstance(vm, (list, tuple)):
+                            valor_texto = ",".join(map(str, vm))
+                        else:
+                            valor_texto = str(vm)
+
+                    Respuesta.objects.create(
+                        encuesta_respuesta=encuesta_respuesta,
+                        pregunta=pregunta,
+                        valor_texto=valor_texto,
+                        valor_numerico=valor_numerico,
+                        valor_boolean=valor_boolean,
+                    )
+                
+                # Marcar como completada
+                encuesta_respuesta.estado = 'completada'
+                encuesta_respuesta.fecha_completada = timezone.now()
+                encuesta_respuesta.save()
+                
+                logger.info(f"Cliente {cliente.pk} completó encuesta {encuesta_activa.pk} para reserva {reserva_id}")
+                
+                return Response(
+                    {
+                        'mensaje': '¡Gracias por completar la encuesta!',
+                        'encuesta_respuesta_id': encuesta_respuesta.pk
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+                
+        except Exception as e:
+            logger.error(f"Error al procesar respuesta de encuesta: {str(e)}")
+            return Response(
+                {'error': 'Error al procesar la encuesta'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+
 
 class PreguntaViewSet(viewsets.ModelViewSet):
     """
@@ -80,7 +258,7 @@ class EncuestaRespuestaViewSet(viewsets.ModelViewSet):
     serializer_class = EncuestaRespuestaSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['estado', 'cliente', 'encuesta']
+    filterset_fields = ['estado', 'cliente', 'encuesta', 'reserva']
     search_fields = ['cliente__persona__nombre', 'cliente__persona__apellido', 'encuesta__titulo']
     ordering_fields = ['fecha_inicio', 'fecha_completada']
     ordering = ['-fecha_inicio']

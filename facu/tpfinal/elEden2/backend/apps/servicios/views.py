@@ -47,23 +47,23 @@ class ReservaViewSet(viewsets.ModelViewSet):
         """
         Filtrar reservas según el tipo de usuario:
         - Clientes: solo ven sus propias reservas (todos los estados)
-        - Empleados/Staff: ven todas las reservas EXCEPTO las que no han sido pagadas
-          (excluye: pendiente, pendiente_pago_sena)
+        - Empleados/Staff: ven todas las reservas que tengan la seña pagada
+          (solo muestran las que tienen estado_pago_sena = 'sena_pagada' o 'aprobado')
         """
         user = self.request.user
         
-        # Si es staff, mostrar solo reservas pagadas (excluir pendiente y pendiente_pago_sena)
+        # Si es staff, mostrar solo reservas con seña pagada
         if user.is_staff:
-            return Reserva.objects.select_related('cliente__persona', 'servicio').exclude(
-                estado__in=['pendiente', 'pendiente_pago_sena']
+            return Reserva.objects.select_related('cliente__persona', 'servicio').filter(
+                estado_pago_sena__in=['sena_pagada', 'aprobado']
             )
         
         # Verificar si es empleado
         try:
             Empleado.objects.get(persona__email=user.email)
-            # Empleados también solo ven reservas pagadas
-            return Reserva.objects.select_related('cliente__persona', 'servicio').exclude(
-                estado__in=['pendiente', 'pendiente_pago_sena']
+            # Empleados también solo ven reservas con seña pagada
+            return Reserva.objects.select_related('cliente__persona', 'servicio').filter(
+                estado_pago_sena__in=['sena_pagada', 'aprobado']
             )
         except Empleado.DoesNotExist:
             pass
@@ -241,7 +241,29 @@ class ReservaViewSet(viewsets.ModelViewSet):
             logger.info(f"✅ Email de confirmación enviado exitosamente a {cliente.persona.email}")
         except Exception as e:
             # No fallar el endpoint si el email falla
-            logger.error(f"❌ Error al enviar email de confirmación: {str(e)}")
+            logger.error(f"❌ Error al enviar email de confirmación al cliente: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+        
+        # Enviar notificación a los administradores
+        try:
+            logger.info(f"📧 Enviando notificación a administradores...")
+            
+            EmailService.send_payment_notification_to_admin(
+                reserva_id=reserva.id_reserva,
+                cliente_nombre=f"{cliente.persona.nombre} {cliente.persona.apellido}",
+                servicio_nombre=reserva.servicio.nombre,
+                monto=reserva.monto_sena,
+                payment_id=payment_id,
+                fecha_reserva=reserva.fecha_reserva,
+                direccion=reserva.direccion,
+                observaciones=reserva.observaciones,
+                tipo_pago='seña'
+            )
+            logger.info(f"✅ Notificación a administradores enviada exitosamente")
+        except Exception as e:
+            # No fallar el endpoint si el email falla
+            logger.error(f"❌ Error al enviar notificación a administradores: {str(e)}")
             import traceback
             logger.error(traceback.format_exc())
         
@@ -635,6 +657,30 @@ class ReservaViewSet(viewsets.ModelViewSet):
         # Cambiar estado a completada
         reserva.estado = 'completada'
         reserva.save()
+        # Enviar email al cliente con la encuesta de satisfacción (sin token público)
+        try:
+            from apps.emails.services import EmailService
+            from apps.encuestas.models import Encuesta
+            
+            cliente = reserva.cliente
+            encuesta_activa = Encuesta.obtener_activa()
+            
+            if encuesta_activa:
+                EmailService.send_survey_request_email(
+                    cliente_email=cliente.persona.email,
+                    cliente_nombre=f"{cliente.persona.nombre} {cliente.persona.apellido}",
+                    reserva_id=reserva.id_reserva,
+                    servicio_nombre=reserva.servicio.nombre,
+                    encuesta_titulo=encuesta_activa.titulo
+                )
+                logger.info(f"✅ Email de encuesta enviado a {cliente.persona.email}")
+            else:
+                logger.warning(f"⚠️ No hay encuesta activa para enviar al cliente")
+        except Exception as e:
+            # No fallar el endpoint si falla el email
+            logger.error(f"❌ Error al enviar email de encuesta: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
         
         serializer = self.get_serializer(reserva)
         return Response({
@@ -727,7 +773,7 @@ class DisenoViewSet(viewsets.ModelViewSet):
     queryset = Diseno.objects.select_related('servicio', 'disenador', 'disenador__persona', 'reserva', 'reserva__cliente__persona').prefetch_related('productos', 'imagenes').all()
     pagination_class = StandardResultsSetPagination  # 10 items por página
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['estado', 'servicio', 'disenador']
+    filterset_fields = ['estado', 'servicio', 'disenador', 'reserva']
     search_fields = ['titulo', 'descripcion', 'reserva__cliente__persona__nombre', 'reserva__cliente__persona__apellido']
     ordering = ['-fecha_creacion']
     parser_classes = [JSONParser, MultiPartParser, FormParser]
@@ -995,8 +1041,56 @@ class DisenoViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def presentar(self, request, pk=None):
         """Presentar el diseño al cliente"""
+        from apps.emails.services import EmailService
+        
         diseno = self.get_object()
         diseno.presentar()
+        
+        # Enviar email al cliente notificando la propuesta
+        try:
+            if diseno.reserva and diseno.reserva.cliente:
+                cliente = diseno.reserva.cliente
+                
+                # Preparar lista de productos
+                productos_lista = []
+                for dp in diseno.productos.all():
+                    productos_lista.append({
+                        'nombre': dp.producto.nombre,
+                        'cantidad': dp.cantidad,
+                        'precio_unitario': float(dp.precio_unitario)
+                    })
+                
+                # Contar imágenes
+                imagenes_count = diseno.imagenes.count()
+                
+                # Nombre del diseñador
+                disenador_nombre = None
+                if diseno.disenador:
+                    disenador_nombre = f"{diseno.disenador.persona.nombre} {diseno.disenador.persona.apellido}"
+                
+                EmailService.send_design_proposal_notification(
+                    cliente_email=cliente.persona.email,
+                    cliente_nombre=f"{cliente.persona.nombre} {cliente.persona.apellido}",
+                    diseno_id=diseno.id_diseno,
+                    titulo_diseno=diseno.titulo,
+                    descripcion=diseno.descripcion,
+                    presupuesto=diseno.presupuesto,
+                    reserva_id=diseno.reserva.id_reserva,
+                    servicio_nombre=diseno.servicio.nombre,
+                    disenador_nombre=disenador_nombre,
+                    fecha_propuesta=diseno.fecha_propuesta,
+                    productos_lista=productos_lista,
+                    imagenes_count=imagenes_count
+                )
+                logger.info(f"✅ Email de propuesta de diseño enviado a {cliente.persona.email}")
+            else:
+                logger.warning(f"⚠️ No se pudo enviar email: diseño {diseno.id_diseno} no tiene reserva o cliente asociado")
+        except Exception as e:
+            # No fallar el endpoint si falla el email
+            logger.error(f"❌ Error al enviar email de propuesta de diseño: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+        
         serializer = self.get_serializer(diseno)
         return Response(serializer.data)
     
@@ -1237,7 +1331,10 @@ class DisenoViewSet(viewsets.ModelViewSet):
         - Cambia estado del diseño a 'rechazado'
         - Cambia estado de la reserva a 'pendiente' o 'cancelada' según lo indique el cliente
         - Guarda feedback del cliente
+        - Envía email al diseñador con el feedback
         """
+        from apps.emails.services import EmailService
+        
         diseno = self.get_object()
         
         # Verificar que el diseño esté presentado
@@ -1269,6 +1366,35 @@ class DisenoViewSet(viewsets.ModelViewSet):
             diseno.reserva.save()
         else:
             mensaje = 'Diseño rechazado exitosamente.'
+        
+        # Enviar email al diseñador notificando el rechazo
+        try:
+            if diseno.disenador:
+                cliente_nombre = 'Cliente'
+                if diseno.reserva and diseno.reserva.cliente:
+                    cliente = diseno.reserva.cliente
+                    cliente_nombre = f"{cliente.persona.nombre} {cliente.persona.apellido}"
+                
+                EmailService.send_design_rejection_notification(
+                    disenador_email=diseno.disenador.persona.email,
+                    disenador_nombre=f"{diseno.disenador.persona.nombre} {diseno.disenador.persona.apellido}",
+                    diseno_id=diseno.id_diseno,
+                    titulo_diseno=diseno.titulo,
+                    cliente_nombre=cliente_nombre,
+                    servicio_nombre=diseno.servicio.nombre,
+                    reserva_id=diseno.reserva.id_reserva if diseno.reserva else 0,
+                    feedback_cliente=feedback,
+                    presupuesto=diseno.presupuesto,
+                    cancelar_servicio=cancelar_servicio
+                )
+                logger.info(f"✅ Email de rechazo de diseño enviado a {diseno.disenador.persona.email}")
+            else:
+                logger.warning(f"⚠️ No se pudo enviar email: diseño {diseno.id_diseno} no tiene diseñador asignado")
+        except Exception as e:
+            # No fallar el endpoint si falla el email
+            logger.error(f"❌ Error al enviar email de rechazo de diseño: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
         
         serializer = self.get_serializer(diseno)
         return Response({

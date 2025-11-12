@@ -1,4 +1,5 @@
 ﻿from django.db import models
+from django.core.exceptions import ValidationError
 from apps.users.models import Cliente
 
 
@@ -6,6 +7,7 @@ class Encuesta(models.Model):
     """
     Modelo para encuestas según diagrama ER.
     Representa una encuesta que puede ser respondida por clientes.
+    Solo puede haber una encuesta activa a la vez.
     """
     id_encuesta = models.AutoField(primary_key=True)
     titulo = models.CharField(max_length=200)
@@ -22,6 +24,27 @@ class Encuesta(models.Model):
 
     def __str__(self):
         return self.titulo
+    
+    def save(self, *args, **kwargs):
+        """
+        Sobrescribir save para asegurar que solo haya una encuesta activa.
+        Si esta encuesta se marca como activa, desactivar todas las demás.
+        """
+        if self.activa:
+            # Desactivar todas las demás encuestas
+            Encuesta.objects.exclude(pk=self.pk).update(activa=False)
+        super().save(*args, **kwargs)
+    
+    @classmethod
+    def obtener_activa(cls):
+        """Obtiene la encuesta activa actual"""
+        try:
+            return cls.objects.get(activa=True)
+        except cls.DoesNotExist:
+            return None
+        except cls.MultipleObjectsReturned:
+            # Si por alguna razón hay múltiples activas, retornar la más reciente
+            return cls.objects.filter(activa=True).order_by('-fecha_creacion').first()
 
 
 class Pregunta(models.Model):
@@ -72,6 +95,7 @@ class EncuestaRespuesta(models.Model):
     """
     Modelo para respuestas de encuestas por cliente según diagrama ER.
     Representa una encuesta respondida por un cliente específico.
+    Asociada a una reserva completada.
     """
     ESTADO_CHOICES = [
         ('iniciada', 'Iniciada'),
@@ -94,16 +118,25 @@ class EncuestaRespuesta(models.Model):
         on_delete=models.CASCADE,
         related_name='respuestas_clientes'
     )
+    # Relación con la reserva (opcional pero recomendado para tracking)
+    reserva = models.ForeignKey(
+        'servicios.Reserva',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='encuestas'
+    )
 
     class Meta:
         db_table = 'encuesta_respuesta'
         verbose_name = 'Encuesta Respondida'
         verbose_name_plural = 'Encuestas Respondidas'
-        unique_together = ['cliente', 'encuesta']
+        unique_together = ['cliente', 'encuesta', 'reserva']
         ordering = ['-fecha_inicio']
         indexes = [
             models.Index(fields=['cliente', 'encuesta']),
             models.Index(fields=['estado']),
+            models.Index(fields=['reserva']),
         ]
 
     def __str__(self):

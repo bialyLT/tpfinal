@@ -394,11 +394,38 @@ def confirmar_pago_sena(request, reserva_id):
             
             logger.info(f"✅ Pago de seña confirmado para reserva {reserva_id}")
             
-            # Enviar email de confirmación
+            # Enviar email de confirmación al cliente
             try:
-                EmailService.enviar_confirmacion_pago_sena(reserva)
+                cliente = reserva.cliente
+                EmailService.send_payment_confirmation_email(
+                    user_email=cliente.persona.email,
+                    user_name=f"{cliente.persona.nombre} {cliente.persona.apellido}",
+                    reserva_id=reserva.id_reserva,
+                    servicio_nombre=reserva.servicio.nombre,
+                    monto=reserva.monto_sena,
+                    payment_id=payment_id,
+                    tipo_pago='seña'
+                )
+                logger.info(f"✅ Email de confirmación enviado a {cliente.persona.email}")
             except Exception as e:
-                logger.error(f"Error al enviar email de confirmación: {str(e)}")
+                logger.error(f"Error al enviar email de confirmación al cliente: {str(e)}")
+            
+            # Enviar notificación a los administradores
+            try:
+                EmailService.send_payment_notification_to_admin(
+                    reserva_id=reserva.id_reserva,
+                    cliente_nombre=f"{cliente.persona.nombre} {cliente.persona.apellido}",
+                    servicio_nombre=reserva.servicio.nombre,
+                    monto=reserva.monto_sena,
+                    payment_id=payment_id,
+                    fecha_reserva=reserva.fecha_reserva,
+                    direccion=reserva.direccion,
+                    observaciones=reserva.observaciones,
+                    tipo_pago='seña'
+                )
+                logger.info(f"✅ Notificación a administradores enviada")
+            except Exception as e:
+                logger.error(f"Error al enviar notificación a administradores: {str(e)}")
             
             return Response({
                 'success': True,
@@ -474,11 +501,53 @@ def confirmar_pago_final(request, reserva_id):
                 
                 logger.info(f"✅ Pago final confirmado para reserva {reserva_id}")
                 
-                # Enviar email de confirmación
+                # Enviar emails de confirmación
                 try:
-                    EmailService.enviar_confirmacion_pago_final(reserva)
+                    cliente = reserva.cliente
+                    
+                    # 1. Email al cliente confirmando el pago
+                    EmailService.send_payment_confirmation_email(
+                        user_email=cliente.persona.email,
+                        user_name=f"{cliente.persona.nombre} {cliente.persona.apellido}",
+                        reserva_id=reserva.id_reserva,
+                        servicio_nombre=reserva.servicio.nombre,
+                        monto=reserva.monto_final,
+                        payment_id=payment_id,
+                        tipo_pago='final'
+                    )
+                    logger.info(f"✅ Email de confirmación de pago final enviado a {cliente.persona.email}")
+                    
+                    # 2. Emails a los empleados asignados
+                    from apps.servicios.models import ReservaEmpleado
+                    empleados_asignados = ReservaEmpleado.objects.filter(reserva=reserva).select_related('empleado__persona')
+                    
+                    for asignacion in empleados_asignados:
+                        empleado = asignacion.empleado
+                        hora_servicio = reserva.fecha_reserva.strftime('%H:%M') if reserva.fecha_reserva else 'A confirmar'
+                        
+                        EmailService.send_employee_work_assignment_notification(
+                            empleado_email=empleado.persona.email,
+                            empleado_nombre=f"{empleado.persona.nombre} {empleado.persona.apellido}",
+                            reserva_id=reserva.id_reserva,
+                            cliente_nombre=f"{cliente.persona.nombre} {cliente.persona.apellido}",
+                            servicio_nombre=reserva.servicio.nombre,
+                            fecha_servicio=reserva.fecha_reserva,
+                            hora_servicio=hora_servicio,
+                            direccion=reserva.direccion or 'No especificada',
+                            observaciones=reserva.observaciones,
+                            rol=asignacion.rol
+                        )
+                        logger.info(f"✅ Email de asignación de trabajo enviado a {empleado.persona.email}")
+                    
+                    if empleados_asignados.count() > 0:
+                        logger.info(f"✅ Se enviaron {empleados_asignados.count()} email(s) a empleados asignados")
+                    else:
+                        logger.warning(f"⚠️ No hay empleados asignados a la reserva {reserva_id}")
+                        
                 except Exception as e:
-                    logger.error(f"Error al enviar email de confirmación: {str(e)}")
+                    logger.error(f"❌ Error al enviar emails de confirmación: {str(e)}")
+                    import traceback
+                    logger.error(traceback.format_exc())
                 
                 return Response({
                     'success': True,
@@ -589,14 +658,60 @@ def buscar_pago_por_preferencia(request, reserva_id):
                 
                 reserva.save()
                 
-                # Enviar email
+                # Enviar emails de confirmación
                 try:
+                    cliente = reserva.cliente
+                    
                     if tipo_pago == 'sena':
-                        EmailService.enviar_confirmacion_pago_sena(reserva)
+                        # Email al cliente
+                        EmailService.send_payment_confirmation_email(
+                            user_email=cliente.persona.email,
+                            user_name=f"{cliente.persona.nombre} {cliente.persona.apellido}",
+                            reserva_id=reserva.id_reserva,
+                            servicio_nombre=reserva.servicio.nombre,
+                            monto=reserva.monto_sena,
+                            payment_id=payment_id,
+                            tipo_pago='seña'
+                        )
+                        # Email a administradores
+                        EmailService.send_payment_notification_to_admin(
+                            reserva_id=reserva.id_reserva,
+                            cliente_nombre=f"{cliente.persona.nombre} {cliente.persona.apellido}",
+                            servicio_nombre=reserva.servicio.nombre,
+                            monto=reserva.monto_sena,
+                            payment_id=payment_id,
+                            fecha_reserva=reserva.fecha_reserva,
+                            direccion=reserva.direccion,
+                            observaciones=reserva.observaciones,
+                            tipo_pago='seña'
+                        )
                     else:
-                        EmailService.enviar_confirmacion_pago_final(reserva)
+                        # Email al cliente para pago final
+                        EmailService.send_payment_confirmation_email(
+                            user_email=cliente.persona.email,
+                            user_name=f"{cliente.persona.nombre} {cliente.persona.apellido}",
+                            reserva_id=reserva.id_reserva,
+                            servicio_nombre=reserva.servicio.nombre,
+                            monto=reserva.monto_final,
+                            payment_id=payment_id,
+                            tipo_pago='final'
+                        )
+                        # Email a administradores para pago final
+                        EmailService.send_payment_notification_to_admin(
+                            reserva_id=reserva.id_reserva,
+                            cliente_nombre=f"{cliente.persona.nombre} {cliente.persona.apellido}",
+                            servicio_nombre=reserva.servicio.nombre,
+                            monto=reserva.monto_final,
+                            payment_id=payment_id,
+                            fecha_reserva=reserva.fecha_reserva,
+                            direccion=reserva.direccion,
+                            observaciones=reserva.observaciones,
+                            tipo_pago='final'
+                        )
+                    
+                    logger.info(f"✅ Emails enviados exitosamente")
                 except Exception as e:
-                    logger.error(f"Error al enviar email: {str(e)}")
+                    logger.error(f"Error al enviar emails: {str(e)}")
                 
                 return Response({
                     'success': True,

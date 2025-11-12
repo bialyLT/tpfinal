@@ -8,6 +8,7 @@ import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import Loading from './components/Loading';
 import ProtectedRoute from './components/ProtectedRoute';
+import ReservaDetallePage from './pages/reservas/ReservaDetallePage';
 
 // Pages
 import HomePage from './pages/home/HomePage';
@@ -35,13 +36,15 @@ import ProveedoresPage from './pages/ProveedoresPage';
 // Basic Protected Route Component (solo requiere autenticación)
 const BasicProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
+  const location = useLocation();
   
   if (loading) {
     return <Loading message="Verificando autenticación..." />;
   }
   
   if (!user) {
-    return <Navigate to="/login" replace />;
+    const loginPath = location.search ? `/login${location.search}` : '/login';
+    return <Navigate to={loginPath} state={{ from: location }} replace />;
   }
   
   return children;
@@ -278,6 +281,16 @@ function App() {
             <Route 
               path="/reservas/pago-exitoso" 
               element={<PagoExitoso />} 
+            />
+
+            {/* Reserva Detalle - Disponible para cualquier usuario autenticado */}
+            <Route
+              path="/servicios/reservas/:reservaId"
+              element={
+                <BasicProtectedRoute>
+                  <ReservaDetallePage />
+                </BasicProtectedRoute>
+              }
             />
 
             {/* ❌ RUTA DEPRECADA - Ya no se usa ConfirmarPrereserva */}

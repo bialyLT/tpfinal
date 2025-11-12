@@ -67,3 +67,13 @@ logs/
 *.tmp
 *.bak
 *.cache
+
+# ============================================
+# ARCHIVOS DE SESIONES DE CHAT / NOTAS LOCALES
+# ============================================
+# Resumen largo de la sesión de chat (no subir a Git)
+CHAT_SESSION_SUMMARY.txt
+
+
+# postgres data
+postgres_data/

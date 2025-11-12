@@ -2,6 +2,7 @@
 from django.core.validators import MinValueValidator
 from django.utils import timezone
 from decimal import Decimal
+import uuid
 
 
 class ConfiguracionPago(models.Model):
@@ -185,6 +186,8 @@ class Reserva(models.Model):
     # Metadatos
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
+    # Token único para acceso público a encuesta de satisfacción (link por email)
+    encuesta_token = models.UUIDField(unique=True, null=True, blank=True, help_text='Token público para responder la encuesta de la reserva')
 
     class Meta:
         verbose_name = 'Reserva'
@@ -242,6 +245,17 @@ class Reserva(models.Model):
         """Marcar reserva como completada"""
         self.estado = 'completada'
         self.save()
+
+    def generate_encuesta_token(self, force: bool = False) -> uuid.UUID:
+        """
+        Genera y asigna un token único para la encuesta si no existe o si force=True.
+        Devuelve el token asignado.
+        """
+        if force or not self.encuesta_token:
+            self.encuesta_token = uuid.uuid4()
+            # Guardamos solo este campo para no modificar otros timestamps innecesariamente
+            self.save(update_fields=['encuesta_token'])
+        return self.encuesta_token
 
 
 class ReservaEmpleado(models.Model):

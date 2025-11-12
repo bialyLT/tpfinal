@@ -1,13 +1,17 @@
 import React from 'react';
 import { GoogleLogin, useGoogleLogin } from '@react-oauth/google';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { success, error as showError } from '../utils/notifications';
 
-const GoogleLoginButton = ({ isRegister = false }) => {
+const GoogleLoginButton = ({ isRegister = false, redirectTo = null }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { updateUser } = useAuth();
+  
+  // Obtener la URL de destino desde props o desde el state
+  const from = redirectTo || location.state?.from;
 
   const handleGoogleSuccess = async (tokenResponse) => {
     try {
@@ -47,8 +51,19 @@ const GoogleLoginButton = ({ isRegister = false }) => {
         success('¡Inicio de sesión exitoso! Bienvenido de nuevo 👋');
       }
 
-      // Redirigir al dashboard
-      navigate('/dashboard');
+      // Redirigir según el destino guardado o al dashboard por defecto
+      if (from) {
+        const destino = typeof from === 'string'
+          ? from
+          : `${from.pathname || '/'}${from.search || ''}${from.hash || ''}`;
+        navigate(destino, { replace: true });
+      } else if (location.search && new URLSearchParams(location.search).get('reserva')) {
+        // Compatibilidad: si la URL todavía usa ?reserva=, redirigir a la nueva vista
+        const reservaId = new URLSearchParams(location.search).get('reserva');
+        navigate(`/servicios/reservas/${reservaId}#encuesta`, { replace: true });
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err) {
       console.error('Error en Google login:', err);
       showError(

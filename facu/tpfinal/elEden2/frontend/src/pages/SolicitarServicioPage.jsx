@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { serviciosService } from '../services';
 import { success, error, handleApiError } from '../utils/notifications';
 import { useAuth } from '../context/AuthContext';
+import { handlePagarSena } from '../utils/pagoHelpers';
 import { 
   Calendar, 
   MapPin, 
@@ -217,63 +218,53 @@ const SolicitarServicioPage = () => {
     setSubmitting(true);
     try {
       const servicioSeleccionado = serviciosDisponibles.find(s => s.id_servicio === parseInt(formData.servicio));
-      
-      // Preparar observaciones con la información del cliente
-      let observaciones = `${formData.descripcion}\n\n`;
-      
-      if (formData.notas_adicionales) {
-        observaciones += `Notas adicionales: ${formData.notas_adicionales}`;
-      }
-
-      console.log('🔵 Iniciando proceso de pago...');
-
-      // Función auxiliar para convertir File a base64
-      const convertToBase64 = (file) => {
-        return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.readAsDataURL(file);
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = (error) => reject(error);
-        });
-      };
 
       // Crear FormData con TODOS los datos de la reserva (incluyendo imágenes)
       const formDataToSend = new FormData();
       formDataToSend.append('servicio', parseInt(formData.servicio));
-      formDataToSend.append('descripcion', formData.descripcion || `Solicitud de ${servicioSeleccionado?.nombre || 'servicio'}`);
-      formDataToSend.append('fecha_preferida', formData.fecha_preferida);
-      formDataToSend.append('direccion_servicio', formData.direccion_servicio);
-      formDataToSend.append('notas_adicionales', formData.notas_adicionales || '');
       
-      // Agregar imágenes del jardín
+      // El modelo Reserva usa 'observaciones', no 'descripcion'
+      // Combinar descripción y notas en observaciones
+      const observacionesCompletas = formData.notas_adicionales 
+        ? `${formData.descripcion}\n\nNotas adicionales: ${formData.notas_adicionales}`
+        : formData.descripcion;
+      formDataToSend.append('observaciones', observacionesCompletas || `Solicitud de ${servicioSeleccionado?.nombre || 'servicio'}`);
+      formDataToSend.append('fecha_reserva', formData.fecha_preferida); // El backend espera 'fecha_reserva', no 'fecha_preferida'
+      formDataToSend.append('direccion', formData.direccion_servicio); // El backend espera 'direccion', no 'direccion_servicio'
+      
+      // Agregar imágenes del jardín (sin [] - el backend usa getlist())
       formData.imagenes_jardin.forEach((img) => {
-        formDataToSend.append('imagenes_jardin[]', img.file);
+        formDataToSend.append('imagenes_jardin', img.file);
       });
       
-      // Agregar imágenes de ideas
+      // Agregar imágenes de ideas (sin [] - el backend usa getlist())
       formData.imagenes_ideas.forEach((img) => {
-        formDataToSend.append('imagenes_ideas[]', img.file);
+        formDataToSend.append('imagenes_ideas', img.file);
       });
+      
+      // Agregar descripciones de las imágenes como JSON arrays
+      const descripcionesJardin = formData.imagenes_jardin.map(img => img.descripcion || '');
+      const descripcionesIdeas = formData.imagenes_ideas.map(img => img.descripcion || '');
+      
+      if (descripcionesJardin.length > 0) {
+        formDataToSend.append('descripciones_jardin', JSON.stringify(descripcionesJardin));
+      }
+      
+      if (descripcionesIdeas.length > 0) {
+        formDataToSend.append('descripciones_ideas', JSON.stringify(descripcionesIdeas));
+      }
       
       success('Creando reserva...');
-      
-      // PASO 1: Crear la reserva (sin pago aún)
-      console.log('� Creando reserva...');
+
+      // PASO 1: Crear la reserva
       const reservaResponse = await serviciosService.solicitarServicio(formDataToSend);
-      
-      console.log('✅ Reserva creada:', reservaResponse);
       const reservaId = reservaResponse.reserva?.id_reserva || reservaResponse.id_reserva;
-      console.log('📋 Reserva ID:', reservaId);
-      
+
       if (!reservaId) {
         throw new Error('No se recibió el ID de la reserva');
       }
       
-      // PASO 2: Crear la preferencia de pago usando el MISMO endpoint que funciona en el modal
-      console.log('💳 Creando preferencia de pago para la seña...');
-      const preferencia = await serviciosService.crearPreferenciaSena(reservaId);
-      
-      console.log('✅ Preferencia de pago creada:', preferencia);
+      success('Reserva creada exitosamente. Redirigiendo al pago...');
       
       // Limpiar URLs de preview
       formData.imagenes_jardin.forEach(img => {
@@ -282,24 +273,17 @@ const SolicitarServicioPage = () => {
       formData.imagenes_ideas.forEach(img => {
         if (img.preview) URL.revokeObjectURL(img.preview);
       });
-      
-      success('Redirigiendo a la página de pago...');
-      
-      // Redirigir a MercadoPago en la misma ventana
-      setTimeout(() => {
-        const redirectUrl = preferencia.sandbox_init_point || preferencia.init_point;
-        console.log('🌐 Redirigiendo a MercadoPago:', redirectUrl);
-        
-        // Redirigir en la misma ventana - MercadoPago devolverá a /reservas/pago-exitoso
-        window.location.href = redirectUrl;
-      }, 1000);
+
+      // PASO 2: Redirigir al pago de seña usando la función general
+      // La función se encargará de crear la preferencia y redirigir a MercadoPago
+      await handlePagarSena(reservaId, setSubmitting);
       
     } catch (err) {
-      console.error('❌ Error al crear reserva y pago:', err);
-      handleApiError(err, 'No se pudo crear la reserva o generar el link de pago');
-    } finally {
-      setSubmitting(false);
+      console.error('❌ Error al crear reserva:', err);
+      handleApiError(err, 'No se pudo crear la reserva');
+      setSubmitting(false); // Asegurarse de desactivar el loading si hay error
     }
+    // No hay finally aquí porque handlePagarSena maneja el setSubmitting
   };
 
   const getSelectedServiceType = () => {

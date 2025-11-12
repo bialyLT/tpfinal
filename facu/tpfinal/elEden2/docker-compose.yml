@@ -3,12 +3,13 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: eleden_postgres
+    restart: always
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-eleden}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -104,5 +105,10 @@ networks:
 
 volumes:
   postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${PWD}/postgres_data
+      o: bind
   backend_static:
   backend_media:

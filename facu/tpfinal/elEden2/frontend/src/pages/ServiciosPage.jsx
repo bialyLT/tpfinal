@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { serviciosService } from '../services';
 import { useAuth } from '../context/AuthContext';
 import { success, handleApiError } from '../utils/notifications';
 import { Calendar, Clock, CheckCircle, XCircle, Users, Filter, Search, Eye, Palette, MapPin } from 'lucide-react';
-import ServicioDetalleModal from './ServicioDetalleModal';
 import CrearDisenoModal from './CrearDisenoModal';
 import DisenoClienteModal from './DisenoClienteModal';
 import Pagination from '../components/Pagination';
 
 const ServiciosPage = () => {
+  const navigate = useNavigate();
   const [servicios, setServicios] = useState([]);
   const [solicitudes, setSolicitudes] = useState([]);
   const [tiposServicio, setTiposServicio] = useState([]);
@@ -17,9 +18,6 @@ const ServiciosPage = () => {
   const [activeTab, setActiveTab] = useState('solicitudes');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [selectedServicioId, setSelectedServicioId] = useState(null);
-  const [selectedItemType, setSelectedItemType] = useState(null); // 'servicio' o 'reserva'
-  const [isDetalleModalOpen, setIsDetalleModalOpen] = useState(false);
   const [isDisenoModalOpen, setIsDisenoModalOpen] = useState(false);
   const [isDisenoClienteModalOpen, setIsDisenoClienteModalOpen] = useState(false);
   const [servicioParaDiseno, setServicioParaDiseno] = useState(null);
@@ -155,16 +153,9 @@ const ServiciosPage = () => {
   };
 
   const handleVerDetalle = (servicioId, tipo) => {
-    console.log('🔍 Abriendo detalle:', { servicioId, tipo });
-    setSelectedServicioId(servicioId);
-    setSelectedItemType(tipo);
-    setIsDetalleModalOpen(true);
-  };
-
-  const handleCloseDetalle = () => {
-    setIsDetalleModalOpen(false);
-    setSelectedServicioId(null);
-    setSelectedItemType(null);
+    if (tipo === 'reserva') {
+      navigate(`/servicios/reservas/${servicioId}`);
+    }
   };
 
   const handleCrearDiseno = (reserva) => {
@@ -532,26 +523,6 @@ const ServiciosPage = () => {
           )}
         </div>
       </div>
-
-      {/* Modal de Detalle */}
-      <ServicioDetalleModal
-        servicioId={selectedServicioId}
-        itemType={selectedItemType}
-        isOpen={isDetalleModalOpen}
-        onClose={handleCloseDetalle}
-        onVerDiseno={(disenoId) => {
-          // Cerrar el modal de detalle y abrir el modal de diseño
-          handleCloseDetalle();
-          // Si es cliente, buscar la reserva asociada al diseño
-          if (isCliente) {
-            const diseno = disenos.find(d => d.id_diseno === disenoId);
-            if (diseno) {
-              setReservaSeleccionada(diseno.reserva || diseno.reserva_id);
-              setIsDisenoClienteModalOpen(true);
-            }
-          }
-        }}
-      />
 
       {/* Modal de Crear Diseño */}
       <CrearDisenoModal

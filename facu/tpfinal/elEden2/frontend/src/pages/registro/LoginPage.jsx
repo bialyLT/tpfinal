@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Leaf, Home, Mail, Lock, ArrowLeft } from 'lucide-react';
 import GoogleLoginButton from '../../components/GoogleLoginButton';
@@ -11,11 +11,15 @@ const LoginPage = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [searchParams] = useSearchParams();
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Verificar si hay un parámetro de redirección
   const redirectTo = searchParams.get('redirect');
+  const reservaId = searchParams.get('reserva');
+  // Obtener la URL de destino desde el state (si viene de ProtectedRoute)
+  const from = location.state?.from;
 
   const handleChange = (e) => {
     setFormData({
@@ -32,8 +36,17 @@ const LoginPage = () => {
       // Asumimos que el backend puede manejar el email como nombre de usuario
       await login(formData.email, formData.password);
       
-      // Redirigir según el parámetro
-      if (redirectTo === 'profile') {
+      // Redirigir según el origen o parámetro
+      if (from) {
+        // Si venía de una ruta protegida, redirigir allí (incluyendo query y hash)
+        const destino = typeof from === 'string'
+          ? from
+          : `${from.pathname || '/'}${from.search || ''}${from.hash || ''}`;
+        navigate(destino, { replace: true });
+      } else if (reservaId) {
+        // Compatibilidad: si todavía llega ?reserva=ID, dirigir a la nueva vista
+        navigate(`/servicios/reservas/${reservaId}#encuesta`, { replace: true });
+      } else if (redirectTo === 'profile') {
         navigate('/perfil');
       } else {
         navigate('/dashboard');
@@ -77,6 +90,13 @@ const LoginPage = () => {
               <div className="mt-4 p-3 bg-blue-900 bg-opacity-30 border border-blue-500 rounded-lg">
                 <p className="text-sm text-blue-300">
                   👋 ¡Bienvenido! Por favor inicia sesión para completar tu perfil.
+                </p>
+              </div>
+            )}
+            {reservaId && (
+              <div className="mt-4 p-3 bg-emerald-900 bg-opacity-30 border border-emerald-500 rounded-lg">
+                <p className="text-sm text-emerald-200">
+                  📝 Detectamos un enlace de encuesta para la reserva <span className="font-semibold">#{reservaId}</span>. Inicia sesión con tu cuenta de cliente y te llevaremos directo a la encuesta.
                 </p>
               </div>
             )}
@@ -146,7 +166,7 @@ const LoginPage = () => {
             </div>
 
             {/* Google Login Button */}
-            <GoogleLoginButton isRegister={false} />
+            <GoogleLoginButton isRegister={false} redirectTo={from} />
           </form>
         </div>
       </div>

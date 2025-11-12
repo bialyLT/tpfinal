@@ -1,17 +1,10 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const ProtectedRoute = ({ children, allowedRoles = [], redirectTo = '/mis-servicios' }) => {
   const { user, loading } = useAuth();
-
-  // Log para debugging
-  console.log('🔒 ProtectedRoute - Checking access:', {
-    path: window.location.pathname,
-    user: user ? user.email : 'No user',
-    loading,
-    allowedRoles
-  });
+  const location = useLocation();
 
   // Mostrar loading mientras se verifica la autenticación
   if (loading) {
@@ -23,10 +16,13 @@ const ProtectedRoute = ({ children, allowedRoles = [], redirectTo = '/mis-servic
     );
   }
 
-  // Si no hay usuario, redirigir al login
+  // Si no hay usuario, redirigir al login guardando la URL de destino
   if (!user) {
     console.log('🔒 ProtectedRoute - No user, redirecting to login');
-    return <Navigate to="/login" replace />;
+    // Guardar la ruta completa (incluyendo query params) para redirigir después del login
+  const search = location.search || '';
+  const loginPath = search ? `/login${search}` : '/login';
+  return <Navigate to={loginPath} state={{ from: location }} replace />;
   }
 
   // Si no se especifican roles permitidos, cualquier usuario autenticado puede acceder
@@ -38,7 +34,8 @@ const ProtectedRoute = ({ children, allowedRoles = [], redirectTo = '/mis-servic
   const userRole = user.perfil?.tipo_usuario || 'cliente';
   const isAdmin = user.is_staff || user.is_superuser || userRole === 'administrador' || user.groups?.includes('Administradores');
   const isEmpleado = userRole === 'empleado' || userRole === 'diseñador' || user.groups?.includes('Empleados');
-  const isCliente = userRole === 'cliente' || user.groups?.includes('Clientes');
+  // Un cliente es cualquier usuario que no es admin ni empleado, o que tiene el grupo Clientes
+  const isCliente = !isAdmin && !isEmpleado || userRole === 'cliente' || user.groups?.includes('Clientes');
 
   // Verificar permisos basándose en roles permitidos
   let hasPermission = false;
