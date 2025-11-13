@@ -78,6 +78,10 @@ class Pregunta(models.Model):
         null=True,
         help_text='Opciones para preguntas de tipo múltiple (formato JSON)'
     )
+    impacta_puntuacion = models.BooleanField(
+        default=False,
+        help_text='Indica si la respuesta impacta la puntuación de los empleados asignados'
+    )
     
     # Relación con Encuesta
     encuesta = models.ForeignKey(

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { usersService } from '../services';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -13,7 +13,8 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   UserGroupIcon,
-  ShieldCheckIcon
+  ShieldCheckIcon,
+  StarIcon
 } from '@heroicons/react/24/outline';
 
 const EmpleadosPage = () => {
@@ -205,6 +206,41 @@ const EmpleadosPage = () => {
     return matchesSearch && matchesStatus;
   });
 
+  const empleadosConImpacto = useMemo(
+    () => empleados.filter(e => (e.empleado_metricas?.puntuacion_cantidad ?? 0) > 0).length,
+    [empleados]
+  );
+
+  const promedioGlobal = useMemo(() => {
+    const valores = empleados
+      .map(e => Number(e.empleado_metricas?.puntuacion_promedio))
+      .filter(value => Number.isFinite(value));
+    if (!valores.length) {
+      return 0;
+    }
+    const suma = valores.reduce((acc, val) => acc + val, 0);
+    return suma / valores.length;
+  }, [empleados]);
+
+  const formatPromedio = (metricas) => {
+    if (!metricas || metricas.puntuacion_promedio === null || metricas.puntuacion_promedio === undefined) {
+      return '—';
+    }
+    const value = Number(metricas.puntuacion_promedio);
+    return Number.isFinite(value) ? value.toFixed(2) : '—';
+  };
+
+  const formatFechaPuntuacion = (metricas) => {
+    if (!metricas || !metricas.fecha_ultima_puntuacion) {
+      return null;
+    }
+    const fecha = new Date(metricas.fecha_ultima_puntuacion);
+    if (Number.isNaN(fecha.getTime())) {
+      return null;
+    }
+    return fecha.toLocaleDateString('es-ES');
+  };
+
   if (!isAdmin) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -252,7 +288,7 @@ const EmpleadosPage = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
             <div className="flex items-center justify-between">
               <div>
@@ -284,6 +320,21 @@ const EmpleadosPage = () => {
                 </p>
               </div>
               <XCircleIcon className="w-8 h-8 text-red-400" />
+            </div>
+          </div>
+
+          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-400">Promedio Global</p>
+                <p className="text-2xl font-bold text-yellow-400">
+                  {promedioGlobal.toFixed(2)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {empleadosConImpacto} empleados con respuestas de impacto
+                </p>
+              </div>
+              <StarIcon className="w-8 h-8 text-yellow-400" />
             </div>
           </div>
         </div>
@@ -347,6 +398,7 @@ const EmpleadosPage = () => {
                       <th className="text-left py-3 px-4 font-medium text-gray-400">Usuario</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-400">Nombre</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-400">Email</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-400">Puntuación</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-400">Estado</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-400">Fecha Registro</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-400">Acciones</th>
@@ -368,6 +420,17 @@ const EmpleadosPage = () => {
                         </td>
                         <td className="py-3 px-4">
                           <div className="text-gray-300">{empleado.email}</div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="text-gray-300">
+                            <div className="text-white font-semibold">
+                              {formatPromedio(empleado.empleado_metricas)}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              {(empleado.empleado_metricas?.puntuacion_cantidad ?? 0)} respuestas impacto
+                              {formatFechaPuntuacion(empleado.empleado_metricas) ? ` · ${formatFechaPuntuacion(empleado.empleado_metricas)}` : ''}
+                            </div>
+                          </div>
                         </td>
                         <td className="py-3 px-4">
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${

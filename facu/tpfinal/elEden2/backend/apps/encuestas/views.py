@@ -5,6 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
 from django.db import transaction
+from decimal import Decimal
 from .models import Encuesta, Pregunta, EncuestaRespuesta, Respuesta
 from apps.users.models import Cliente
 from .serializers import (
@@ -218,6 +219,38 @@ class EncuestaViewSet(viewsets.ModelViewSet):
                 encuesta_respuesta.estado = 'completada'
                 encuesta_respuesta.fecha_completada = timezone.now()
                 encuesta_respuesta.save()
+
+                try:
+                    respuestas_relevantes = encuesta_respuesta.respuestas.filter(
+                        pregunta__impacta_puntuacion=True,
+                        pregunta__tipo='escala'
+                    )
+                    valores_puntuacion = [
+                        Decimal(respuesta.valor_numerico)
+                        for respuesta in respuestas_relevantes
+                        if respuesta.valor_numerico is not None
+                    ]
+
+                    if valores_puntuacion:
+                        total_puntuacion = sum(valores_puntuacion, Decimal('0'))
+                        cantidad_puntuacion = len(valores_puntuacion)
+                        timestamp = encuesta_respuesta.fecha_completada
+                        empleados_asignados = list(reserva.empleados.all())
+
+                        for empleado in empleados_asignados:
+                            empleado.registrar_resultado_encuesta(
+                                puntuacion_total=total_puntuacion,
+                                cantidad_items=cantidad_puntuacion,
+                                timestamp=timestamp
+                            )
+                except Exception as scoring_error:
+                    logger.error(
+                        "No se pudo actualizar la puntuación de empleados para la encuesta %s (reserva %s): %s",
+                        encuesta_respuesta.pk,
+                        reserva.id_reserva,
+                        scoring_error,
+                        exc_info=True
+                    )
                 
                 logger.info(f"Cliente {cliente.pk} completó encuesta {encuesta_activa.pk} para reserva {reserva_id}")
                 

@@ -8,7 +8,17 @@ class PreguntaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Pregunta
-        fields = ['id_pregunta', 'texto', 'tipo', 'tipo_display', 'orden', 'obligatoria', 'opciones', 'encuesta']
+        fields = [
+            'id_pregunta',
+            'texto',
+            'tipo',
+            'tipo_display',
+            'orden',
+            'obligatoria',
+            'opciones',
+            'impacta_puntuacion',
+            'encuesta'
+        ]
         read_only_fields = ['id_pregunta']
 
 
@@ -16,12 +26,13 @@ class PreguntaCreateUpdateSerializer(serializers.ModelSerializer):
     """Serializer para crear/actualizar preguntas sin el campo encuesta (se usa en nested)"""
     class Meta:
         model = Pregunta
-        fields = ['id_pregunta', 'texto', 'tipo', 'orden', 'obligatoria', 'opciones']
+        fields = ['id_pregunta', 'texto', 'tipo', 'orden', 'obligatoria', 'opciones', 'impacta_puntuacion']
         read_only_fields = ['id_pregunta']
 
     def validate(self, data):
         """Validar que las preguntas de tipo múltiple tengan opciones"""
-        if data.get('tipo') == 'multiple':
+        tipo = data.get('tipo') or (self.instance.tipo if self.instance else None)
+        if tipo == 'multiple':
             if not data.get('opciones'):
                 raise serializers.ValidationError({
                     'opciones': 'Las preguntas de opción múltiple deben tener opciones definidas.'
@@ -31,6 +42,15 @@ class PreguntaCreateUpdateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     'opciones': 'Las opciones deben ser una lista.'
                 })
+
+        impacta = data.get('impacta_puntuacion')
+        if impacta is None and self.instance:
+            impacta = self.instance.impacta_puntuacion
+
+        if impacta and tipo != 'escala':
+            raise serializers.ValidationError({
+                'impacta_puntuacion': 'Solo las preguntas de tipo escala (1-5) pueden impactar la puntuación de empleados.'
+            })
         return data
 
 

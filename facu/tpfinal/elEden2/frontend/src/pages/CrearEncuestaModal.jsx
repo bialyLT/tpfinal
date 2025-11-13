@@ -51,7 +51,10 @@ const CrearEncuestaModal = ({ show, onClose, onSuccess, encuesta, modoEdicion })
         titulo: encuesta.titulo,
         descripcion: encuesta.descripcion || '',
         activa: encuesta.activa,
-        preguntas: encuesta.preguntas || []
+        preguntas: (encuesta.preguntas || []).map((pregunta, index) => ({
+          ...pregunta,
+          impacta_puntuacion: Boolean(pregunta.impacta_puntuacion)
+        }))
       });
     } else {
       // Resetear form cuando es creación
@@ -74,7 +77,8 @@ const CrearEncuestaModal = ({ show, onClose, onSuccess, encuesta, modoEdicion })
           tipo: 'texto',
           orden: prev.preguntas.length + 1,
           obligatoria: true,
-          opciones: []
+          opciones: [],
+          impacta_puntuacion: false
         }
       ]
     }));
@@ -103,6 +107,9 @@ const CrearEncuestaModal = ({ show, onClose, onSuccess, encuesta, modoEdicion })
           // Si cambia de tipo múltiple a otro, limpiar opciones
           if (campo === 'tipo' && valor !== 'multiple') {
             updated.opciones = [];
+          }
+          if (campo === 'tipo' && valor !== 'escala') {
+            updated.impacta_puntuacion = false;
           }
           return updated;
         }
@@ -203,6 +210,7 @@ const CrearEncuestaModal = ({ show, onClose, onSuccess, encuesta, modoEdicion })
         ...formData,
         preguntas: formData.preguntas.map(p => ({
           ...p,
+          impacta_puntuacion: p.tipo === 'escala' ? Boolean(p.impacta_puntuacion) : false,
           opciones: p.tipo === 'multiple' ? p.opciones.filter(o => o.trim()) : []
         }))
       };
@@ -378,6 +386,18 @@ const CrearEncuestaModal = ({ show, onClose, onSuccess, encuesta, modoEdicion })
                           />
                           Obligatoria
                         </label>
+
+                        {pregunta.tipo === 'escala' && (
+                          <label className="flex items-center gap-2 text-sm text-gray-300">
+                            <input
+                              type="checkbox"
+                              checked={pregunta.impacta_puntuacion}
+                              onChange={(e) => actualizarPregunta(index, 'impacta_puntuacion', e.target.checked)}
+                              className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
+                            />
+                            Impacta en puntuación
+                          </label>
+                        )}
                       </div>
 
                       {/* Opciones para preguntas múltiples */}

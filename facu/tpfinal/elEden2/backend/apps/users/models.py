@@ -1,5 +1,7 @@
 ﻿from django.db import models
 from django.core.validators import RegexValidator
+from decimal import Decimal, ROUND_HALF_UP
+from django.utils import timezone
 
 
 class Genero(models.Model):
@@ -113,6 +115,27 @@ class Empleado(models.Model):
     activo = models.BooleanField(default=True)
     cargo = models.CharField(max_length=100, blank=True, null=True)
     observaciones = models.TextField(blank=True, null=True)
+    puntuacion_acumulada = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text='Suma de todas las puntuaciones recibidas de encuestas'
+    )
+    puntuacion_cantidad = models.PositiveIntegerField(
+        default=0,
+        help_text='Cantidad de respuestas de encuesta consideradas para la puntuación'
+    )
+    puntuacion_promedio = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text='Promedio de puntuación acumulada (formato 0.00)'
+    )
+    fecha_ultima_puntuacion = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Última vez que se actualizó la puntuación desde una encuesta'
+    )
     
     class Meta:
         verbose_name = 'Empleado'
@@ -122,6 +145,32 @@ class Empleado(models.Model):
 
     def __str__(self):
         return f"Empleado: {self.persona.apellido}, {self.persona.nombre}"
+
+    def registrar_resultado_encuesta(self, puntuacion_total: Decimal, cantidad_items: int, timestamp=None):
+        """Actualiza la puntuación del empleado con los resultados de una encuesta."""
+        if cantidad_items <= 0:
+            return
+
+        if not isinstance(puntuacion_total, Decimal):
+            puntuacion_total = Decimal(puntuacion_total)
+
+        self.puntuacion_acumulada = (self.puntuacion_acumulada or Decimal('0')) + puntuacion_total
+        self.puntuacion_cantidad += int(cantidad_items)
+
+        if self.puntuacion_cantidad > 0:
+            promedio = self.puntuacion_acumulada / Decimal(self.puntuacion_cantidad)
+            self.puntuacion_promedio = promedio.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        else:
+            self.puntuacion_promedio = Decimal('0.00')
+
+        self.fecha_ultima_puntuacion = timestamp or timezone.now()
+
+        self.save(update_fields=[
+            'puntuacion_acumulada',
+            'puntuacion_cantidad',
+            'puntuacion_promedio',
+            'fecha_ultima_puntuacion'
+        ])
 
 
 class Proveedor(models.Model):

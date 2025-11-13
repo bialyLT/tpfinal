@@ -57,14 +57,41 @@ class ProveedorSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     """Serializer para listar usuarios (empleados)"""
     groups = serializers.SerializerMethodField()
+    empleado_metricas = serializers.SerializerMethodField()
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'is_active', 'is_staff', 'groups', 'date_joined', 'last_login']
+        fields = [
+            'id',
+            'username',
+            'email',
+            'first_name',
+            'last_name',
+            'is_active',
+            'is_staff',
+            'groups',
+            'date_joined',
+            'last_login',
+            'empleado_metricas'
+        ]
         read_only_fields = ['id', 'date_joined', 'last_login']
     
     def get_groups(self, obj):
         return [group.name for group in obj.groups.all()]
+
+    def get_empleado_metricas(self, obj):
+        persona = getattr(obj, 'persona', None)
+        if not persona or not hasattr(persona, 'empleado'):
+            return None
+
+        empleado = persona.empleado
+        return {
+            'id_empleado': empleado.id_empleado,
+            'puntuacion_promedio': float(empleado.puntuacion_promedio) if empleado.puntuacion_promedio is not None else None,
+            'puntuacion_cantidad': empleado.puntuacion_cantidad,
+            'puntuacion_acumulada': float(empleado.puntuacion_acumulada) if empleado.puntuacion_acumulada is not None else None,
+            'fecha_ultima_puntuacion': empleado.fecha_ultima_puntuacion
+        }
 
 
 class CreateEmpleadoSerializer(serializers.Serializer):
