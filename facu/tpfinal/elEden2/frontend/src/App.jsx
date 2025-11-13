@@ -90,6 +90,7 @@ const AppLayout = ({ children }) => {
   // Páginas donde NO se debe mostrar el Navbar (login y register)
   const hideNavbarPages = ['/login', '/register'];
   const shouldShowNavbar = !hideNavbarPages.includes(location.pathname);
+  const requiresNavbarPadding = shouldShowNavbar && location.pathname !== '/';
   
   return (
     <div className="min-h-screen bg-gray-900">
@@ -114,7 +115,7 @@ const AppLayout = ({ children }) => {
             /* Clientes usan Navbar */
             <>
               {shouldShowNavbar && <Navbar />}
-              <main className={shouldShowNavbar ? 'pt-16' : ''}>
+              <main className={requiresNavbarPadding ? 'pt-16' : ''}>
                 {children}
               </main>
             </>
@@ -124,7 +125,7 @@ const AppLayout = ({ children }) => {
         /* Usuarios no autenticados usan Navbar (excepto en login/register) */
         <>
           {shouldShowNavbar && <Navbar />}
-          <main className={shouldShowNavbar ? 'pt-16' : ''}>
+          <main className={requiresNavbarPadding ? 'pt-16' : ''}>
             {children}
           </main>
         </>

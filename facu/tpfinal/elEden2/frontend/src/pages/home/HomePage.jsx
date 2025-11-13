@@ -5,40 +5,6 @@ import api from '../../services/api';
 import { success, error } from '../../utils/notifications';
 
 const HomePage = () => {
-  const [loadingPago, setLoadingPago] = useState(false);
-
-  const handlePagoPrueba = async () => {
-    try {
-      setLoadingPago(true);
-      const response = await api.post('/servicios/pago-prueba/', {
-        monto: 100,
-        descripcion: 'Pago de Prueba - El Edén'
-      });
-      
-      console.log('=== RESPUESTA DE PAGO DE PRUEBA ===');
-      console.log('Preference ID:', response.data.preference_id);
-      console.log('Init Point:', response.data.init_point);
-      console.log('Sandbox Init Point:', response.data.sandbox_init_point);
-      console.log('Mensaje:', response.data.mensaje);
-      console.log('===================================');
-      
-      success('Redirigiendo a MercadoPago... Usa tarjeta: 5031 7557 3453 0604', 5000);
-      
-      // Redirigir a MercadoPago
-      setTimeout(() => {
-        const redirectUrl = response.data.sandbox_init_point || response.data.init_point;
-        console.log('Redirigiendo a:', redirectUrl);
-        window.location.href = redirectUrl;
-      }, 2000);
-      
-    } catch (err) {
-      console.error('Error al crear pago de prueba:', err);
-      console.error('Detalles:', err.response?.data);
-      error('Error al crear el pago de prueba: ' + (err.response?.data?.detalle || err.message));
-    } finally {
-      setLoadingPago(false);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans">
@@ -64,31 +30,7 @@ const HomePage = () => {
                 <Link to="/register" className="btn btn-primary btn-lg">
                   Comenzar Ahora
                 </Link>
-                
-                {/* Botón de Prueba de MercadoPago */}
-                <button 
-                  onClick={handlePagoPrueba}
-                  disabled={loadingPago}
-                  className="btn btn-outline btn-lg flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white border-0"
-                >
-                  {loadingPago ? (
-                    <>
-                      <Loader className="animate-spin" size={20} />
-                      Cargando...
-                    </>
-                  ) : (
-                    <>
-                      <CreditCard size={20} />
-                      Probar MercadoPago
-                    </>
-                  )}
-                </button>
               </div>
-              
-              {/* Mensaje informativo del botón de prueba */}
-              <p className="mt-4 text-sm text-gray-500 max-w-2xl mx-auto md:mx-0">
-                * Botón de prueba: Genera un pago de $100 en MercadoPago sandbox para testing
-              </p>
             </div>
           </div>
         </main>
