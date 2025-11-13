@@ -2,7 +2,7 @@
 
 Sistema completo de gestión para viveros con Django REST Framework + React + PostgreSQL.
 
-## 🚀 Inicio Rápido con Docker (Recomendado)
+## Inicio Rápido con Docker (Recomendado)
 
 ### Requisitos
 - [Docker Desktop](https://www.docker.com/products/docker-desktop) instalado y corriendo
@@ -45,10 +45,10 @@ Sistema completo de gestión para viveros con Django REST Framework + React + Po
    ```
 
 5. **Acceder a la aplicación**
-   - 🌐 Frontend: http://localhost:5173
-   - 🔧 Backend API: http://localhost:8000
-   - 👨‍💼 Admin Django: http://localhost:8000/admin
-   - 📧 Mailpit (emails): http://localhost:8025
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:8000
+   - Admin Django: http://localhost:8000/admin
+   - Mailpit (emails): http://localhost:8025
 
 ### Detener servicios
 ```bash
@@ -57,11 +57,10 @@ docker-stop.bat
 docker-compose down
 ```
 
-📚 **Documentación completa**: Ver [DOCKER_README.md](DOCKER_README.md)
 
 ---
 
-## 🛠️ Instalación Manual (Sin Docker)
+## Instalación Manual (Sin Docker)
 
 ### Requisitos
 - Python 3.10+
@@ -123,13 +122,10 @@ docker-compose down
    npm run dev
    ```
 
-### PostgreSQL (Opcional)
-
-Ver [POSTGRESQL_MIGRATION.md](backend/POSTGRESQL_MIGRATION.md) para instrucciones detalladas.
 
 ---
 
-## 📖 Estructura del Proyecto
+## Estructura del Proyecto
 
 ```
 elEden2/
@@ -157,7 +153,7 @@ elEden2/
 
 ---
 
-## 🔧 Tecnologías
+## Tecnologías
 
 ### Backend
 - Django 5.2
@@ -181,16 +177,14 @@ elEden2/
 
 ---
 
-## 📚 Documentación Adicional
+## Documentación Adicional
 
-- [DOCKER_README.md](DOCKER_README.md) - Guía completa de Docker
-- [POSTGRESQL_MIGRATION.md](backend/POSTGRESQL_MIGRATION.md) - Migración a PostgreSQL
 - [backend/.env.example](backend/.env.example) - Variables de entorno backend
 - [frontend/.env.example](frontend/.env.example) - Variables de entorno frontend
 
 ---
 
-## 🔑 Credenciales de Prueba
+## Credenciales de Prueba
 
 ### MercadoPago (Sandbox)
 Las credenciales de prueba se configuran en el archivo `.env`
@@ -201,13 +195,7 @@ http://localhost:8000/admin
 
 ---
 
-## 🐛 Solución de Problemas
-
-### Docker
-Ver [DOCKER_README.md - Solución de Problemas](DOCKER_README.md#-solución-de-problemas)
-
-### PostgreSQL
-Ver [POSTGRESQL_MIGRATION.md - Solución de Problemas](backend/POSTGRESQL_MIGRATION.md#-solución-de-problemas)
+## Solución de Problemas
 
 ### Frontend no Carga
 ```bash
@@ -227,7 +215,7 @@ python manage.py migrate
 
 ---
 
-## 📝 Scripts Disponibles
+## Scripts Disponibles
 
 ### Windows
 - `docker-start.bat` - Iniciar todos los servicios
@@ -254,7 +242,7 @@ docker-compose exec backend python manage.py test
 
 ---
 
-## 👥 Contribuir
+## Contribuir
 
 1. Fork el proyecto
 2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
@@ -264,19 +252,11 @@ docker-compose exec backend python manage.py test
 
 ---
 
-## 📄 Licencia
-
-Este proyecto está bajo la Licencia MIT.
-
----
-
-## 📞 Soporte
+## Soporte
 
 Para soporte y preguntas:
-- 📧 Email: soporte@eleden.com
-- 📖 Documentación: [DOCKER_README.md](DOCKER_README.md)
-- 🐛 Issues: Abre un issue en GitHub
+- Email: soporte@eleden.com
+- Documentación: [DOCKER_README.md](DOCKER_README.md)
+- Issues: Abre un issue en GitHub
 
 ---
-
-**¡Hecho con 💚 por el equipo de El Edén!**

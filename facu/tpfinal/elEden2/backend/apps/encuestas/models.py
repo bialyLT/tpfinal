@@ -1,4 +1,5 @@
 ﻿from django.db import models
+from django.db.models import Q
 from django.core.exceptions import ValidationError
 from apps.users.models import Cliente
 
@@ -21,6 +22,13 @@ class Encuesta(models.Model):
         verbose_name = 'Encuesta'
         verbose_name_plural = 'Encuestas'
         ordering = ['-fecha_creacion']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['activa'],
+                condition=Q(activa=True),
+                name='unique_active_encuesta'
+            )
+        ]
 
     def __str__(self):
         return self.titulo

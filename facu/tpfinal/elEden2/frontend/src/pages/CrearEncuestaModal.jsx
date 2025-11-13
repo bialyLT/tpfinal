@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2, GripVertical } from 'lucide-react';
 import api from '../services/api';
+import { encuestasService } from '../services/encuestasService';
 
 const TIPOS_PREGUNTA = [
   { value: 'texto', label: 'Texto Libre' },
@@ -19,8 +20,32 @@ const CrearEncuestaModal = ({ show, onClose, onSuccess, encuesta, modoEdicion })
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [encuestaActiva, setEncuestaActiva] = useState(null);
+  const [loadingActiva, setLoadingActiva] = useState(false);
+
+  const disableActiveCreation = !modoEdicion && !loadingActiva && formData.activa && Boolean(encuestaActiva);
 
   useEffect(() => {
+    const obtenerActiva = async () => {
+      setLoadingActiva(true);
+      try {
+        const activa = await encuestasService.obtenerEncuestaActiva();
+        setEncuestaActiva(activa);
+      } catch (error) {
+        if (error.response?.status === 404) {
+          setEncuestaActiva(null);
+        } else {
+          console.error('Error al verificar encuesta activa:', error);
+        }
+      } finally {
+        setLoadingActiva(false);
+      }
+    };
+
+    if (!modoEdicion) {
+      obtenerActiva();
+    }
+
     if (modoEdicion && encuesta) {
       setFormData({
         titulo: encuesta.titulo,
@@ -162,6 +187,14 @@ const CrearEncuestaModal = ({ show, onClose, onSuccess, encuesta, modoEdicion })
       return;
     }
 
+    if (!modoEdicion && formData.activa && encuestaActiva) {
+      setErrors((prev) => ({
+        ...prev,
+        activa: 'Ya existe una encuesta activa. Desactívala antes de crear una nueva.'
+      }));
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -264,6 +297,20 @@ const CrearEncuestaModal = ({ show, onClose, onSuccess, encuesta, modoEdicion })
                 Encuesta activa (visible para responder)
               </label>
             </div>
+            {errors.activa && (
+              <p className="text-red-400 text-sm mt-1">{errors.activa}</p>
+            )}
+
+            {disableActiveCreation && (
+              <div className="p-4 rounded-lg border border-amber-400 bg-amber-500/10 text-amber-200">
+                <p className="text-sm font-semibold">
+                  Ya existe una encuesta activa: <span className="underline">{encuestaActiva.titulo}</span>.
+                </p>
+                <p className="text-sm mt-1">
+                  Debes desactivar esa encuesta antes de crear una nueva como activa.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Preguntas */}
@@ -396,7 +443,7 @@ const CrearEncuestaModal = ({ show, onClose, onSuccess, encuesta, modoEdicion })
             <button
               type="submit"
               className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={loading}
+              disabled={loading || disableActiveCreation}
             >
               {loading ? 'Guardando...' : modoEdicion ? 'Actualizar' : 'Crear'}
             </button>

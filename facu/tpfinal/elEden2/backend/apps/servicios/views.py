@@ -34,7 +34,10 @@ class ServicioViewSet(viewsets.ModelViewSet):
 
 
 class ReservaViewSet(viewsets.ModelViewSet):
-    queryset = Reserva.objects.select_related('cliente__persona', 'servicio').all()
+    queryset = Reserva.objects.select_related('cliente__persona', 'servicio').prefetch_related(
+        'encuestas__cliente__persona',
+        'encuestas__encuesta'
+    ).all()
     serializer_class = ReservaSerializer
     pagination_class = SmallResultsSetPagination  # 5 items por página (para "Mis Reservas")
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]

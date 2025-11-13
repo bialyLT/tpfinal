@@ -80,6 +80,15 @@ const ReservaDetallePage = () => {
       return;
     }
 
+    if (reserva.encuesta_cliente_completada) {
+      setSurveyState((prev) => ({
+        ...prev,
+        completada: true,
+        yaRespondio: true,
+      }));
+      return;
+    }
+
     loadEncuesta();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reserva, isCliente]);
@@ -114,7 +123,7 @@ const ReservaDetallePage = () => {
   const loadEncuesta = async () => {
     setSurveyState((prev) => ({ ...prev, loading: true, error: null }));
     try {
-  const encuestaActiva = await encuestasService.obtenerEncuestaActiva();
+      const encuestaActiva = await encuestasService.obtenerEncuestaActiva();
 
       const respuestasIniciales = {};
       encuestaActiva.preguntas.forEach((pregunta) => {
@@ -129,21 +138,7 @@ const ReservaDetallePage = () => {
         };
       });
 
-      let yaRespondio = false;
-      try {
-        const params = {
-          estado: 'completada',
-          reserva: apiReservaId,
-        };
-        if (user?.cliente?.id_cliente) {
-          params.cliente = user.cliente.id_cliente;
-        }
-  const respuestas = await encuestasService.obtenerRespuestas(params);
-  const lista = respuestas?.results || respuestas || [];
-  yaRespondio = lista.some((item) => Number(item.reserva) === Number(apiReservaId));
-      } catch (respuestasError) {
-        console.error('No se pudo verificar el estado de la encuesta:', respuestasError);
-      }
+      const yaRespondio = Boolean(reserva?.encuesta_cliente_completada);
 
       setSurveyState({
         loading: false,
@@ -227,14 +222,17 @@ const ReservaDetallePage = () => {
 
     try {
       setEnviandoEncuesta(true);
-  const respuestasArray = Object.values(surveyState.respuestas);
-  await encuestasService.responderEncuesta(apiReservaId, respuestasArray);
+      const respuestasArray = Object.values(surveyState.respuestas);
+      await encuestasService.responderEncuesta(apiReservaId, respuestasArray);
       success('¡Gracias por compartir tu experiencia!');
       setSurveyState((prev) => ({
         ...prev,
         completada: true,
         yaRespondio: true,
       }));
+      setReserva((prev) => (
+        prev ? { ...prev, encuesta_cliente_completada: true } : prev
+      ));
     } catch (error) {
       handleApiError(error, 'No pudimos enviar la encuesta');
     } finally {

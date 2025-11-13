@@ -1,5 +1,6 @@
 ﻿from rest_framework import serializers
 from .models import Servicio, Reserva, Diseno, DisenoProducto, ImagenDiseno, ImagenReserva, ReservaEmpleado
+from apps.users.models import Cliente
 
 
 class ServicioSerializer(serializers.ModelSerializer):
@@ -50,6 +51,8 @@ class ReservaSerializer(serializers.ModelSerializer):
     imagenes = ImagenReservaSerializer(many=True, read_only=True)
     # Incluir diseños relacionados con información básica
     disenos = serializers.SerializerMethodField()
+    encuesta_cliente_completada = serializers.SerializerMethodField()
+    encuesta_cliente_respuesta_id = serializers.SerializerMethodField()
     
     class Meta:
         model = Reserva
@@ -67,6 +70,34 @@ class ReservaSerializer(serializers.ModelSerializer):
             'disenador_id': d.disenador.id_empleado if d.disenador else None,
             'disenador_nombre': f"{d.disenador.persona.nombre} {d.disenador.persona.apellido}" if d.disenador else None
         } for d in disenos]
+
+    def _get_cliente_respuesta(self, obj):
+        """Obtiene la respuesta de encuesta completada por el cliente autenticado, si existe."""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+
+        cache = self.context.setdefault('_encuesta_respuestas_cache', {})
+        cache_key = obj.id_reserva
+        if cache_key in cache:
+            return cache[cache_key]
+
+        cliente = Cliente.objects.filter(persona__email=request.user.email).first()
+        if not cliente:
+            cache[cache_key] = None
+            return None
+
+        respuesta = obj.encuestas.filter(cliente=cliente, estado='completada').order_by('-fecha_completada').first()
+        cache[cache_key] = respuesta
+        return respuesta
+
+    def get_encuesta_cliente_completada(self, obj):
+        respuesta = self._get_cliente_respuesta(obj)
+        return bool(respuesta)
+
+    def get_encuesta_cliente_respuesta_id(self, obj):
+        respuesta = self._get_cliente_respuesta(obj)
+        return respuesta.id_encuesta_respuesta if respuesta else None
 
 
 class ImagenDisenoSerializer(serializers.ModelSerializer):

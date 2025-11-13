@@ -263,6 +263,19 @@ class EncuestaRespuestaViewSet(viewsets.ModelViewSet):
     ordering_fields = ['fecha_inicio', 'fecha_completada']
     ordering = ['-fecha_inicio']
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+
+        if user.is_staff:
+            return queryset
+
+        cliente = Cliente.objects.filter(persona__email=user.email).first()
+        if not cliente:
+            return queryset.none()
+
+        return queryset.filter(cliente=cliente)
+
 
 class RespuestaViewSet(viewsets.ModelViewSet):
     queryset = Respuesta.objects.select_related('encuesta_respuesta', 'pregunta').all()
