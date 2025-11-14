@@ -41,17 +41,6 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
   const [productosSeleccionados, setProductosSeleccionados] = useState([]);
   const [previewImages, setPreviewImages] = useState([]);
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchProductos();
-      if (modoEdicion && diseno) {
-        cargarDisenoParaEditar();
-      } else {
-        resetForm();
-      }
-    }
-  }, [isOpen, modoEdicion, diseno, cargarDisenoParaEditar]);
-
   const cargarDisenoParaEditar = useCallback(async () => {
     if (!diseno?.id_diseno) return;
     try {
@@ -121,6 +110,17 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       console.error('❌ Response:', error.response);
     }
   }, [diseno]);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchProductos();
+      if (modoEdicion && diseno) {
+        cargarDisenoParaEditar();
+      } else {
+        resetForm();
+      }
+    }
+  }, [isOpen, modoEdicion, diseno, cargarDisenoParaEditar]);
 
   const fetchProductos = async () => {
     try {

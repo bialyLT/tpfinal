@@ -15,12 +15,6 @@ const DisenoClienteModal = ({ isOpen, onClose, reservaId, onDisenoActualizado })
   const [procesando, setProcesando] = useState(false);
   const [cancelarServicio, setCancelarServicio] = useState(false);
 
-  useEffect(() => {
-    if (isOpen && reservaId) {
-      fetchDisenos();
-    }
-  }, [isOpen, reservaId, fetchDisenos]);
-
   const fetchDisenos = useCallback(async () => {
     try {
       setLoading(true);
@@ -51,6 +45,12 @@ const DisenoClienteModal = ({ isOpen, onClose, reservaId, onDisenoActualizado })
       setLoading(false);
     }
   }, [reservaId]);
+
+  useEffect(() => {
+    if (isOpen && reservaId) {
+      fetchDisenos();
+    }
+  }, [isOpen, reservaId, fetchDisenos]);
 
   const handleAceptar = async () => {
     if (!disenoActual) return;
