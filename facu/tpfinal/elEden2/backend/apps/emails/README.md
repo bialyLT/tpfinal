@@ -181,7 +181,7 @@ cd C:\Users\Usuario\Downloads\mailpit-windows-amd64
 
 3. **Probar email de cliente:** Registrar un nuevo cliente desde el frontend
 
-4. **Probar email de empleado:** Crear un nuevo empleado desde el panel de administración (Gestión de Usuarios)
+4. **Probar email de empleado:** Crear un nuevo empleado desde el panel de administración (Gestión de Empleados)
 
 5. Verificar que ambos emails llegaron a Mailpit con sus respectivos contenidos
 

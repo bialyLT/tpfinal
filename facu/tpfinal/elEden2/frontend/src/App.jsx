@@ -177,9 +177,9 @@ function App() {
               } 
             />
 
-            {/* Usuarios (Empleados) - Solo Administradores */}
+            {/* Empleados - Solo Administradores */}
             <Route 
-              path="/usuarios" 
+              path="/empleados" 
               element={
                 <ProtectedRoute allowedRoles={['administrador']}>
                   <EmpleadosPage />

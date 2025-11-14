@@ -264,7 +264,7 @@ class EmpleadoViewSet(viewsets.ModelViewSet):
         """Obtener solo usuarios que pertenecen al grupo 'Empleados'"""
         empleados_group = Group.objects.filter(name='Empleados').first()
         if empleados_group:
-            return User.objects.filter(groups=empleados_group)
+            return User.objects.filter(groups=empleados_group).select_related('persona').select_related('persona__empleado')
         return User.objects.none()
     
     def get_serializer_class(self):

@@ -1,4 +1,6 @@
-﻿from rest_framework import serializers
+﻿from decimal import Decimal
+from django.utils import timezone
+from rest_framework import serializers
 from django.contrib.auth.models import User, Group
 from .models import Genero, TipoDocumento, Localidad, Persona, Cliente, Empleado, Proveedor
 
@@ -55,7 +57,7 @@ class ProveedorSerializer(serializers.ModelSerializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
-    """Serializer para listar usuarios (empleados)"""
+    """Serializer para listar empleados (usuarios del grupo "Empleados")"""
     groups = serializers.SerializerMethodField()
     empleado_metricas = serializers.SerializerMethodField()
     
@@ -80,18 +82,31 @@ class UserSerializer(serializers.ModelSerializer):
         return [group.name for group in obj.groups.all()]
 
     def get_empleado_metricas(self, obj):
-        persona = getattr(obj, 'persona', None)
-        if not persona or not hasattr(persona, 'empleado'):
+        empleado = self._resolve_empleado(obj)
+        if not empleado:
             return None
 
-        empleado = persona.empleado
         return {
             'id_empleado': empleado.id_empleado,
             'puntuacion_promedio': float(empleado.puntuacion_promedio) if empleado.puntuacion_promedio is not None else None,
-            'puntuacion_cantidad': empleado.puntuacion_cantidad,
+            'puntuacion_cantidad': empleado.puntuacion_cantidad or 0,
             'puntuacion_acumulada': float(empleado.puntuacion_acumulada) if empleado.puntuacion_acumulada is not None else None,
             'fecha_ultima_puntuacion': empleado.fecha_ultima_puntuacion
         }
+
+    def _resolve_empleado(self, obj):
+        persona = getattr(obj, 'persona', None)
+        if persona and getattr(persona, 'empleado', None):
+            return persona.empleado
+
+        persona = Persona.objects.select_related('empleado').filter(email__iexact=obj.email).first()
+        if persona:
+            if persona.user_id is None:
+                persona.user = obj
+                persona.save(update_fields=['user'])
+            return getattr(persona, 'empleado', None)
+
+        return None
 
 
 class CreateEmpleadoSerializer(serializers.Serializer):
@@ -192,12 +207,18 @@ class CreateEmpleadoSerializer(serializers.Serializer):
             genero=genero,
             tipo_documento=tipo_documento
         )
+        persona.user = user
+        persona.save(update_fields=['user'])
         
-        # Crear Empleado
-        Empleado.objects.create(
+        # Crear Empleado con puntuación inicial para que aparezca como 10 por defecto
+        empleado = Empleado.objects.create(
             persona=persona,
             cargo=cargo or 'Sin especificar',
-            activo=True
+            activo=True,
+            puntuacion_promedio=Decimal('10.00'),
+            puntuacion_cantidad=1,
+            puntuacion_acumulada=Decimal('10.00'),
+            fecha_ultima_puntuacion=timezone.now()
         )
         
         return user

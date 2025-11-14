@@ -11,6 +11,7 @@ from decimal import Decimal
 import logging
 
 from .models import Servicio, Reserva, Diseno, DisenoProducto, ImagenDiseno, ImagenReserva, ReservaEmpleado, ConfiguracionPago
+from .utils import ordenar_empleados_por_puntuacion
 from .serializers import (
     ServicioSerializer, ReservaSerializer,
     DisenoSerializer, DisenoDetalleSerializer, CrearDisenoSerializer,
@@ -529,17 +530,26 @@ class ReservaViewSet(viewsets.ModelViewSet):
             rol='operador'
         ).values_list('empleado_id', flat=True)
         
-        # Obtener empleados disponibles (no ocupados)
-        empleados_disponibles = Empleado.objects.exclude(
+        # Obtener empleados disponibles (no ocupados) y priorizarlos por puntuación
+        empleados_disponibles_qs = Empleado.objects.exclude(
             id_empleado__in=empleados_ocupados
         ).select_related('persona')
-        
-        data = [{
-            'id': emp.id_empleado,
-            'nombre': emp.persona.nombre,
-            'apellido': emp.persona.apellido,
-            'email': emp.persona.email,
-        } for emp in empleados_disponibles]
+
+        empleados_ordenados = ordenar_empleados_por_puntuacion(empleados_disponibles_qs)
+
+        data = []
+        for prioridad, emp in enumerate(empleados_ordenados, start=1):
+            data.append({
+                'id': emp.id_empleado,
+                'nombre': emp.persona.nombre,
+                'apellido': emp.persona.apellido,
+                'email': emp.persona.email,
+                'prioridad': prioridad,
+                'puntuacion_promedio': float(emp.puntuacion_promedio) if emp.puntuacion_promedio is not None else None,
+                'puntuacion_cantidad': emp.puntuacion_cantidad,
+                'puntuacion_acumulada': float(emp.puntuacion_acumulada) if emp.puntuacion_acumulada is not None else None,
+                'fecha_ultima_puntuacion': emp.fecha_ultima_puntuacion.isoformat() if emp.fecha_ultima_puntuacion else None,
+            })
         
         return Response({
             'fecha': fecha_str,
@@ -1279,14 +1289,15 @@ class DisenoViewSet(viewsets.ModelViewSet):
                 rol='operador'
             ).values_list('empleado_id', flat=True)
             
-            # Obtener empleados disponibles
+            # Obtener empleados disponibles priorizados por puntuación
             empleados_disponibles = Empleado.objects.exclude(
                 id_empleado__in=empleados_ocupados
             ).select_related('persona')
+            empleados_prioritarios = ordenar_empleados_por_puntuacion(empleados_disponibles)
             
             # Asignar hasta 2 empleados como operadores
             empleados_asignados = []
-            for empleado in empleados_disponibles[:2]:
+            for prioridad, empleado in enumerate(empleados_prioritarios[:2], start=1):
                 asignacion, created = ReservaEmpleado.objects.get_or_create(
                     reserva=diseno.reserva,
                     empleado=empleado,
@@ -1298,7 +1309,10 @@ class DisenoViewSet(viewsets.ModelViewSet):
                 if created:
                     empleados_asignados.append({
                         'nombre': f"{empleado.persona.nombre} {empleado.persona.apellido}",
-                        'email': empleado.persona.email
+                        'email': empleado.persona.email,
+                        'prioridad': prioridad,
+                        'puntuacion_promedio': float(empleado.puntuacion_promedio) if empleado.puntuacion_promedio is not None else None,
+                        'puntuacion_cantidad': empleado.puntuacion_cantidad
                     })
             
             mensaje = 'Diseño aceptado exitosamente. Stock descontado.'

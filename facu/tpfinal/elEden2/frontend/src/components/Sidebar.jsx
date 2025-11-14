@@ -101,7 +101,7 @@ const Sidebar = () => {
         { name: 'Servicios', href: '/servicios', icon: Wrench },
         { name: 'Diseños', href: '/disenos', icon: Palette },
         { name: 'Encuestas', href: '/gestion-encuestas', icon: ClipboardList },
-        { name: 'Usuarios', href: '/usuarios', icon: Users },
+  { name: 'Empleados', href: '/empleados', icon: Users },
       ];
     }
 

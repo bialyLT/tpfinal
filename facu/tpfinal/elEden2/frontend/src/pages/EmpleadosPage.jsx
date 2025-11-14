@@ -206,21 +206,27 @@ const EmpleadosPage = () => {
     return matchesSearch && matchesStatus;
   });
 
-  const empleadosConImpacto = useMemo(
-    () => empleados.filter(e => (e.empleado_metricas?.puntuacion_cantidad ?? 0) > 0).length,
+  const empleadosActivos = useMemo(
+    () => empleados.filter((empleado) => empleado.is_active),
     [empleados]
   );
 
+  const empleadosConImpacto = useMemo(
+    () => empleadosActivos.filter(e => (e.empleado_metricas?.puntuacion_cantidad ?? 0) > 0).length,
+    [empleadosActivos]
+  );
+
   const promedioGlobal = useMemo(() => {
-    const valores = empleados
+    const valores = empleadosActivos
       .map(e => Number(e.empleado_metricas?.puntuacion_promedio))
       .filter(value => Number.isFinite(value));
     if (!valores.length) {
       return 0;
     }
     const suma = valores.reduce((acc, val) => acc + val, 0);
-    return suma / valores.length;
-  }, [empleados]);
+    const promedioBase = suma / valores.length;
+    return Math.min(10, Math.max(0, promedioBase));
+  }, [empleadosActivos]);
 
   const formatPromedio = (metricas) => {
     if (!metricas || metricas.puntuacion_promedio === null || metricas.puntuacion_promedio === undefined) {
@@ -323,20 +329,20 @@ const EmpleadosPage = () => {
             </div>
           </div>
 
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-400">Promedio Global</p>
-                <p className="text-2xl font-bold text-yellow-400">
-                  {promedioGlobal.toFixed(2)}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {empleadosConImpacto} empleados con respuestas de impacto
-                </p>
+            <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-400">Promedio Global (0-10)</p>
+                  <p className="text-2xl font-bold text-yellow-400">
+                    {promedioGlobal.toFixed(2)}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {empleadosConImpacto} empleados activos con respuestas de impacto
+                  </p>
+                </div>
+                <StarIcon className="w-8 h-8 text-yellow-400" />
               </div>
-              <StarIcon className="w-8 h-8 text-yellow-400" />
             </div>
-          </div>
         </div>
 
         {/* Filters */}

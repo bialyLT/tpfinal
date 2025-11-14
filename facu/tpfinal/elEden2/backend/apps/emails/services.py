@@ -4,6 +4,8 @@ Servicios para envío de emails
 from django.core.mail import send_mail, EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.utils import timezone
 from django.utils.html import strip_tags
 import logging
 
@@ -509,6 +511,56 @@ Sistema de Notificaciones - El Edén
             logger.error(f"❌ [EmailService] Error al enviar notificación a administradores")
             logger.error(f"   ❌ Error: {str(e)}")
             logger.error(f"   🔍 Tipo: {type(e).__name__}")
+            return False
+
+    @staticmethod
+    def send_employee_deactivation_alert(empleado, motivo, promedio_actual, evaluaciones_bajas):
+        """Envía un correo al equipo administrativo cuando un empleado es dado de baja por puntuación."""
+        subject = f"Empleado {empleado.persona.nombre} {empleado.persona.apellido} dado de baja"
+        nombre_empleado = f"{empleado.persona.nombre} {empleado.persona.apellido}".strip()
+        try:
+            promedio_str = f"{float(promedio_actual):.2f}"
+        except (TypeError, ValueError):
+            promedio_str = str(promedio_actual)
+        timestamp = timezone.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        message = f"""
+Hola equipo administrativo,
+
+El empleado {nombre_empleado} ({empleado.persona.email}) ha sido desactivado automáticamente en el sistema.
+
+Motivo: {motivo}
+Promedio actual: {promedio_str}
+Calificaciones consecutivas < 7: {evaluaciones_bajas}
+Fecha de baja: {timestamp}
+
+Por favor, revisen el estado del empleado y tomen las acciones necesarias.
+
+Saludos,
+El sistema de alertas de El Edén
+""".strip()
+
+        User = get_user_model()
+        recipients = list(
+            User.objects.filter(is_staff=True, email__isnull=False)
+            .values_list('email', flat=True)
+        )
+
+        if not recipients:
+            recipients = [settings.DEFAULT_FROM_EMAIL]
+
+        try:
+            send_mail(
+                subject=subject,
+                message=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=list(recipients),
+                fail_silently=False,
+            )
+            logger.info(f"Alerta de baja enviada a administradores: {', '.join(recipients)}")
+            return True
+        except Exception as e:
+            logger.error(f"Error al enviar alerta de baja de empleado: {str(e)}")
             return False
 
     @staticmethod

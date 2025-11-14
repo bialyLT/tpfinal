@@ -1,5 +1,6 @@
 ﻿from rest_framework import serializers
 from .models import Servicio, Reserva, Diseno, DisenoProducto, ImagenDiseno, ImagenReserva, ReservaEmpleado
+from .utils import ordenar_empleados_por_puntuacion
 from apps.users.models import Cliente
 
 
@@ -35,11 +36,39 @@ class EmpleadoAsignadoSerializer(serializers.ModelSerializer):
     empleado_apellido = serializers.CharField(source='empleado.persona.apellido', read_only=True)
     empleado_email = serializers.CharField(source='empleado.persona.email', read_only=True)
     rol_display = serializers.CharField(source='get_rol_display', read_only=True)
+    puntuacion_promedio = serializers.SerializerMethodField()
+    puntuacion_cantidad = serializers.SerializerMethodField()
+    puntuacion_acumulada = serializers.SerializerMethodField()
     
     class Meta:
         model = ReservaEmpleado
-        fields = ['id_reserva_empleado', 'empleado', 'empleado_nombre', 'empleado_apellido', 
-                  'empleado_email', 'rol', 'rol_display', 'fecha_asignacion', 'notas']
+        fields = [
+            'id_reserva_empleado',
+            'empleado',
+            'empleado_nombre',
+            'empleado_apellido',
+            'empleado_email',
+            'rol',
+            'rol_display',
+            'fecha_asignacion',
+            'notas',
+            'puntuacion_promedio',
+            'puntuacion_cantidad',
+            'puntuacion_acumulada',
+        ]
+
+    def get_puntuacion_promedio(self, obj):
+        if obj.empleado.puntuacion_promedio is None:
+            return None
+        return float(obj.empleado.puntuacion_promedio)
+
+    def get_puntuacion_cantidad(self, obj):
+        return obj.empleado.puntuacion_cantidad
+
+    def get_puntuacion_acumulada(self, obj):
+        if obj.empleado.puntuacion_acumulada is None:
+            return None
+        return float(obj.empleado.puntuacion_acumulada)
 
 
 class ReservaSerializer(serializers.ModelSerializer):
@@ -47,7 +76,7 @@ class ReservaSerializer(serializers.ModelSerializer):
     cliente_apellido = serializers.CharField(source='cliente.persona.apellido', read_only=True)
     servicio_nombre = serializers.CharField(source='servicio.nombre', read_only=True)
     estado_display = serializers.CharField(source='get_estado_display', read_only=True)
-    empleados_asignados = EmpleadoAsignadoSerializer(source='asignaciones', many=True, read_only=True)
+    empleados_asignados = serializers.SerializerMethodField()
     imagenes = ImagenReservaSerializer(many=True, read_only=True)
     # Incluir diseños relacionados con información básica
     disenos = serializers.SerializerMethodField()
@@ -98,6 +127,31 @@ class ReservaSerializer(serializers.ModelSerializer):
     def get_encuesta_cliente_respuesta_id(self, obj):
         respuesta = self._get_cliente_respuesta(obj)
         return respuesta.id_encuesta_respuesta if respuesta else None
+
+    def get_empleados_asignados(self, obj):
+        asignaciones = list(obj.asignaciones.select_related('empleado__persona').all())
+        if not asignaciones:
+            return []
+
+        serializer = EmpleadoAsignadoSerializer(asignaciones, many=True)
+        data_by_empleado = {
+            asignacion.empleado_id: dict(data)
+            for asignacion, data in zip(asignaciones, serializer.data)
+        }
+
+        empleados_ordenados = ordenar_empleados_por_puntuacion(
+            [asignacion.empleado for asignacion in asignaciones]
+        )
+
+        resultado = []
+        for prioridad, empleado in enumerate(empleados_ordenados, start=1):
+            data = data_by_empleado.get(empleado.id_empleado)
+            if not data:
+                continue
+            data['prioridad'] = prioridad
+            resultado.append(data)
+
+        return resultado
 
 
 class ImagenDisenoSerializer(serializers.ModelSerializer):

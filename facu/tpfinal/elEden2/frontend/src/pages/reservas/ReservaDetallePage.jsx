@@ -12,6 +12,7 @@ import {
   Image as ImageIcon,
   MapPin,
   Palette,
+  Star,
   User,
   XCircle,
 } from 'lucide-react';
@@ -256,6 +257,14 @@ const ReservaDetallePage = () => {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
+  };
+
+  const formatPuntuacion = (valor) => {
+    if (valor === null || valor === undefined) {
+      return '—';
+    }
+    const numero = Number(valor);
+    return Number.isFinite(numero) ? numero.toFixed(2) : '—';
   };
 
   const getStatusColor = (status) => {
@@ -870,16 +879,47 @@ const ReservaDetallePage = () => {
                 </div>
                 <div className="space-y-3">
                   {reserva.empleados_asignados.map((empleado) => (
-                    <div key={empleado.id_reserva_empleado} className="bg-gray-800 rounded-lg p-4 flex items-center justify-between">
-                      <div>
-                        <p className="text-white font-medium">
-                          {`${empleado.empleado_nombre || ''} ${empleado.empleado_apellido || ''}`.trim() || 'Empleado asignado'}
-                        </p>
-                        <p className="text-xs text-gray-400">{empleado.rol_display}</p>
+                    <div
+                      key={empleado.id_reserva_empleado || `${empleado.empleado_email}-${empleado.empleado}`}
+                      className="bg-gray-800 rounded-lg p-4 flex flex-col gap-3 border border-gray-700"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-white font-medium">
+                            {`${empleado.empleado_nombre || ''} ${empleado.empleado_apellido || ''}`.trim() || 'Empleado asignado'}
+                          </p>
+                          {empleado.rol_display && (
+                            <p className="text-xs text-gray-400">{empleado.rol_display}</p>
+                          )}
+                          {empleado.empleado_email && (
+                            <p className="text-xs text-gray-500 mt-1">{empleado.empleado_email}</p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <div className="flex items-center gap-1 justify-end text-amber-400">
+                            <Star className="w-4 h-4" />
+                            <span className="text-sm font-semibold">
+                              {formatPuntuacion(empleado.puntuacion_promedio)}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-400 mt-1">
+                            Prioridad #{empleado.prioridad ?? '—'}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {`${empleado.puntuacion_cantidad ?? 0} evaluaciones`}
+                          </p>
+                        </div>
                       </div>
-                      <span className="text-sm text-gray-400">
-                        Asignado el {new Date(empleado.fecha_asignacion).toLocaleDateString('es-AR')}
-                      </span>
+                      <div className="flex flex-wrap gap-3 text-xs text-gray-400">
+                        <span>
+                          Asignado el {new Date(empleado.fecha_asignacion).toLocaleDateString('es-AR')}
+                        </span>
+                        {empleado.fecha_ultima_puntuacion && (
+                          <span>
+                            Última evaluación {new Date(empleado.fecha_ultima_puntuacion).toLocaleDateString('es-AR')}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

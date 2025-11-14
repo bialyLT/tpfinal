@@ -3,6 +3,8 @@ from django.core.validators import RegexValidator
 from decimal import Decimal, ROUND_HALF_UP
 from django.utils import timezone
 
+from apps.emails.services import EmailService
+
 
 class Genero(models.Model):
     id_genero = models.AutoField(primary_key=True)
@@ -136,6 +138,21 @@ class Empleado(models.Model):
         blank=True,
         help_text='Última vez que se actualizó la puntuación desde una encuesta'
     )
+    evaluaciones_bajas_consecutivas = models.PositiveIntegerField(
+        default=0,
+        help_text='Cantidad de evaluaciones consecutivas con puntaje menor a 7'
+    )
+    fecha_baja_automatica = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Fecha en la que el sistema desactivó automáticamente al empleado'
+    )
+    motivo_baja_automatica = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text='Motivo registrado para la baja automática del empleado'
+    )
     
     class Meta:
         verbose_name = 'Empleado'
@@ -147,12 +164,23 @@ class Empleado(models.Model):
         return f"Empleado: {self.persona.apellido}, {self.persona.nombre}"
 
     def registrar_resultado_encuesta(self, puntuacion_total: Decimal, cantidad_items: int, timestamp=None):
-        """Actualiza la puntuación del empleado con los resultados de una encuesta."""
+        """Actualiza la puntuación del empleado y ejecuta alertas automáticas."""
         if cantidad_items <= 0:
             return
 
         if not isinstance(puntuacion_total, Decimal):
             puntuacion_total = Decimal(puntuacion_total)
+
+        if cantidad_items:
+            promedio_encuesta = (puntuacion_total / Decimal(cantidad_items)).quantize(
+                Decimal('0.01'),
+                rounding=ROUND_HALF_UP
+            )
+        else:
+            promedio_encuesta = Decimal('0.00')
+
+        promedio_anterior = self.puntuacion_promedio or Decimal('0.00')
+        timestamp = timestamp or timezone.now()
 
         self.puntuacion_acumulada = (self.puntuacion_acumulada or Decimal('0')) + puntuacion_total
         self.puntuacion_cantidad += int(cantidad_items)
@@ -163,14 +191,54 @@ class Empleado(models.Model):
         else:
             self.puntuacion_promedio = Decimal('0.00')
 
-        self.fecha_ultima_puntuacion = timestamp or timezone.now()
+        if promedio_encuesta < Decimal('7.00'):
+            self.evaluaciones_bajas_consecutivas = (self.evaluaciones_bajas_consecutivas or 0) + 1
+        else:
+            self.evaluaciones_bajas_consecutivas = 0
 
-        self.save(update_fields=[
+        self.fecha_ultima_puntuacion = timestamp
+
+        alert_triggered = False
+        motivo_baja = None
+        motivo_promedio = 'Promedio general descendió por debajo de 7'
+        motivo_consecutivas = 'Recibió 3 calificaciones consecutivas menores a 7'
+        umbral = Decimal('7.00')
+
+        if self.activo:
+            if promedio_anterior >= umbral and self.puntuacion_promedio < umbral:
+                alert_triggered = True
+                motivo_baja = motivo_promedio
+            elif self.evaluaciones_bajas_consecutivas >= 3:
+                alert_triggered = True
+                motivo_baja = motivo_consecutivas
+
+        fields_to_update = [
             'puntuacion_acumulada',
             'puntuacion_cantidad',
             'puntuacion_promedio',
-            'fecha_ultima_puntuacion'
-        ])
+            'fecha_ultima_puntuacion',
+            'evaluaciones_bajas_consecutivas'
+        ]
+
+        if alert_triggered:
+            self.activo = False
+            self.fecha_baja_automatica = timestamp
+            self.motivo_baja_automatica = motivo_baja
+            fields_to_update.extend([
+                'activo',
+                'fecha_baja_automatica',
+                'motivo_baja_automatica'
+            ])
+
+        self.save(update_fields=fields_to_update)
+
+        if alert_triggered:
+            EmailService.send_employee_deactivation_alert(
+                empleado=self,
+                motivo=motivo_baja,
+                promedio_actual=self.puntuacion_promedio,
+                evaluaciones_bajas=self.evaluaciones_bajas_consecutivas
+            )
 
 
 class Proveedor(models.Model):

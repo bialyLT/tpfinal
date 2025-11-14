@@ -11,8 +11,7 @@ export default defineConfig({
       '127.0.0.1',
       '.ngrok-free.app',
       '.ngrok-free.dev',
-      'grimacingly-ungainable-halle.ngrok-free.dev', // Tu dominio de ngrok del backend
-      // Agrega aquí el dominio de ngrok del frontend cuando lo tengas
+      'grimacingly-ungainable-halle.ngrok-free.dev',
     ]
   }
 })

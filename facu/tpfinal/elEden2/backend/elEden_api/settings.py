@@ -383,7 +383,7 @@ CORS_ALLOWED_ORIGINS = [
 # Agregar la URL del frontend si es de ngrok
 if FRONTEND_URL and 'ngrok' in FRONTEND_URL:
     CORS_ALLOWED_ORIGINS.append(FRONTEND_URL)
-    print(f"✅ CORS: Permitiendo requests desde {FRONTEND_URL}")
+    print(f"CORS: Permitiendo requests desde {FRONTEND_URL}")
 
 CORS_ALLOW_CREDENTIALS = True
 
