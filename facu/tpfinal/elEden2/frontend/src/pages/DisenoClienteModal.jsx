@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Calendar, User, DollarSign, CheckCircle, XCircle, Clock, Package, Image as ImageIcon, AlertCircle } from 'lucide-react';
 import { serviciosService } from '../services';
 import { handleApiError, success } from '../utils/notifications';
@@ -19,9 +19,9 @@ const DisenoClienteModal = ({ isOpen, onClose, reservaId, onDisenoActualizado })
     if (isOpen && reservaId) {
       fetchDisenos();
     }
-  }, [isOpen, reservaId]);
+  }, [isOpen, reservaId, fetchDisenos]);
 
-  const fetchDisenos = async () => {
+  const fetchDisenos = useCallback(async () => {
     try {
       setLoading(true);
       // Obtener todos los diseños del cliente
@@ -50,7 +50,7 @@ const DisenoClienteModal = ({ isOpen, onClose, reservaId, onDisenoActualizado })
     } finally {
       setLoading(false);
     }
-  };
+  }, [reservaId]);
 
   const handleAceptar = async () => {
     if (!disenoActual) return;

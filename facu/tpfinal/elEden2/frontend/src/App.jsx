@@ -85,7 +85,6 @@ const AppLayout = ({ children }) => {
   // Determinar si el usuario es admin o empleado
   const isAdmin = user && (user.is_staff || user.is_superuser || user.perfil?.tipo_usuario === 'administrador' || user.groups?.includes('Administradores'));
   const isEmpleado = user && (user.perfil?.tipo_usuario === 'empleado' || user.groups?.includes('Empleados'));
-  const isCliente = user && !isAdmin && !isEmpleado;
   
   // Páginas donde NO se debe mostrar el Navbar (login y register)
   const hideNavbarPages = ['/login', '/register'];

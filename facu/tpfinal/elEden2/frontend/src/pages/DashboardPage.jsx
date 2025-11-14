@@ -1,7 +1,7 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { ArrowUp, ArrowDown, Users, Briefcase, DollarSign, FileText, Calendar, BarChart, Wrench, User, Star, CheckCircle, Clock, XCircle, Leaf } from 'lucide-react';
+import { weatherService } from '../services';
+import { ArrowUp, ArrowDown, Users, Briefcase, DollarSign, FileText, Calendar, BarChart, Wrench, User, Star, CheckCircle, Clock, XCircle, Leaf, CloudRain, RefreshCw } from 'lucide-react';
 
 const StatCard = ({ title, value, change, icon }) => {
   const isPositive = change && change.startsWith('+');
@@ -32,6 +32,125 @@ const DashboardPage = () => {
   const { user } = useAuth();
 
   const isAdmin = user.is_staff || user.is_superuser || user.perfil?.tipo_usuario === 'administrador' || user.groups?.includes('Administradores')
+
+  const [weatherAlerts, setWeatherAlerts] = useState([]);
+  const [eligibleReservations, setEligibleReservations] = useState([]);
+  const [weatherModalOpen, setWeatherModalOpen] = useState(false);
+  const [modalReservaId, setModalReservaId] = useState('');
+  const [modalDate, setModalDate] = useState('');
+  const [modalMessage, setModalMessage] = useState('Simulación de lluvia para pruebas');
+  const [loadingWeather, setLoadingWeather] = useState(false);
+  const [simulatingRain, setSimulatingRain] = useState(false);
+  const [updatingReserva, setUpdatingReserva] = useState(false);
+  const [weatherError, setWeatherError] = useState('');
+  const [weatherSuccess, setWeatherSuccess] = useState('');
+
+  const formatDatetimeLocal = (value) => {
+    if (!value) return '';
+    const date = new Date(value);
+    const tz = date.getTimezoneOffset();
+    const local = new Date(date.getTime() - tz * 60000);
+    return local.toISOString().slice(0, 16);
+  };
+
+  const formatDateForDisplay = (value) => {
+    if (!value) return 'Sin fecha';
+    return new Date(value).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+  };
+
+  const selectedReserva = useMemo(() => (
+    eligibleReservations.find((res) => String(res.id_reserva) === String(modalReservaId))
+  ), [eligibleReservations, modalReservaId]);
+
+  useEffect(() => {
+    if (selectedReserva?.fecha_reserva) {
+      setModalDate(formatDatetimeLocal(selectedReserva.fecha_reserva));
+    }
+  }, [selectedReserva]);
+
+  const refreshWeatherData = async () => {
+    if (!isAdmin) return;
+    setLoadingWeather(true);
+    setWeatherError('');
+    try {
+      const [alerts, reservas] = await Promise.all([
+        weatherService.getPendingAlerts(),
+        weatherService.getEligibleReservations(),
+      ]);
+      setWeatherAlerts(alerts);
+      setEligibleReservations(reservas);
+    } catch (error) {
+      console.error('Weather fetch error', error);
+      setWeatherError('No se pudieron cargar las alertas de clima.');
+    } finally {
+      setLoadingWeather(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshWeatherData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);
+
+  const openWeatherModal = () => {
+    setWeatherError('');
+    setWeatherSuccess('');
+    setModalReservaId('');
+    setModalDate('');
+    setModalMessage('Simulación de lluvia para pruebas');
+    setWeatherModalOpen(true);
+  };
+
+  const closeWeatherModal = () => {
+    setWeatherModalOpen(false);
+    setSimulatingRain(false);
+  };
+
+  const handleSimulateSubmit = async (event) => {
+    event.preventDefault();
+    if (!modalReservaId || !modalDate) {
+      setWeatherError('Seleccioná una reserva y fecha válidas.');
+      return;
+    }
+    setSimulatingRain(true);
+    setWeatherError('');
+    try {
+      await weatherService.simulateRainAlert({
+        reserva_id: Number(modalReservaId),
+        alert_date: new Date(modalDate).toISOString(),
+        message: modalMessage,
+      });
+      setWeatherSuccess('Simulación creada correctamente.');
+      closeWeatherModal();
+      await refreshWeatherData();
+    } catch (error) {
+      console.error('simulate rain error', error);
+      setWeatherError('No se pudo simular la alerta.');
+    } finally {
+      setSimulatingRain(false);
+    }
+  };
+
+  const handleReprogram = async (alerta) => {
+    if (!alerta?.reserva_detalle?.id_reserva) return;
+    const defaultValue = formatDatetimeLocal(alerta.reserva_detalle.fecha_reserva || new Date().toISOString());
+    const input = window.prompt('Nueva fecha (YYYY-MM-DDTHH:MM)', defaultValue);
+    if (!input) return;
+
+    setUpdatingReserva(true);
+    setWeatherError('');
+    try {
+      const isoDate = new Date(input).toISOString();
+      await weatherService.applyReprogramacion(alerta.reserva_detalle.id_reserva, { nueva_fecha: isoDate });
+      setWeatherSuccess('Reserva reprogramada correctamente.');
+      await refreshWeatherData();
+    } catch (error) {
+      console.error('reprogram error', error);
+      setWeatherError('No se pudo reprogramar la reserva.');
+    } finally {
+      setUpdatingReserva(false);
+    }
+  };
 
   const getWelcomeMessage = () => {
     if (isAdmin) return 'Panel de Administración';
@@ -73,7 +192,8 @@ const DashboardPage = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-300 p-4 sm:p-6 lg:p-8">
+    <>
+      <div className="min-h-screen bg-gray-900 text-gray-300 p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
         <header className="mb-8 ">
           <h1 className="text-3xl font-bold text-white mb-2">
@@ -91,6 +211,76 @@ const DashboardPage = () => {
               ))}
             </div>
           </div>
+
+          {isAdmin && (
+            <div className="mb-10">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-center gap-2">
+                  <CloudRain className="w-6 h-6 text-sky-400" />
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">Alertas por clima</h2>
+                    <p className="text-sm text-gray-400">Simulá lluvias y reagendá servicios afectados</p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={refreshWeatherData}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-gray-700 text-gray-100 hover:bg-gray-600 transition"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Actualizar
+                  </button>
+                  <button
+                    onClick={openWeatherModal}
+                    disabled={eligibleReservations.length === 0}
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-md transition ${eligibleReservations.length === 0 ? 'bg-gray-600 text-gray-400 cursor-not-allowed' : 'bg-sky-600 hover:bg-sky-500 text-white'}`}
+                  >
+                    <CloudRain className="w-4 h-4" />
+                    Simular lluvia
+                  </button>
+                </div>
+              </div>
+
+              {weatherError && <p className="text-red-400 mt-4">{weatherError}</p>}
+              {weatherSuccess && <p className="text-green-400 mt-4">{weatherSuccess}</p>}
+
+              <div className="mt-4 bg-gray-800 rounded-lg shadow-lg">
+                {loadingWeather ? (
+                  <p className="p-4 text-gray-400">Cargando alertas...</p>
+                ) : weatherAlerts.length === 0 ? (
+                  <p className="p-4 text-gray-400">No hay alertas climáticas pendientes.</p>
+                ) : (
+                  <ul className="divide-y divide-gray-700">
+                    {weatherAlerts.map((alerta) => (
+                      <li key={alerta.id} className="p-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <p className="text-white font-semibold">Reserva #{alerta.reserva || 'N/D'}</p>
+                          <p className="text-sm text-gray-400">{alerta.message}</p>
+                          <p className="text-xs text-gray-500">
+                            Fecha: {formatDateForDisplay(alerta.alert_date)} · Precipitación estimada: {alerta.precipitation_mm} mm · Prob: {alerta.probability_percentage || '--'}%
+                          </p>
+                          {alerta.reserva_detalle && (
+                            <p className="text-xs text-gray-500">
+                              Cliente: {alerta.reserva_detalle.cliente} · Servicio: {alerta.reserva_detalle.servicio}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleReprogram(alerta)}
+                            disabled={updatingReserva}
+                            className={`px-4 py-2 rounded-md text-sm font-semibold transition ${updatingReserva ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500 text-white'}`}
+                          >
+                            Reprogramar
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
 
           <div>
             <h2 className="text-lg font-semibold text-white mb-4">Actividad Reciente</h2>
@@ -131,6 +321,71 @@ const DashboardPage = () => {
         </main>
       </div>
     </div>
+
+    {weatherModalOpen && (
+      <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
+        <div className="bg-gray-900 w-full max-w-lg rounded-lg p-6 shadow-2xl border border-gray-700">
+          <h3 className="text-xl font-semibold text-white mb-4">Simular lluvia para una reserva</h3>
+          <form className="space-y-4" onSubmit={handleSimulateSubmit}>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Reserva</label>
+              <select
+                className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                value={modalReservaId}
+                onChange={(e) => setModalReservaId(e.target.value)}
+                required
+              >
+                <option value="">Seleccioná una reserva</option>
+                {eligibleReservations.map((reserva) => (
+                  <option key={reserva.id_reserva} value={reserva.id_reserva}>
+                    #{reserva.id_reserva} · {reserva.servicio} · {formatDateForDisplay(reserva.fecha_reserva)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Fecha de lluvia</label>
+              <input
+                type="datetime-local"
+                className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                value={modalDate}
+                onChange={(e) => setModalDate(e.target.value)}
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Mensaje</label>
+              <textarea
+                className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                rows={3}
+                value={modalMessage}
+                onChange={(e) => setModalMessage(e.target.value)}
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                className="px-4 py-2 rounded-md border border-gray-600 text-gray-300 hover:bg-gray-800"
+                onClick={closeWeatherModal}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={simulatingRain}
+                className={`px-4 py-2 rounded-md font-semibold ${simulatingRain ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-sky-600 hover:bg-sky-500 text-white'}`}
+              >
+                {simulatingRain ? 'Simulando...' : 'Crear alerta'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 

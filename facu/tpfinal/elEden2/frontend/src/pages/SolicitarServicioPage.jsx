@@ -114,10 +114,6 @@ const SolicitarServicioPage = () => {
     });
   };
 
-  const isFechaBloqueada = (fecha) => {
-    return fechasBloqueadas.includes(fecha);
-  };
-
   const handleImageUpload = (e, tipo) => {
     const files = Array.from(e.target.files);
     const campo = tipo === 'jardin' ? 'imagenes_jardin' : 'imagenes_ideas';

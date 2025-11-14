@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Search, Edit, Trash2, ToggleLeft, ToggleRight, Eye, BarChart3 } from 'lucide-react';
 import api from '../services/api';
 import CrearEncuestaModal from './CrearEncuestaModal';
@@ -14,11 +14,7 @@ const GestionEncuestasPage = () => {
   const [modoEdicion, setModoEdicion] = useState(false);
   const [filtroActiva, setFiltroActiva] = useState('todas');
 
-  useEffect(() => {
-    cargarEncuestas();
-  }, [filtroActiva]);
-
-  const cargarEncuestas = async () => {
+  const cargarEncuestas = useCallback(async () => {
     try {
       setLoading(true);
       let url = '/encuestas/';
@@ -37,7 +33,11 @@ const GestionEncuestasPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filtroActiva]);
+
+  useEffect(() => {
+    cargarEncuestas();
+  }, [filtroActiva, cargarEncuestas]);
 
   const handleCrear = () => {
     setModoEdicion(false);

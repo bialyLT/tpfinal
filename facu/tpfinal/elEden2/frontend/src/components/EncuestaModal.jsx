@@ -186,7 +186,7 @@ const EncuestaModal = () => {
           </div>
         );
 
-      case 'multiple':
+      case 'multiple': {
         const opciones = pregunta.opciones_multiple || [];
         return (
           <div className="space-y-2">
@@ -206,6 +206,7 @@ const EncuestaModal = () => {
             ))}
           </div>
         );
+      }
 
       default:
         return null;

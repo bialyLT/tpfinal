@@ -79,7 +79,7 @@ const RegisterPage = () => {
       if (result?.success) {
         navigate('/');
       }
-    } catch (error) {
+    } catch {
       // El error ya se maneja en AuthContext
     } finally {
       setIsLoading(false);

@@ -52,6 +52,7 @@ api.interceptors.response.use(
           return api(originalRequest);
         }
       } catch (refreshError) {
+        console.error('Error al refrescar token:', refreshError);
         // Si el refresh token también falló, limpiar localStorage y redirigir al login
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');

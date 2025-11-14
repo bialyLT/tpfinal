@@ -7,6 +7,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction
 from django.utils import timezone
+from datetime import datetime
 from decimal import Decimal
 import logging
 
@@ -324,6 +325,51 @@ class ReservaViewSet(viewsets.ModelViewSet):
             'mensaje': 'Pago final confirmado exitosamente',
             'reserva': self.get_serializer(reserva).data
         }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='reprogramar-por-clima', permission_classes=[IsAdminUser])
+    def reprogramar_por_clima(self, request, pk=None):
+        """Permite al staff reprogramar una reserva por alerta climática."""
+        reserva = self.get_object()
+
+        if not reserva.servicio.reprogramable_por_clima:
+            return Response(
+                {'error': 'Este servicio no admite reprogramación automática por clima'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        nueva_fecha_str = request.data.get('nueva_fecha')
+        if not nueva_fecha_str:
+            return Response(
+                {'error': 'Debe indicar el campo "nueva_fecha" en formato ISO 8601'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            nueva_fecha = datetime.fromisoformat(nueva_fecha_str.replace('Z', '+00:00'))
+            if timezone.is_naive(nueva_fecha):
+                nueva_fecha = timezone.make_aware(nueva_fecha, timezone.get_current_timezone())
+        except ValueError:
+            return Response({'error': 'Formato de fecha inválido'}, status=status.HTTP_400_BAD_REQUEST)
+
+        reserva.aplicar_reprogramacion(nueva_fecha, motivo='clima', confirmar=True)
+
+        if reserva.weather_alert:
+            reserva.weather_alert.status = 'resolved'
+            reserva.weather_alert.resolved_at = timezone.now()
+            reserva.weather_alert.save(update_fields=['status', 'resolved_at'])
+
+        from apps.emails.services import EmailService
+
+        EmailService.send_weather_reprogram_notification(reserva=reserva, nueva_fecha=nueva_fecha)
+
+        serializer = self.get_serializer(reserva)
+        return Response(
+            {
+                'mensaje': 'Reserva reprogramada correctamente',
+                'reserva': serializer.data
+            },
+            status=status.HTTP_200_OK
+        )
     
     @action(detail=True, methods=['post'], url_path='crear-preferencia-sena')
     def crear_preferencia_sena(self, request, pk=None):

@@ -265,11 +265,6 @@ export const serviciosService = {
     return response.data;
   },
 
-  presentarDiseno: async (id) => {
-    const response = await api.post(`/servicios/disenos/${id}/presentar/`);
-    return response.data;
-  },
-
   createServicio: async (data) => {
     const formData = new FormData();
     
@@ -411,6 +406,34 @@ export const proveedoresService = {
   
   delete: async (id) => {
     await api.delete(`/users/proveedores/${id}/`);
+  }
+};
+
+// Weather Services
+export const weatherService = {
+  getPendingAlerts: async () => {
+    const response = await api.get('/weather/alerts/pending/');
+    return response.data;
+  },
+
+  getEligibleReservations: async () => {
+    const response = await api.get('/weather/reservas/eligibles/');
+    return response.data;
+  },
+
+  simulateRainAlert: async (payload) => {
+    const response = await api.post('/weather/simulate/', payload);
+    return response.data;
+  },
+
+  checkForecast: async (payload) => {
+    const response = await api.post('/weather/check/', payload);
+    return response.data;
+  },
+
+  applyReprogramacion: async (reservaId, data) => {
+    const response = await api.post(`/servicios/reservas/${reservaId}/reprogramar-por-clima/`, data);
+    return response.data;
   }
 };
 

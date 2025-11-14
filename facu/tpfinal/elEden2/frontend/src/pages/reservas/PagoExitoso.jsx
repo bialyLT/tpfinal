@@ -35,20 +35,17 @@ const PagoExitoso = () => {
     console.log('  - preference_id:', preferenceId);
     console.log('  - external_reference:', externalReference);
     console.log('📝 Todos los parámetros:', Object.fromEntries(searchParams));
-  }, []);
-
-  useEffect(() => {
-    console.log('🔍 Parámetros recibidos de MercadoPago:');
-    console.log('  - reserva_id:', reservaId);
-    console.log('  - tipo:', tipoPago);
-    console.log('  - payment_id:', paymentId);
-    console.log('  - status:', status);
-    console.log('  - collection_status:', collectionStatus);
-    console.log('  - collection_id:', collectionId);
-    console.log('  - preference_id:', preferenceId);
-    console.log('  - external_reference:', externalReference);
-    console.log('📝 Todos los parámetros:', Object.fromEntries(searchParams));
-  }, []);
+  }, [
+    reservaId,
+    tipoPago,
+    paymentId,
+    status,
+    collectionStatus,
+    collectionId,
+    preferenceId,
+    externalReference,
+    searchParams
+  ]);
 
   // Esperar a que el usuario se autentique antes de procesar el pago
   useEffect(() => {
@@ -169,7 +166,19 @@ const PagoExitoso = () => {
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [reservaId, tipoPago, status, paymentId, collectionStatus, collectionId, user, authLoading]);
+  }, [
+    authLoading,
+    collectionId,
+    collectionStatus,
+    externalReference,
+    navigate,
+    paymentId,
+    preferenceId,
+    reservaId,
+    status,
+    tipoPago,
+    user
+  ]);
 
   const handlePrint = () => {
     window.print();

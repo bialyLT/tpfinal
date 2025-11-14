@@ -43,6 +43,7 @@ urlpatterns = [
     path('api/v1/', include('apps.encuestas.urls')),
     path('api/v1/', include('apps.ventas.urls')),
     path('api/v1/mercadopago/', include('apps.mercadopago.urls')),  # Nueva app de MercadoPago
+    path('api/v1/', include('apps.weather.urls')),
 ]
 
 # Serve media files in development

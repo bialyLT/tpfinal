@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { serviciosService } from '../services';
 import { useAuth } from '../context/AuthContext';
 import { handleApiError } from '../utils/notifications';
@@ -26,6 +26,7 @@ const DisenosPage = () => {
   const [disenoParaEditar, setDisenoParaEditar] = useState(null);
   const [disenosPage, setDisenosPage] = useState(1);
   const [disenosPageSize, setDisenosPageSize] = useState(10);
+  const [debouncedFilters, setDebouncedFilters] = useState({ search: '', estado: '' });
   const { user } = useAuth();
 
   const isAdmin = user?.groups?.includes('Administradores');
@@ -34,34 +35,35 @@ const DisenosPage = () => {
   // Debounce para búsqueda
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (disenosPage !== 1) {
-        setDisenosPage(1); // Resetear a primera página cuando se busca
-      } else {
-        fetchDisenos();
-      }
-    }, 500); // Esperar 500ms después de que el usuario deje de escribir
+      setDisenosPage((prev) => (prev === 1 ? prev : 1));
+      setDebouncedFilters((prev) => {
+        if (prev.search === searchTerm && prev.estado === estadoFilter) {
+          return prev;
+        }
+        return {
+          search: searchTerm,
+          estado: estadoFilter
+        };
+      });
+    }, 500);
 
     return () => clearTimeout(timer);
   }, [searchTerm, estadoFilter]);
 
-  useEffect(() => {
-    fetchDisenos();
-  }, [disenosPage, disenosPageSize]);
-
-  const fetchDisenos = async () => {
+  const fetchDisenos = useCallback(async ({ page, pageSize, search, estado }) => {
     try {
       setLoading(true);
       const params = {
-        page: disenosPage,
-        page_size: disenosPageSize
+        page,
+        page_size: pageSize
       };
       
-      if (searchTerm) {
-        params.search = searchTerm;
+      if (search) {
+        params.search = search;
       }
       
-      if (estadoFilter) {
-        params.estado = estadoFilter;
+      if (estado) {
+        params.estado = estado;
       }
       
       const data = await serviciosService.getDisenos(params);
@@ -76,26 +78,34 @@ const DisenosPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  const fetchCurrentDisenos = useCallback(() => {
+    return fetchDisenos({
+      page: disenosPage,
+      pageSize: disenosPageSize,
+      search: debouncedFilters.search,
+      estado: debouncedFilters.estado
+    });
+  }, [debouncedFilters, disenosPage, disenosPageSize, fetchDisenos]);
+
+  useEffect(() => {
+    fetchCurrentDisenos();
+  }, [fetchCurrentDisenos]);
 
   const handleEditarDiseno = (diseno) => {
-    console.log('🔧 handleEditarDiseno llamado con:', diseno);
-    console.log('🔧 isDisenoModalOpen antes:', isDisenoModalOpen);
     setDisenoParaEditar(diseno);
     setIsDisenoModalOpen(true);
-    console.log('🔧 Estado actualizado - isDisenoModalOpen debería ser true');
   };
 
   const handleCloseDisenoModal = () => {
-    console.log('🔧 handleCloseDisenoModal llamado');
     setIsDisenoModalOpen(false);
     setDisenoParaEditar(null);
-    fetchDisenos(); // Recargar lista después de editar
+    fetchCurrentDisenos(); // Recargar lista después de editar
   };
 
   const handleDisenoActualizado = () => {
-    console.log('🔧 handleDisenoActualizado llamado');
-    fetchDisenos(); // Recargar lista después de actualizar
+    fetchCurrentDisenos(); // Recargar lista después de actualizar
   };
 
   const getEstadoColor = (estado) => {
@@ -167,7 +177,7 @@ const DisenosPage = () => {
       }, 3000);
       
       // Recargar la lista de diseños
-      fetchDisenos();
+      fetchCurrentDisenos();
     } catch (error) {
       handleApiError(error, 'Error al presentar el diseño');
     }
@@ -414,12 +424,10 @@ const DisenosPage = () => {
               setIsDetalleModalOpen(false);
               setSelectedDiseno(null);
             }}
-            onUpdate={fetchDisenos}
           />
         )}
 
         {/* Modal de Editar Diseño */}
-        {console.log('🔧 Renderizando modal - isOpen:', isDisenoModalOpen, 'diseno:', disenoParaEditar)}
         <CrearDisenoModal
           servicio={null}
           diseno={disenoParaEditar}
@@ -433,7 +441,7 @@ const DisenosPage = () => {
 };
 
 // Modal de Detalle del Diseño
-const DisenoDetalleModal = ({ diseno, isOpen, onClose, onUpdate }) => {
+const DisenoDetalleModal = ({ diseno, isOpen, onClose }) => {
   if (!isOpen) return null;
 
   const formatCurrency = (amount) => {

@@ -1,8 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
-import { Leaf, Users, MapPin, Smile, CreditCard, Loader } from 'lucide-react';
-import api from '../../services/api';
-import { success, error } from '../../utils/notifications';
+import { Leaf, Users, MapPin, Smile } from 'lucide-react';
 
 const HomePage = () => {
 

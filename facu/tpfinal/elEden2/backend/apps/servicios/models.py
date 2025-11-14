@@ -70,6 +70,10 @@ class Servicio(models.Model):
     activo = models.BooleanField(default=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
+    reprogramable_por_clima = models.BooleanField(
+        default=True,
+        help_text='Indica si este servicio puede reagendarse automáticamente ante mal clima'
+    )
 
     class Meta:
         verbose_name = 'Servicio'
@@ -182,6 +186,19 @@ class Reserva(models.Model):
         related_name='reservas_asignadas',
         blank=True
     )
+    weather_alert = models.ForeignKey(
+        'weather.WeatherAlert',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reservas_afectadas'
+    )
+    requiere_reprogramacion = models.BooleanField(default=False)
+    motivo_reprogramacion = models.CharField(max_length=255, blank=True, null=True)
+    fecha_reprogramada_sugerida = models.DateTimeField(null=True, blank=True)
+    fecha_reprogramada_confirmada = models.DateTimeField(null=True, blank=True)
+    alerta_clima_payload = models.JSONField(default=dict, blank=True)
+    reprogramacion_fuente = models.CharField(max_length=50, blank=True, null=True)
     
     # Metadatos
     fecha_creacion = models.DateTimeField(auto_now_add=True)
@@ -256,6 +273,41 @@ class Reserva(models.Model):
             # Guardamos solo este campo para no modificar otros timestamps innecesariamente
             self.save(update_fields=['encuesta_token'])
         return self.encuesta_token
+
+    def marcar_alerta_climatica(self, alerta, sugerencia=None):
+        self.weather_alert = alerta
+        self.alerta_clima_payload = alerta.payload or {}
+        if self.servicio.reprogramable_por_clima:
+            self.requiere_reprogramacion = True
+            self.motivo_reprogramacion = 'Clima: lluvia pronosticada'
+            self.fecha_reprogramada_sugerida = sugerencia
+            self.reprogramacion_fuente = 'clima'
+        self.save(update_fields=[
+            'weather_alert',
+            'alerta_clima_payload',
+            'requiere_reprogramacion',
+            'motivo_reprogramacion',
+            'fecha_reprogramada_sugerida',
+            'reprogramacion_fuente'
+        ])
+
+    def aplicar_reprogramacion(self, nueva_fecha, motivo='clima', confirmar=False):
+        update_fields = ['fecha_reprogramada_sugerida', 'requiere_reprogramacion', 'motivo_reprogramacion', 'reprogramacion_fuente']
+        self.fecha_reprogramada_sugerida = nueva_fecha
+        self.reprogramacion_fuente = motivo
+        self.motivo_reprogramacion = motivo
+
+        if confirmar:
+            self.fecha_reserva = nueva_fecha
+            self.fecha_reprogramada_confirmada = nueva_fecha
+            self.requiere_reprogramacion = False
+            update_fields.extend(['fecha_reserva', 'fecha_reprogramada_confirmada'])
+        else:
+            self.fecha_reprogramada_confirmada = None
+            self.requiere_reprogramacion = True
+            update_fields.append('fecha_reprogramada_confirmada')
+
+        self.save(update_fields=update_fields)
 
 
 class ReservaEmpleado(models.Model):

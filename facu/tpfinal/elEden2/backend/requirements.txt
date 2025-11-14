@@ -25,6 +25,9 @@ python-dotenv==1.0.1
 django-filter==23.5
 django-rest-auth==0.9.5
 
+# HTTP Clients
+requests==2.32.3
+
 # Development & Debug
 django-debug-toolbar==4.4.6
 factory-boy==3.3.1

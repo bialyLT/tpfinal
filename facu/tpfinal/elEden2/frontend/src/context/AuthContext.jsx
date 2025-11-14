@@ -1,6 +1,7 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { authService } from '../services';
-import { success, error, handleApiError } from '../utils/notifications';
+import { success, handleApiError } from '../utils/notifications';
 
 const AuthContext = createContext();
 
@@ -121,7 +122,7 @@ export const AuthProvider = ({ children }) => {
       await authService.logout();
       dispatch({ type: 'LOGOUT' });
       success('Sesión cerrada');
-    } catch (error) {
+    } catch {
       // Aún así cerrar sesión localmente
       dispatch({ type: 'LOGOUT' });
       success('Sesión cerrada');

@@ -564,6 +564,98 @@ El sistema de alertas de El Edén
             return False
 
     @staticmethod
+    def send_weather_alert_notification(reserva, alerta):
+        """Notifica al equipo administrativo que una reserva fue marcada por clima."""
+        subject = f"[Clima] Posible lluvia para reserva #{reserva.id_reserva}"
+        cliente = reserva.cliente.persona if reserva.cliente_id else None
+        cliente_nombre = f"{cliente.nombre} {cliente.apellido}" if cliente else 'Cliente'
+        fecha_texto = reserva.fecha_reserva.strftime('%d/%m/%Y %H:%M') if reserva.fecha_reserva else 'sin fecha'
+        message = f"""
+Se detectó una alerta de clima para la reserva #{reserva.id_reserva}.
+
+Cliente: {cliente_nombre}
+Servicio: {reserva.servicio.nombre if reserva.servicio_id else 'N/D'}
+Fecha original: {fecha_texto}
+Probabilidad de lluvia: {alerta.probability_percentage or 'sin dato'}%
+Precipitación estimada: {alerta.precipitation_mm} mm (umbral {alerta.precipitation_threshold} mm)
+
+Se marcó la reserva como pendiente de reprogramación.
+""".strip()
+
+        User = get_user_model()
+        recipients = list(User.objects.filter(is_staff=True, email__isnull=False).values_list('email', flat=True))
+        if not recipients:
+            recipients = [settings.DEFAULT_FROM_EMAIL]
+
+        try:
+            send_mail(
+                subject=subject,
+                message=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=recipients,
+                fail_silently=False,
+            )
+            logger.info("Alerta de clima notificada a administradores")
+            return True
+        except Exception as exc:
+            logger.error(f"No se pudo enviar alerta de clima: {exc}")
+            return False
+
+    @staticmethod
+    def send_weather_reprogram_notification(reserva, nueva_fecha):
+        """Informa al cliente y al equipo que la reserva se reprogramó por clima."""
+        cliente = reserva.cliente.persona if reserva.cliente_id else None
+        if not cliente:
+            return False
+
+        subject = f"Reserva #{reserva.id_reserva} reprogramada por clima"
+        nueva_fecha_texto = nueva_fecha.strftime('%d/%m/%Y %H:%M')
+        mensaje_cliente = f"""
+Hola {cliente.nombre},
+
+Reprogramamos tu servicio "{reserva.servicio.nombre}" debido a condiciones climáticas adversas.
+
+📅 Nueva fecha: {nueva_fecha_texto}
+📍 Dirección: {reserva.direccion or 'A confirmar'}
+
+Te avisaremos si surge algún cambio adicional.
+
+Equipo de El Edén
+""".strip()
+
+        try:
+            send_mail(
+                subject=subject,
+                message=mensaje_cliente,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[cliente.email],
+                fail_silently=False,
+            )
+            logger.info("Cliente notificado por reprogramación climática")
+        except Exception as exc:
+            logger.error(f"No se pudo notificar al cliente por clima: {exc}")
+
+        User = get_user_model()
+        admin_recipients = list(User.objects.filter(is_staff=True, email__isnull=False).values_list('email', flat=True))
+        if admin_recipients:
+            mensaje_admin = f"""
+Se reprogramó la reserva #{reserva.id_reserva} por clima.
+Nueva fecha: {nueva_fecha_texto}
+Cliente: {cliente.nombre} {cliente.apellido}
+Servicio: {reserva.servicio.nombre}
+""".strip()
+            try:
+                send_mail(
+                    subject=f"[Admin] {subject}",
+                    message=mensaje_admin,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=admin_recipients,
+                    fail_silently=False,
+                )
+            except Exception as exc:
+                logger.error(f"No se pudo notificar a administradores de la reprogramación: {exc}")
+
+    @staticmethod
     def send_design_proposal_notification(cliente_email, cliente_nombre, diseno_id, titulo_diseno, descripcion, presupuesto, reserva_id, servicio_nombre, disenador_nombre=None, fecha_propuesta=None, productos_lista=None, imagenes_count=0):
         """
         Envía un email al cliente cuando se presenta una propuesta de diseño

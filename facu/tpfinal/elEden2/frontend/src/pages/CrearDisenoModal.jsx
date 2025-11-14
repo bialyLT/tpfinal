@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Upload, Plus, Trash2, Palette, DollarSign, Calendar, Image as ImageIcon, Package } from 'lucide-react';
 import { serviciosService, productosService } from '../services';
 import { success, error as showError } from '../utils/notifications';
@@ -50,9 +50,10 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
         resetForm();
       }
     }
-  }, [isOpen, modoEdicion, diseno]);
+  }, [isOpen, modoEdicion, diseno, cargarDisenoParaEditar]);
 
-  const cargarDisenoParaEditar = async () => {
+  const cargarDisenoParaEditar = useCallback(async () => {
+    if (!diseno?.id_diseno) return;
     try {
       console.log('🔍 Intentando cargar diseño con ID:', diseno.id_diseno);
       console.log('🔍 Diseño completo recibido:', diseno);
@@ -119,7 +120,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       console.error('❌ Error completo:', error);
       console.error('❌ Response:', error.response);
     }
-  };
+  }, [diseno]);
 
   const fetchProductos = async () => {
     try {
@@ -294,7 +295,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
         URL.revokeObjectURL(preview.url);
       });
     };
-  }, []);
+  }, [previewImages]);
 
   if (!isOpen) return null;
 

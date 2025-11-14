@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { serviciosService } from '../services';
 import { useAuth } from '../context/AuthContext';
@@ -12,10 +12,9 @@ const ServiciosPage = () => {
   const navigate = useNavigate();
   const [servicios, setServicios] = useState([]);
   const [solicitudes, setSolicitudes] = useState([]);
-  const [tiposServicio, setTiposServicio] = useState([]);
   const [disenos, setDisenos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('solicitudes');
+  const activeTab = 'solicitudes';
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [isDisenoModalOpen, setIsDisenoModalOpen] = useState(false);
@@ -42,11 +41,7 @@ const ServiciosPage = () => {
   const isEmpleado = user?.groups?.includes('Empleados');
   const isCliente = !isAdmin && !isEmpleado;
 
-  useEffect(() => {
-    fetchData();
-  }, [solicitudesPagination.currentPage, solicitudesPagination.pageSize, disenosPagination.currentPage, disenosPagination.pageSize]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const promises = [
@@ -68,8 +63,7 @@ const ServiciosPage = () => {
       const results = await Promise.all(promises);
       const [serviciosData, reservasData, disenosData] = results;
       
-      setServicios(serviciosData.results || serviciosData);
-      setTiposServicio(serviciosData.results || serviciosData);
+  setServicios(serviciosData.results || serviciosData);
       
       // Actualizar solicitudes con datos de paginación
       if (reservasData.results) {
@@ -103,22 +97,17 @@ const ServiciosPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [
+    disenosPagination.currentPage,
+    disenosPagination.pageSize,
+    solicitudesPagination.currentPage,
+    solicitudesPagination.pageSize,
+    isCliente
+  ]);
 
-  const handleUpdateEstado = async (id, nuevoEstado) => {
-    try {
-      // Determinar si es reserva o servicio según el tab activo
-      if (activeTab === 'solicitudes') {
-        await serviciosService.updateReserva(id, { estado: nuevoEstado });
-      } else {
-        await serviciosService.updateServicio(id, { activo: nuevoEstado === 'activo' });
-      }
-      success('Estado actualizado correctamente');
-      fetchData();
-    } catch (error) {
-      handleApiError(error, 'Error al actualizar el estado');
-    }
-  };
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handleFinalizarServicio = async (id) => {
     if (!window.confirm('¿Está seguro de finalizar este servicio?')) {

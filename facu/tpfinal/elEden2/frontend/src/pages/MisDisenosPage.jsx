@@ -271,7 +271,6 @@ const MisDisenosPage = () => {
             onRechazar={handleRechazarClick}
             loading={actionLoading}
             formatCurrency={formatCurrency}
-            formatDate={formatDate}
           />
         )}
 
@@ -340,7 +339,7 @@ const DisenoCard = ({ diseno, onVerDetalle, formatCurrency, formatDate, getEstad
 };
 
 // Modal de Detalle con opciones de aceptar/rechazar
-const DisenoDetalleModal = ({ diseno, onClose, onAceptar, onRechazar, loading, formatCurrency, formatDate }) => {
+const DisenoDetalleModal = ({ diseno, onClose, onAceptar, onRechazar, loading, formatCurrency }) => {
   const isPresentado = diseno.estado === 'presentado';
 
   return (

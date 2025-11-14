@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Leaf, Home, Mail, Lock, ArrowLeft } from 'lucide-react';
+import { Leaf, Mail, Lock, ArrowLeft } from 'lucide-react';
 import GoogleLoginButton from '../../components/GoogleLoginButton';
 
 const LoginPage = () => {
@@ -11,7 +11,7 @@ const LoginPage = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [searchParams] = useSearchParams();
-  const { login, user } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -51,7 +51,7 @@ const LoginPage = () => {
       } else {
         navigate('/dashboard');
       }
-    } catch (error) {
+    } catch {
       // El error ya se maneja en AuthContext, no necesitamos duplicar el toast aquí
     } finally {
       setIsLoading(false);

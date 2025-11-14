@@ -313,7 +313,7 @@ const ReservaDetallePage = () => {
 
   const puedeMostrarEncuesta = isCliente && reserva?.estado === 'completada' && surveyState.encuesta && !surveyState.completada;
 
-  const renderPregunta = (pregunta, index) => {
+  const renderPregunta = (pregunta) => {
     const preguntaId = pregunta.id ?? pregunta.id_pregunta;
     const respuesta = surveyState.respuestas[preguntaId];
 
@@ -983,7 +983,7 @@ const ReservaDetallePage = () => {
                         {pregunta.descripcion && (
                           <p className="text-sm text-gray-400 mb-3">{pregunta.descripcion}</p>
                         )}
-                        {renderPregunta(pregunta, index)}
+                        {renderPregunta(pregunta)}
                       </div>
                     ))}
                   </div>

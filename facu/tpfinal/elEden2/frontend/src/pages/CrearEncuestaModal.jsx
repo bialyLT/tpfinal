@@ -51,7 +51,7 @@ const CrearEncuestaModal = ({ show, onClose, onSuccess, encuesta, modoEdicion })
         titulo: encuesta.titulo,
         descripcion: encuesta.descripcion || '',
         activa: encuesta.activa,
-        preguntas: (encuesta.preguntas || []).map((pregunta, index) => ({
+  preguntas: (encuesta.preguntas || []).map((pregunta) => ({
           ...pregunta,
           impacta_puntuacion: Boolean(pregunta.impacta_puntuacion)
         }))

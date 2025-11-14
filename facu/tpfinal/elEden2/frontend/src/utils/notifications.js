@@ -90,7 +90,7 @@ export const handleApiError = (apiError, customMessage = null) => {
       } else {
         // Errores de campo
         const fieldErrors = [];
-        Object.entries(responseData).forEach(([field, errors]) => {
+        Object.entries(responseData).forEach(([, errors]) => {
           if (Array.isArray(errors)) {
             fieldErrors.push(...errors);
           } else if (typeof errors === 'string') {

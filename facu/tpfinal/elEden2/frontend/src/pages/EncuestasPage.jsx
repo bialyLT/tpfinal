@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { encuestasService } from '../services';
 import { useAuth } from '../context/AuthContext';
-import { handleApiError, success } from '../utils/notifications';
+import { handleApiError } from '../utils/notifications';
 import { 
   ClipboardDocumentListIcon, 
   FunnelIcon, 
@@ -19,7 +19,6 @@ const EncuestasPage = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [viewMode, setViewMode] = useState('grid');
   const { user } = useAuth();
 
   const isAdmin = user?.groups?.includes('Administradores');

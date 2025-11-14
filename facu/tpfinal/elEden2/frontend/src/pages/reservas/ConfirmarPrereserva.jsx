@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Loader } from 'lucide-react';
 import { serviciosService } from '../../services';
@@ -15,7 +15,6 @@ const globalLock = {
 const ConfirmarPrereserva = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [processing, setProcessing] = useState(true);
   // Usar useRef en lugar de useState para evitar re-renders
   const isProcessingRef = useRef(false);
   const hasProcessedRef = useRef(false);
@@ -169,12 +168,12 @@ const ConfirmarPrereserva = () => {
           navigate('/servicios');
         }, 2000);
       } finally {
-        setProcessing(false);
+        globalLock.processing = false;
       }
     };
 
     confirmarReserva();
-  }, []); // Ejecutar SOLO una vez al montar el componente
+  }, [navigate, searchParams]); // Ejecutar SOLO una vez al montar o si cambian los parámetros
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-green-50 to-blue-50">
