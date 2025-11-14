@@ -233,6 +233,11 @@ class Empleado(models.Model):
         self.save(update_fields=fields_to_update)
 
         if alert_triggered:
+            user_to_deactivate = getattr(self.persona, 'user', None)
+            if user_to_deactivate and user_to_deactivate.is_active:
+                user_to_deactivate.is_active = False
+                user_to_deactivate.save(update_fields=['is_active'])
+
             EmailService.send_employee_deactivation_alert(
                 empleado=self,
                 motivo=motivo_baja,
