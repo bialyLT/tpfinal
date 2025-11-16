@@ -1,5 +1,7 @@
 from datetime import datetime
+import requests
 
+from django.conf import settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAdminUser
@@ -100,3 +102,67 @@ class EligibleReservationsAPIView(APIView):
             for reserva in reservas
         ]
         return Response(data, status=status.HTTP_200_OK)
+
+
+class CurrentTemperatureAPIView(APIView):
+    """
+    Obtiene la temperatura actual desde Open-Meteo.
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        try:
+            # Coordenadas por defecto (Posadas, Misiones)
+            lat = getattr(settings, 'WEATHER_DEFAULT_LAT', -27.3667)
+            lon = getattr(settings, 'WEATHER_DEFAULT_LON', -55.9000)
+            
+            url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m"
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            temperature = data['current']['temperature_2m']
+            
+            # Obtener ubicación usando Nominatim
+            location = None
+            try:
+                nominatim_url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=10&addressdetails=1"
+                nominatim_response = requests.get(nominatim_url, timeout=10, headers={'User-Agent': 'ElEden-Weather/1.0'})
+                nominatim_response.raise_for_status()
+                nominatim_data = nominatim_response.json()
+                
+                # Extraer ubicación legible
+                address = nominatim_data.get('address', {})
+                city = address.get('city') or address.get('town') or address.get('village') or address.get('municipality')
+                country = address.get('country')
+                if city and country:
+                    location = f"{city}, {country}"
+                elif city:
+                    location = city
+                elif country:
+                    location = country
+                else:
+                    location = nominatim_data.get('display_name', 'Ubicación desconocida')
+            except Exception as e:
+                # Si falla la geocodificación, continuar sin ubicación
+                location = None
+            
+            response_data = {
+                'temperature': temperature,
+                'unit': '°C'
+            }
+            if location:
+                response_data['location'] = location
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except requests.RequestException as e:
+            return Response(
+                {'error': 'No se pudo obtener la temperatura'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        except KeyError:
+            return Response(
+                {'error': 'Datos de temperatura no disponibles'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )

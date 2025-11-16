@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { weatherService } from '../services';
+import { weatherService, adminService } from '../services';
 import { ArrowUp, ArrowDown, Users, Briefcase, DollarSign, FileText, Calendar, BarChart, Wrench, User, Star, CheckCircle, Clock, XCircle, Leaf, CloudRain, RefreshCw } from 'lucide-react';
 
 const StatCard = ({ title, value, change, icon }) => {
@@ -51,6 +51,15 @@ const DashboardPage = () => {
   const [reprogramMessage, setReprogramMessage] = useState('Reprogramación por alerta climática');
   const [reprogramming, setReprogramming] = useState(false);
 
+  const [stats, setStats] = useState({
+    total_users: 0,
+    active_services: 0,
+    monthly_revenue: 0
+  });
+  const [temperature, setTemperature] = useState(null);
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const [loadingStats, setLoadingStats] = useState(false);
+
   const formatDatetimeLocal = (value) => {
     if (!value) return '';
     const date = new Date(value);
@@ -73,6 +82,18 @@ const DashboardPage = () => {
       setModalDate(formatDatetimeLocal(selectedReserva.fecha_reserva));
     }
   }, [selectedReserva]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      setLoadingStats(true);
+      fetchStats();
+      fetchTemperature();
+
+      // Actualizar temperatura cada 10 minutos
+      const interval = setInterval(fetchTemperature, 10 * 60 * 1000);
+      return () => clearInterval(interval);
+    }
+  }, [isAdmin]);
 
   const refreshWeatherData = async () => {
     if (!isAdmin) return;
@@ -180,10 +201,9 @@ const DashboardPage = () => {
   const getStats = () => {
     if (isAdmin) {
       return [
-        { title: 'Total Usuarios', value: '127', change: '+12%', icon: <Users className="w-5 h-5 text-gray-400" /> },
-        { title: 'Servicios Activos', value: '23', change: '+5%', icon: <Briefcase className="w-5 h-5 text-gray-400" /> },
-        { title: 'Ingresos del Mes', value: '$45,230', change: '+18%', icon: <DollarSign className="w-5 h-5 text-gray-400" /> },
-        { title: 'Encuestas Completadas', value: '89', change: '+7%', icon: <FileText className="w-5 h-5 text-gray-400" /> }
+        { title: 'Total Usuarios', value: loadingStats ? '...' : stats.total_users.toString(), change: '', icon: <Users className="w-5 h-5 text-gray-400" /> },
+        { title: 'Servicios Activos', value: loadingStats ? '...' : stats.active_services.toString(), change: '', icon: <Briefcase className="w-5 h-5 text-gray-400" /> },
+        { title: 'Ingresos del Mes', value: loadingStats ? '...' : `$${stats.monthly_revenue.toLocaleString()}`, change: '', icon: <DollarSign className="w-5 h-5 text-gray-400" /> }
       ];
     }
     if (user?.groups?.includes('Empleados')) {
@@ -200,6 +220,28 @@ const DashboardPage = () => {
       { title: 'En Progreso', value: '2', change: '0', icon: <Clock className="w-5 h-5 text-gray-400" /> },
       { title: 'Próxima Visita', value: 'Mañana', change: '', icon: <Calendar className="w-5 h-5 text-gray-400" /> }
     ];
+  };
+
+  const fetchStats = async () => {
+    try {
+      const data = await adminService.fetchStats();
+      setStats(data);
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
+  const fetchTemperature = async () => {
+    try {
+      const data = await adminService.fetchCurrentTemperature();
+      setTemperature(data);
+      setLastUpdate(new Date());
+    } catch (error) {
+      console.error('Error fetching temperature:', error);
+      setTemperature(null);
+    }
   };
 
   const recentActivity = [
@@ -230,6 +272,37 @@ const DashboardPage = () => {
               ))}
             </div>
           </div>
+
+          {isAdmin && (
+            <div className="mb-10">
+              <h2 className="text-lg font-semibold text-white mb-4">Clima Actual</h2>
+              <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-sm font-medium text-gray-400">Temperatura</span>
+                  <button
+                    onClick={fetchTemperature}
+                    className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-gray-700 text-gray-100 hover:bg-gray-600 transition text-sm"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Actualizar
+                  </button>
+                </div>
+                <div className="text-center">
+                  <p className="text-4xl font-bold text-white mb-2">
+                    {temperature ? `${temperature.temperature}°C` : 'N/A'}
+                  </p>
+                  {temperature?.location && (
+                    <p className="text-lg text-gray-400 mb-4">{temperature.location}</p>
+                  )}
+                  {lastUpdate && (
+                    <p className="text-xs text-gray-500">
+                      Última actualización: {lastUpdate.toLocaleString('es-AR')}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {isAdmin && (
             <div className="mb-10">

@@ -21,6 +21,7 @@ from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenRefreshView, TokenBlacklistView
 from core.views import CustomTokenObtainPairView
 from apps.users.google_auth import google_login, google_callback
+from .views import AdminStatsAPIView
 
 urlpatterns = [
     # Admin
@@ -44,6 +45,7 @@ urlpatterns = [
     path('api/v1/', include('apps.ventas.urls')),
     path('api/v1/mercadopago/', include('apps.mercadopago.urls')),  # Nueva app de MercadoPago
     path('api/v1/', include('apps.weather.urls')),
+    path('api/v1/admin/stats/', AdminStatsAPIView.as_view(), name='admin-stats'),
 ]
 
 # Serve media files in development

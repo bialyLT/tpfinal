@@ -595,3 +595,16 @@ export const localidadesService = {
     return response.data;
   }
 };
+
+// Admin Services
+export const adminService = {
+  fetchStats: async () => {
+    const response = await api.get('/admin/stats/');
+    return response.data;
+  },
+
+  fetchCurrentTemperature: async () => {
+    const response = await api.get('/weather/current-temperature/');
+    return response.data;
+  }
+};

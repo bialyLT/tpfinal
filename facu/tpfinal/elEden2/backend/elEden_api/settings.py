@@ -375,8 +375,8 @@ FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
 # Weather configuration
 WEATHER_API_URL = os.getenv('WEATHER_API_URL', 'https://api.open-meteo.com/v1/forecast')
-WEATHER_DEFAULT_LAT = float(os.getenv('WEATHER_DEFAULT_LAT', '-26.82414'))
-WEATHER_DEFAULT_LON = float(os.getenv('WEATHER_DEFAULT_LON', '-65.22260'))
+WEATHER_DEFAULT_LAT = float(os.getenv('WEATHER_DEFAULT_LAT', '-27.3667'))
+WEATHER_DEFAULT_LON = float(os.getenv('WEATHER_DEFAULT_LON', '-55.9000'))
 WEATHER_ALERT_THRESHOLD_MM = float(os.getenv('WEATHER_ALERT_THRESHOLD_MM', '1.0'))
 
 # CORS Configuration

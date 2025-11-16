@@ -85,8 +85,8 @@ class WeatherAlertService:
         if latitude is not None and longitude is not None:
             return latitude, longitude
         return (
-            float(getattr(settings, 'WEATHER_DEFAULT_LAT', -26.82414)),
-            float(getattr(settings, 'WEATHER_DEFAULT_LON', -65.2226)),
+            float(getattr(settings, 'WEATHER_DEFAULT_LAT', -27.3667)),
+            float(getattr(settings, 'WEATHER_DEFAULT_LON', -55.9000)),
         )
 
     def _ensure_forecast(self, latitude: float, longitude: float, target_date: datetime, raw_forecast: ForecastResult) -> WeatherForecast:
@@ -181,8 +181,8 @@ class WeatherAlertService:
         precipitation = precipitation_mm or self.threshold
         forecast, created = WeatherForecast.objects.get_or_create(
             date=fecha.date(),
-            latitude=Decimal(str(getattr(settings, 'WEATHER_DEFAULT_LAT', -26.82414))),
-            longitude=Decimal(str(getattr(settings, 'WEATHER_DEFAULT_LON', -65.2226))),
+            latitude=Decimal(str(getattr(settings, 'WEATHER_DEFAULT_LAT', -27.3667))),
+            longitude=Decimal(str(getattr(settings, 'WEATHER_DEFAULT_LON', -55.9000))),
             source='simulated',
             defaults={
                 'precipitation_mm': precipitation,
