@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as datetime_timezone
 from decimal import Decimal
 from typing import Optional
 
@@ -90,7 +90,7 @@ class WeatherAlertService:
         )
 
     def _ensure_forecast(self, latitude: float, longitude: float, target_date: datetime, raw_forecast: ForecastResult) -> WeatherForecast:
-        forecast, _ = WeatherForecast.objects.get_or_create(
+        forecast, created = WeatherForecast.objects.get_or_create(
             date=target_date.date(),
             latitude=Decimal(str(latitude)),
             longitude=Decimal(str(longitude)),
@@ -102,10 +102,31 @@ class WeatherAlertService:
                 'raw_payload': raw_forecast.raw,
             }
         )
+        if not created:
+            needs_update = False
+            if forecast.raw_payload in (None, {}):
+                forecast.raw_payload = raw_forecast.raw
+                needs_update = True
+            if forecast.summary != raw_forecast.summary:
+                forecast.summary = raw_forecast.summary
+                needs_update = True
+            if forecast.precipitation_mm != raw_forecast.precipitation_mm:
+                forecast.precipitation_mm = raw_forecast.precipitation_mm
+                needs_update = True
+            if forecast.precipitation_probability != raw_forecast.precipitation_probability:
+                forecast.precipitation_probability = raw_forecast.precipitation_probability
+                needs_update = True
+            if needs_update:
+                forecast.save(update_fields=[
+                    'raw_payload',
+                    'summary',
+                    'precipitation_mm',
+                    'precipitation_probability'
+                ])
         return forecast
 
     def evaluate_reserva(self, reserva: Reserva, latitude: Optional[float] = None, longitude: Optional[float] = None, auto_create_alert: bool = True) -> dict:
-        fecha_objetivo = reserva.fecha_reserva.astimezone(timezone.utc) if timezone.is_aware(reserva.fecha_reserva) else reserva.fecha_reserva
+        fecha_objetivo = reserva.fecha_reserva.astimezone(datetime_timezone.utc) if timezone.is_aware(reserva.fecha_reserva) else reserva.fecha_reserva
         coords = self._get_coordinates(reserva, latitude, longitude)
         forecast = self.client.get_daily_forecast(coords[0], coords[1], fecha_objetivo)
         forecast_obj = self._ensure_forecast(coords[0], coords[1], fecha_objetivo, forecast)
@@ -134,6 +155,7 @@ class WeatherAlertService:
         return result
 
     def _create_alert_from_forecast(self, reserva: Reserva, forecast: WeatherForecast, is_simulated: bool = False, message: Optional[str] = None) -> WeatherAlert:
+        payload = forecast.raw_payload if getattr(forecast, 'raw_payload', None) else {}
         alerta = WeatherAlert.objects.create(
             reserva=reserva,
             servicio=reserva.servicio,
@@ -147,7 +169,7 @@ class WeatherAlertService:
             is_simulated=is_simulated,
             requires_reprogramming=reserva.servicio.reprogramable_por_clima,
             message=message or 'Lluvia pronosticada: se sugiere reprogramar',
-            payload=forecast.raw,
+            payload=payload,
         )
         self._mark_reserva_requires_reprogramming(reserva, alerta)
         return alerta

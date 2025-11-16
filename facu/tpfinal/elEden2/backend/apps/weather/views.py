@@ -17,7 +17,6 @@ from .services import WeatherAlertService
 
 
 class WeatherCheckAPIView(APIView):
-    permission_classes = [IsAdminUser]
 
     def post(self, request):
         serializer = WeatherCheckSerializer(data=request.data)
@@ -42,7 +41,6 @@ class WeatherCheckAPIView(APIView):
 
 
 class WeatherSimulateAPIView(APIView):
-    permission_classes = [IsAdminUser]
 
     def post(self, request):
         serializer = WeatherSimulationSerializer(data=request.data)
@@ -68,7 +66,6 @@ class WeatherSimulateAPIView(APIView):
 
 
 class PendingWeatherAlertsAPIView(APIView):
-    permission_classes = [IsAdminUser]
 
     def get(self, request):
         alertas = WeatherAlert.objects.select_related('reserva__servicio', 'reserva__cliente__persona').filter(
@@ -80,7 +77,6 @@ class PendingWeatherAlertsAPIView(APIView):
 
 
 class EligibleReservationsAPIView(APIView):
-    permission_classes = [IsAdminUser]
 
     def get(self, request):
         ahora = timezone.now()

@@ -62,15 +62,15 @@ class ImagenDisenoInline(admin.TabularInline):
 
 @admin.register(Servicio)
 class ServicioAdmin(admin.ModelAdmin):
-    list_display = ('id_servicio', 'nombre', 'activo', 'fecha_creacion')
-    list_filter = ('activo',)
+    list_display = ('id_servicio', 'nombre', 'activo', 'reprogramable_por_clima', 'fecha_creacion')
+    list_filter = ('activo', 'reprogramable_por_clima')
     search_fields = ('nombre', 'descripcion')
     ordering = ('nombre',)
     readonly_fields = ('fecha_creacion', 'fecha_actualizacion')
     
     fieldsets = (
         ('Información Básica', {
-            'fields': ('nombre', 'descripcion', 'activo')
+            'fields': ('nombre', 'descripcion', 'activo', 'reprogramable_por_clima')
         }),
         ('Fechas', {
             'fields': ('fecha_creacion', 'fecha_actualizacion'),

@@ -45,6 +45,12 @@ const DashboardPage = () => {
   const [weatherError, setWeatherError] = useState('');
   const [weatherSuccess, setWeatherSuccess] = useState('');
 
+  const [reprogramModalOpen, setReprogramModalOpen] = useState(false);
+  const [reprogramReservaId, setReprogramReservaId] = useState('');
+  const [reprogramDate, setReprogramDate] = useState('');
+  const [reprogramMessage, setReprogramMessage] = useState('Reprogramación por alerta climática');
+  const [reprogramming, setReprogramming] = useState(false);
+
   const formatDatetimeLocal = (value) => {
     if (!value) return '';
     const date = new Date(value);
@@ -131,31 +137,44 @@ const DashboardPage = () => {
     }
   };
 
-  const handleReprogram = async (alerta) => {
+  const handleReprogram = (alerta) => {
     if (!alerta?.reserva_detalle?.id_reserva) return;
     const defaultValue = formatDatetimeLocal(alerta.reserva_detalle.fecha_reserva || new Date().toISOString());
-    const input = window.prompt('Nueva fecha (YYYY-MM-DDTHH:MM)', defaultValue);
-    if (!input) return;
-
-    setUpdatingReserva(true);
+    setReprogramReservaId(alerta.reserva_detalle.id_reserva);
+    setReprogramDate(defaultValue);
+    setReprogramMessage('Reprogramación por alerta climática');
     setWeatherError('');
-    try {
-      const isoDate = new Date(input).toISOString();
-      await weatherService.applyReprogramacion(alerta.reserva_detalle.id_reserva, { nueva_fecha: isoDate });
-      setWeatherSuccess('Reserva reprogramada correctamente.');
-      await refreshWeatherData();
-    } catch (error) {
-      console.error('reprogram error', error);
-      setWeatherError('No se pudo reprogramar la reserva.');
-    } finally {
-      setUpdatingReserva(false);
-    }
+    setWeatherSuccess('');
+    setReprogramModalOpen(true);
   };
 
   const getWelcomeMessage = () => {
     if (isAdmin) return 'Panel de Administración';
     if (user?.groups?.includes('Empleados')) return 'Panel de Empleado';
     return 'Mi Dashboard';
+  };
+
+  const handleReprogramSubmit = async (e) => {
+    e.preventDefault();
+    if (!reprogramReservaId || !reprogramDate) {
+      setWeatherError('Por favor completa todos los campos.');
+      return;
+    }
+
+    setReprogramming(true);
+    setWeatherError('');
+    try {
+      const isoDate = new Date(reprogramDate).toISOString();
+      await weatherService.applyReprogramacion(reprogramReservaId, { nueva_fecha: isoDate });
+      setWeatherSuccess('Reserva reprogramada correctamente.');
+      setReprogramModalOpen(false);
+      await refreshWeatherData();
+    } catch (error) {
+      console.error('reprogram error', error);
+      setWeatherError('No se pudo reprogramar la reserva.');
+    } finally {
+      setReprogramming(false);
+    }
   };
 
   const getStats = () => {
@@ -379,6 +398,51 @@ const DashboardPage = () => {
                 className={`px-4 py-2 rounded-md font-semibold ${simulatingRain ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-sky-600 hover:bg-sky-500 text-white'}`}
               >
                 {simulatingRain ? 'Simulando...' : 'Crear alerta'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )}
+
+    {reprogramModalOpen && (
+      <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
+        <div className="bg-gray-900 w-full max-w-lg rounded-lg p-6 shadow-2xl border border-gray-700">
+          <h3 className="text-xl font-semibold text-white mb-4">Reprogramar Reserva</h3>
+          <form className="space-y-4" onSubmit={handleReprogramSubmit}>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Nueva Fecha</label>
+              <input
+                type="datetime-local"
+                className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                value={reprogramDate}
+                onChange={(e) => setReprogramDate(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Mensaje (opcional)</label>
+              <textarea
+                className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                value={reprogramMessage}
+                onChange={(e) => setReprogramMessage(e.target.value)}
+                rows="3"
+              />
+            </div>
+            <div className="flex gap-3 pt-4">
+              <button
+                type="button"
+                className="px-4 py-2 rounded-md border border-gray-600 text-gray-300 hover:bg-gray-800"
+                onClick={() => setReprogramModalOpen(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={reprogramming}
+                className={`px-4 py-2 rounded-md font-semibold ${reprogramming ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500 text-white'}`}
+              >
+                {reprogramming ? 'Reprogramando...' : 'Reprogramar'}
               </button>
             </div>
           </form>

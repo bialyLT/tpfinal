@@ -46,7 +46,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
     filterset_fields = ['estado', 'servicio']
     search_fields = ['cliente__persona__nombre', 'cliente__persona__apellido', 'servicio__nombre']
     ordering = ['-fecha_solicitud']
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_queryset(self):
         """

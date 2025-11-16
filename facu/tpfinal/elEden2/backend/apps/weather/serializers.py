@@ -53,7 +53,7 @@ class WeatherAlertSerializer(serializers.ModelSerializer):
 
 class WeatherSimulationSerializer(serializers.Serializer):
     reserva_id = serializers.IntegerField(required=True)
-    alert_date = serializers.DateField(required=False)
+    alert_date = serializers.DateTimeField(required=False)
     message = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     precipitation_mm = serializers.DecimalField(max_digits=6, decimal_places=2, required=False)
 
