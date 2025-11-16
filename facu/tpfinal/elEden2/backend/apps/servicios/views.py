@@ -360,6 +360,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
 
         from apps.emails.services import EmailService
 
+        logger.info(f"[Reprogramación] Llamando EmailService.send_weather_reprogram_notification para reserva #{reserva.id_reserva}")
         EmailService.send_weather_reprogram_notification(reserva=reserva, nueva_fecha=nueva_fecha)
 
         serializer = self.get_serializer(reserva)

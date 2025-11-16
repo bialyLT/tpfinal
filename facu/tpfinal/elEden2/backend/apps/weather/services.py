@@ -179,16 +179,25 @@ class WeatherAlertService:
             raise ValueError('El servicio asociado no permite reprogramaciones automáticas por clima')
         fecha = alert_date or reserva.fecha_reserva
         precipitation = precipitation_mm or self.threshold
-        forecast = WeatherForecast.objects.create(
+        forecast, created = WeatherForecast.objects.get_or_create(
             date=fecha.date(),
             latitude=Decimal(str(getattr(settings, 'WEATHER_DEFAULT_LAT', -26.82414))),
             longitude=Decimal(str(getattr(settings, 'WEATHER_DEFAULT_LON', -65.2226))),
-            precipitation_mm=precipitation,
-            precipitation_probability=100,
-            summary='Simulación de lluvia',
-            raw_payload={'simulated': True, 'message': message or 'Simulación manual'},
-            source='simulated'
+            source='simulated',
+            defaults={
+                'precipitation_mm': precipitation,
+                'precipitation_probability': 100,
+                'summary': 'Simulación de lluvia',
+                'raw_payload': {'simulated': True, 'message': message or 'Simulación manual'},
+            }
         )
+        if not created:
+            # Actualizar si ya existe
+            forecast.precipitation_mm = precipitation
+            forecast.precipitation_probability = 100
+            forecast.summary = 'Simulación de lluvia'
+            forecast.raw_payload = {'simulated': True, 'message': message or 'Simulación manual'}
+            forecast.save()
         alerta = WeatherAlert.objects.create(
             reserva=reserva,
             servicio=reserva.servicio,

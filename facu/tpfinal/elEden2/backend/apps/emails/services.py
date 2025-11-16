@@ -655,6 +655,50 @@ Servicio: {reserva.servicio.nombre}
             except Exception as exc:
                 logger.error(f"No se pudo notificar a administradores de la reprogramación: {exc}")
 
+        # Notificar a empleados asignados
+        logger.info(f"[Reprogramación] Verificando empleados asignados para reserva #{reserva.id_reserva}")
+        
+        # Log de todas las asignaciones sin filtro
+        todas_asignaciones = reserva.asignaciones.all()
+        logger.info(f"[Reprogramación] Total asignaciones encontradas: {todas_asignaciones.count()}")
+        for asignacion in todas_asignaciones:
+            logger.info(f"[Reprogramación] Asignación: Empleado {asignacion.empleado.persona.nombre} {asignacion.empleado.persona.apellido}, Activo: {asignacion.empleado.activo}, Email: {asignacion.empleado.persona.email}, User activo: {asignacion.empleado.persona.user.is_active if hasattr(asignacion.empleado.persona, 'user') else 'N/A'}")
+        
+        empleado_recipients = list(reserva.asignaciones.filter(
+            empleado__activo=True,
+            empleado__persona__user__is_active=True,
+            empleado__persona__email__isnull=False
+        ).values_list('empleado__persona__email', flat=True))
+        
+        logger.info(f"[Reprogramación] Empleados filtrados con email: {len(empleado_recipients)} - Emails: {empleado_recipients}")
+        
+        if empleado_recipients:
+            mensaje_empleado = f"""
+Hola,
+
+La reserva #{reserva.id_reserva} a la que estás asignado/a ha sido reprogramada por condiciones climáticas adversas.
+
+📅 Nueva fecha: {nueva_fecha_texto}
+Cliente: {cliente.nombre} {cliente.apellido}
+Servicio: {reserva.servicio.nombre}
+📍 Dirección: {reserva.direccion or 'A confirmar'}
+
+Por favor, ajusta tu agenda correspondiente.
+
+Equipo de El Edén
+""".strip()
+            try:
+                send_mail(
+                    subject=f"[Empleado] {subject}",
+                    message=mensaje_empleado,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=empleado_recipients,
+                    fail_silently=False,
+                )
+                logger.info(f"Notificados {len(empleado_recipients)} empleados por reprogramación climática")
+            except Exception as exc:
+                logger.error(f"No se pudo notificar a empleados de la reprogramación: {exc}")
+
     @staticmethod
     def send_design_proposal_notification(cliente_email, cliente_nombre, diseno_id, titulo_diseno, descripcion, presupuesto, reserva_id, servicio_nombre, disenador_nombre=None, fecha_propuesta=None, productos_lista=None, imagenes_count=0):
         """
