@@ -76,13 +76,16 @@ class Producto(models.Model):
     def __str__(self):
         return f"{self.nombre} - {self.marca.nombre_marca}"
 
-    def calcular_precio_desde_compras(self):
+    def calcular_precio_desde_compras(self, porcentaje_ganancia=None):
         """
         Calcula y actualiza el precio del producto basado en el precio unitario
-        más alto de todas las compras realizadas.
+        más alto de todas las compras realizadas, aplicando porcentaje de ganancia si se proporciona.
         
+        Args:
+            porcentaje_ganancia (Decimal, optional): Porcentaje de ganancia a aplicar sobre el precio de compra
+            
         Returns:
-            Decimal: El precio unitario más alto, o 0 si no hay compras
+            Decimal: El precio unitario más alto con ganancia aplicada, o 0 si no hay compras
         """
         from apps.ventas.models import DetalleCompra
         
@@ -90,7 +93,15 @@ class Producto(models.Model):
             producto=self
         ).order_by('-precio_unitario').first()
         
-        nuevo_precio = detalle_max.precio_unitario if detalle_max else 0
+        if not detalle_max:
+            nuevo_precio = 0
+        else:
+            precio_compra = detalle_max.precio_unitario
+            if porcentaje_ganancia is not None and porcentaje_ganancia > 0:
+                # Aplicar porcentaje de ganancia: precio_venta = precio_compra * (1 + porcentaje/100)
+                nuevo_precio = precio_compra * (1 + porcentaje_ganancia / 100)
+            else:
+                nuevo_precio = precio_compra
         
         # Actualizar el precio en la base de datos
         if self.precio != nuevo_precio:

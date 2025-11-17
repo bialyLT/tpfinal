@@ -24,7 +24,8 @@ const ComprasPage = () => {
   const [formData, setFormData] = useState({
     proveedor: '',
     fecha: new Date().toISOString().split('T')[0],
-    observaciones: ''
+    observaciones: '',
+    porcentaje_ganancia: 0
   });
   
   // Estados para detalles de compra (inline)
@@ -64,15 +65,21 @@ const ComprasPage = () => {
       setFormData({
         proveedor: compra.proveedor,
         fecha: compra.fecha?.split('T')[0] || new Date().toISOString().split('T')[0],
-        observaciones: compra.observaciones || ''
+        observaciones: compra.observaciones || '',
+        porcentaje_ganancia: 0 // No se guarda en BD, siempre 0 para ediciones
       });
-      setDetalles(compra.detalles || []);
+      setDetalles((compra.detalles || []).map(detalle => ({
+        ...detalle,
+        cantidad: parseInt(detalle.cantidad) || 0,
+        precio_unitario: parseFloat(detalle.precio_unitario) || 0
+      })));
     } else {
       setSelectedCompra(null);
       setFormData({
         proveedor: '',
         fecha: new Date().toISOString().split('T')[0],
-        observaciones: ''
+        observaciones: '',
+        porcentaje_ganancia: 0
       });
       setDetalles([]);
     }
@@ -85,7 +92,8 @@ const ComprasPage = () => {
     setFormData({
       proveedor: '',
       fecha: new Date().toISOString().split('T')[0],
-      observaciones: ''
+      observaciones: '',
+      porcentaje_ganancia: 0
     });
     setDetalles([]);
     setNuevoDetalle({
@@ -107,8 +115,8 @@ const ComprasPage = () => {
     setDetalles([...detalles, {
       producto: nuevoDetalle.producto,
       producto_nombre: producto?.nombre || '',
-      cantidad: nuevoDetalle.cantidad,
-      precio_unitario: nuevoDetalle.precio_unitario,
+      cantidad: parseInt(nuevoDetalle.cantidad) || 0,
+      precio_unitario: parseFloat(nuevoDetalle.precio_unitario) || 0,
       subtotal: subtotal
     }]);
 
@@ -340,7 +348,7 @@ const ComprasPage = () => {
               
               <form onSubmit={handleSubmit} className="p-6">
                 {/* Datos de la Compra */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       Proveedor *
@@ -373,7 +381,23 @@ const ComprasPage = () => {
                     />
                   </div>
 
-                  <div className="md:col-span-1">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Porcentaje de Ganancia (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={formData.porcentaje_ganancia}
+                      onChange={(e) => setFormData({ ...formData, porcentaje_ganancia: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       Total
                     </label>
@@ -422,8 +446,8 @@ const ComprasPage = () => {
                             <tr key={index}>
                               <td className="px-3 py-2 text-white">{detalle.producto_nombre}</td>
                               <td className="px-3 py-2 text-center text-gray-300">{detalle.cantidad}</td>
-                              <td className="px-3 py-2 text-right text-gray-300">${detalle.precio_unitario.toFixed(2)}</td>
-                              <td className="px-3 py-2 text-right font-semibold text-green-400">${(detalle.cantidad * detalle.precio_unitario).toFixed(2)}</td>
+                              <td className="px-3 py-2 text-right text-gray-300">${Number(detalle.precio_unitario).toFixed(2)}</td>
+                              <td className="px-3 py-2 text-right font-semibold text-green-400">${Number(detalle.cantidad * detalle.precio_unitario).toFixed(2)}</td>
                               <td className="px-3 py-2 text-center">
                                 <button
                                   type="button"
