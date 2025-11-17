@@ -44,15 +44,12 @@ Tu cuenta ha sido creada exitosamente. A continuación, encontrarás tus credenc
 Usuario: {username}
 Contraseña temporal: {password}
 
-Por seguridad, te recomendamos cambiar tu contraseña al iniciar sesión por primera vez.
-
 Puedes acceder a tu cuenta en: {settings.FRONTEND_URL}
 
 ¿Qué puedes hacer ahora?
-✓ Explorar nuestros servicios de jardinería
 ✓ Solicitar servicios personalizados
 ✓ Ver el estado de tus solicitudes
-✓ Gestionar tu perfil
+✓ Gestionar tu información personal
 
 Si tienes alguna pregunta o necesitas ayuda, no dudes en contactarnos.
 
@@ -72,10 +69,9 @@ Tu cuenta ha sido creada exitosamente con el usuario: {username}
 Puedes acceder a tu cuenta en: {settings.FRONTEND_URL}
 
 ¿Qué puedes hacer ahora?
-✓ Explorar nuestros servicios de jardinería
 ✓ Solicitar servicios personalizados
 ✓ Ver el estado de tus solicitudes
-✓ Gestionar tu perfil
+✓ Gestionar tu información personal
 
 Si tienes alguna pregunta o necesitas ayuda, no dudes en contactarnos.
 
@@ -141,20 +137,15 @@ Después de iniciar sesión, debes completar tu información personal:
 • Teléfono de contacto
 • Número de documento
 • Dirección completa
-• Cargo/Puesto de trabajo
 
 Esta información es necesaria para tu registro completo en el sistema.
 
-🔒 SEGURIDAD:
-• Cambia tu contraseña después del primer inicio de sesión
-• Guarda estas credenciales en un lugar seguro
-• No compartas tu contraseña con nadie
-
 Como empleado, tendrás acceso a:
 ✓ Panel de gestión de servicios
+✓ Panel de gestión de diseños
+✓ Panel de control de stock
+✓ Panel de gestión de proveedores
 ✓ Calendario de trabajos asignados
-✓ Gestión de clientes
-✓ Herramientas de comunicación interna
 
 Si tienes alguna pregunta o necesitas ayuda, contacta con el administrador del sistema.
 
@@ -297,48 +288,41 @@ El equipo de El Edén 🌱
         Returns:
             bool: True si el email fue enviado exitosamente
         """
-        try:
-            logger.info(f"📧 [EmailService] Iniciando envío de email de confirmación de pago")
-            logger.info(f"   📮 Para: {user_email}")
-            logger.info(f"   💳 Tipo: {tipo_pago}")
-            logger.info(f"   💰 Monto: ${monto}")
-            
+        try:        
             tipo_pago_texto = 'Seña' if tipo_pago == 'seña' else 'Pago Final'
             subject = f'✅ Pago de {tipo_pago_texto} Confirmado - Reserva #{reserva_id}'
-            
-            logger.info(f"   📄 Asunto: {subject}")
-            
+
             message = f"""
 ¡Hola {user_name}!
 
 ¡Excelente noticia! Tu pago ha sido procesado exitosamente. 🎉
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📄 DETALLES DE LA TRANSACCIÓN
+DETALLES DE LA TRANSACCIÓN
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-💳 Tipo de Pago: {tipo_pago_texto}
-💰 Monto: ${monto:,.2f} ARS
-🔢 Reserva N°: #{reserva_id}
-🌿 Servicio: {servicio_nombre}
-🆔 ID de Transacción: {payment_id}
+Tipo de Pago: {tipo_pago_texto}
+Monto: ${monto:,.2f} ARS
+Reserva N°: #{reserva_id}
+Servicio: {servicio_nombre}
+ID de Transacción: {payment_id}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
             
             if tipo_pago == 'seña':
                 message += """
-📋 PRÓXIMOS PASOS:
+PRÓXIMOS PASOS:
 
-1. ✅ Tu reserva está confirmada
-2. 📞 Nuestro equipo te contactará pronto para coordinar detalles
-3. 🎨 Recibirás una propuesta de diseño
-4. 💵 El pago final se realizará después de aprobar el diseño
+1. Nuestro equipo te contactará pronto para coordinar detalles
+2. Recibirás una propuesta de diseño
+3. Deberas aprobar el diseño y realizar el pago final 
+4. En el caso de rechazar el diseño, deberas enviar un feedback para corregirlo
 
 """
             else:
                 message += """
-🎉 ¡RESERVA COMPLETAMENTE PAGADA!
+¡RESERVA COMPLETAMENTE PAGADA!
 
 Tu servicio está confirmado y listo para ejecutarse.
 Nuestro equipo se pondrá en contacto contigo para coordinar la fecha de inicio.
@@ -346,10 +330,10 @@ Nuestro equipo se pondrá en contacto contigo para coordinar la fecha de inicio.
 """
             
             message += f"""
-🔗 Ver detalles de tu reserva:
-{settings.FRONTEND_URL}/mis-reservas
+Ver detalles de tu reserva:
+{settings.FRONTEND_URL}/mis-servicios
 
-📧 Si tienes alguna pregunta, no dudes en contactarnos.
+Si tienes alguna pregunta, no dudes en contactarnos.
 
 ¡Gracias por confiar en El Edén! 🌱
 
@@ -357,26 +341,13 @@ Saludos cordiales,
 El equipo de El Edén
             """.strip()
             
-            logger.info(f"   📨 Enviando email vía {settings.EMAIL_BACKEND}...")
-            
             send_mail(
                 subject=subject,
                 message=message,
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[user_email],
                 fail_silently=False,
-            )
-            
-            logger.info(f"✅ [EmailService] Email de confirmación de pago ({tipo_pago}) enviado exitosamente")
-            logger.info(f"   📬 Destinatario: {user_email}")
-            logger.info(f"   🔢 Reserva: #{reserva_id}")
-            
-            # Si estás usando ConsoleEmailBackend, el email se muestra en la consola
-            if 'console' in settings.EMAIL_BACKEND.lower():
-                logger.info(f"   ℹ️ Backend: CONSOLE (el email se muestra arriba en la terminal)")
-            elif 'smtp' in settings.EMAIL_BACKEND.lower():
-                logger.info(f"   ℹ️ Backend: SMTP (email enviado por correo real)")
-            
+            )          
             return True
             
         except Exception as e:
@@ -408,24 +379,21 @@ El equipo de El Edén
         try:
             from django.contrib.auth.models import User
             
-            logger.info(f"📧 [EmailService] Iniciando envío de notificación a administradores")
-            logger.info(f"   🔢 Reserva: #{reserva_id}")
-            
             # Obtener emails de todos los administradores
             admin_emails = User.objects.filter(is_staff=True, is_active=True).values_list('email', flat=True)
             admin_emails = [email for email in admin_emails if email]  # Filtrar emails vacíos
             
             if not admin_emails:
-                logger.warning("⚠️ No se encontraron administradores con email configurado")
+                logger.warning("No se encontraron administradores con email configurado")
                 return False
             
             logger.info(f"   👥 Administradores: {', '.join(admin_emails)}")
             
             tipo_pago_texto = 'Seña' if tipo_pago == 'seña' else 'Pago Final'
-            subject = f'🔔 Nueva Reserva - Pago de {tipo_pago_texto} Recibido - Reserva #{reserva_id}'
+            subject = f'Nueva Reserva - Pago de {tipo_pago_texto} Recibido - Reserva #{reserva_id}'
             
             # Formatear fecha
-            fecha_formateada = fecha_reserva.strftime('%d/%m/%Y %H:%M') if fecha_reserva else 'No especificada'
+            fecha_formateada = fecha_reserva.strftime('%d/%m/%Y') if fecha_reserva else 'No especificada'
             
             message = f"""
 ¡Hola Administrador!
@@ -433,30 +401,30 @@ El equipo de El Edén
 Se ha recibido un nuevo pago de {tipo_pago_texto.lower()} para una reserva.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 INFORMACIÓN DE LA RESERVA
+INFORMACIÓN DE LA RESERVA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🔢 Reserva N°: #{reserva_id}
-👤 Cliente: {cliente_nombre}
-🌿 Servicio: {servicio_nombre}
-📅 Fecha Programada: {fecha_formateada}
-📍 Dirección: {direccion or 'No especificada'}
+Reserva N°: #{reserva_id}
+Cliente: {cliente_nombre}
+Servicio: {servicio_nombre}
+Fecha Programada: {fecha_formateada}
+Dirección: {direccion or 'No especificada'}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💳 INFORMACIÓN DEL PAGO
+INFORMACIÓN DEL PAGO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-💰 Monto: ${monto:,.2f} ARS
-💳 Tipo: {tipo_pago_texto}
-🆔 ID de Transacción: {payment_id}
-✅ Estado: APROBADO
+Monto: ${monto:,.2f} ARS
+Tipo: {tipo_pago_texto}
+ID de Transacción: {payment_id}
+Estado: APROBADO
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
             
             if observaciones:
                 message += f"""
-📝 OBSERVACIONES DEL CLIENTE:
+OBSERVACIONES DEL CLIENTE:
 
 {observaciones}
 
@@ -465,27 +433,24 @@ Se ha recibido un nuevo pago de {tipo_pago_texto.lower()} para una reserva.
             
             if tipo_pago == 'seña':
                 message += """
-📋 ACCIONES REQUERIDAS:
+ACCIONES REQUERIDAS:
 
-1. ✅ Verificar el pago en el panel de MercadoPago
-2. 📞 Contactar al cliente para confirmar detalles
-3. 🎨 Asignar un diseñador si corresponde
-4. 📅 Coordinar la fecha del servicio
+1. Verificar el pago en el panel de MercadoPago
+2. Contactar al cliente para confirmar detalles
+3. Coordinar la fecha del servicio
 
 """
             else:
                 message += """
-📋 ACCIONES REQUERIDAS:
+ACCIONES REQUERIDAS:
 
-1. ✅ Verificar el pago en el panel de MercadoPago
-2. 👥 Asignar empleados para el servicio
-3. 📅 Confirmar la fecha con el cliente
-4. 🚀 Iniciar la ejecución del servicio
+1. Verificar el pago en el panel de MercadoPago
+2. Iniciar la ejecución del servicio
 
 """
             
             message += f"""
-🔗 Ver detalles en el panel de administración:
+Ver detalles en el panel de administración:
 {settings.FRONTEND_URL}/servicios
 
 ¡Atención inmediata requerida! 🌱
@@ -501,9 +466,6 @@ Sistema de Notificaciones - El Edén
                 recipient_list=admin_emails,
                 fail_silently=False,
             )
-            
-            logger.info(f"✅ [EmailService] Notificación a administradores enviada exitosamente")
-            logger.info(f"   📬 Destinatarios: {len(admin_emails)} administrador(es)")
             
             return True
             
@@ -557,10 +519,8 @@ El sistema de alertas de El Edén
                 recipient_list=list(recipients),
                 fail_silently=False,
             )
-            logger.info(f"Alerta de baja enviada a administradores: {', '.join(recipients)}")
             return True
         except Exception as e:
-            logger.error(f"Error al enviar alerta de baja de empleado: {str(e)}")
             return False
 
     @staticmethod
@@ -595,10 +555,8 @@ Se marcó la reserva como pendiente de reprogramación.
                 recipient_list=recipients,
                 fail_silently=False,
             )
-            logger.info("Alerta de clima notificada a administradores")
             return True
         except Exception as exc:
-            logger.error(f"No se pudo enviar alerta de clima: {exc}")
             return False
 
     @staticmethod
@@ -615,8 +573,8 @@ Hola {cliente.nombre},
 
 Reprogramamos tu servicio "{reserva.servicio.nombre}" debido a condiciones climáticas adversas.
 
-📅 Nueva fecha: {nueva_fecha_texto}
-📍 Dirección: {reserva.direccion or 'A confirmar'}
+Nueva fecha: {nueva_fecha_texto}
+Dirección: {reserva.direccion or 'A confirmar'}
 
 Te avisaremos si surge algún cambio adicional.
 
@@ -631,7 +589,6 @@ Equipo de El Edén
                 recipient_list=[cliente.email],
                 fail_silently=False,
             )
-            logger.info("Cliente notificado por reprogramación climática")
         except Exception as exc:
             logger.error(f"No se pudo notificar al cliente por clima: {exc}")
 
@@ -654,34 +611,23 @@ Servicio: {reserva.servicio.nombre}
                 )
             except Exception as exc:
                 logger.error(f"No se pudo notificar a administradores de la reprogramación: {exc}")
-
-        # Notificar a empleados asignados
-        logger.info(f"[Reprogramación] Verificando empleados asignados para reserva #{reserva.id_reserva}")
-        
-        # Log de todas las asignaciones sin filtro
-        todas_asignaciones = reserva.asignaciones.all()
-        logger.info(f"[Reprogramación] Total asignaciones encontradas: {todas_asignaciones.count()}")
-        for asignacion in todas_asignaciones:
-            logger.info(f"[Reprogramación] Asignación: Empleado {asignacion.empleado.persona.nombre} {asignacion.empleado.persona.apellido}, Activo: {asignacion.empleado.activo}, Email: {asignacion.empleado.persona.email}, User activo: {asignacion.empleado.persona.user.is_active if hasattr(asignacion.empleado.persona, 'user') else 'N/A'}")
-        
+                
         empleado_recipients = list(reserva.asignaciones.filter(
             empleado__activo=True,
             empleado__persona__user__is_active=True,
             empleado__persona__email__isnull=False
         ).values_list('empleado__persona__email', flat=True))
-        
-        logger.info(f"[Reprogramación] Empleados filtrados con email: {len(empleado_recipients)} - Emails: {empleado_recipients}")
-        
+                
         if empleado_recipients:
             mensaje_empleado = f"""
 Hola,
 
 La reserva #{reserva.id_reserva} a la que estás asignado/a ha sido reprogramada por condiciones climáticas adversas.
 
-📅 Nueva fecha: {nueva_fecha_texto}
+Nueva fecha: {nueva_fecha_texto}
 Cliente: {cliente.nombre} {cliente.apellido}
 Servicio: {reserva.servicio.nombre}
-📍 Dirección: {reserva.direccion or 'A confirmar'}
+Dirección: {reserva.direccion or 'A confirmar'}
 
 Por favor, ajusta tu agenda correspondiente.
 
@@ -695,7 +641,6 @@ Equipo de El Edén
                     recipient_list=empleado_recipients,
                     fail_silently=False,
                 )
-                logger.info(f"Notificados {len(empleado_recipients)} empleados por reprogramación climática")
             except Exception as exc:
                 logger.error(f"No se pudo notificar a empleados de la reprogramación: {exc}")
 
@@ -721,12 +666,8 @@ Equipo de El Edén
         Returns:
             bool: True si el email fue enviado exitosamente
         """
-        try:
-            logger.info(f"📧 [EmailService] Iniciando envío de notificación de propuesta de diseño")
-            logger.info(f"   📮 Para: {cliente_email}")
-            logger.info(f"   🎨 Diseño ID: {diseno_id}")
-            
-            subject = f'🎨 Nueva Propuesta de Diseño Disponible - Reserva #{reserva_id}'
+        try:        
+            subject = f'Nueva Propuesta de Diseño Disponible - Reserva #{reserva_id}'
             
             # Formatear fecha propuesta
             fecha_texto = ''
@@ -736,31 +677,31 @@ Equipo de El Edén
             message = f"""
 ¡Hola {cliente_nombre}!
 
-¡Tenemos excelentes noticias! 🎉
+¡Tenemos excelentes noticias!
 
 Tu propuesta de diseño está lista para ser revisada.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎨 DETALLES DE LA PROPUESTA
+DETALLES DE LA PROPUESTA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📋 Título: {titulo_diseno}
-🔢 Diseño N°: #{diseno_id}
-🌿 Servicio: {servicio_nombre}
-🔢 Reserva N°: #{reserva_id}
+Título: {titulo_diseno}
+Diseño N°: #{diseno_id}
+Servicio: {servicio_nombre}
+Reserva N°: #{reserva_id}
 """
             
             if disenador_nombre:
-                message += f"👨‍🎨 Diseñador: {disenador_nombre}\n"
+                message += f"Diseñador: {disenador_nombre}\n"
             
             if fecha_propuesta:
-                message += f"📅 Fecha Propuesta: {fecha_texto}\n"
+                message += f"Fecha Propuesta: {fecha_texto}\n"
             
             message += f"""
-💰 Presupuesto Total: ${presupuesto:,.2f} ARS
+Presupuesto Total: ${presupuesto:,.2f} ARS
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📝 DESCRIPCIÓN DEL PROYECTO
+DESCRIPCIÓN DEL PROYECTO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 {descripcion}
@@ -770,7 +711,7 @@ Tu propuesta de diseño está lista para ser revisada.
             
             if productos_lista and len(productos_lista) > 0:
                 message += """
-🛠️ MATERIALES Y PRODUCTOS INCLUIDOS
+MATERIALES Y PRODUCTOS INCLUIDOS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 """
@@ -786,7 +727,7 @@ Tu propuesta de diseño está lista para ser revisada.
             
             if imagenes_count > 0:
                 message += f"""
-🖼️ IMÁGENES DEL DISEÑO
+IMÁGENES DEL DISEÑO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Esta propuesta incluye {imagenes_count} imagen(es) de referencia que podrás ver en el sistema.
@@ -796,20 +737,20 @@ Esta propuesta incluye {imagenes_count} imagen(es) de referencia que podrás ver
 """
             
             message += f"""
-📋 PRÓXIMOS PASOS:
+PRÓXIMOS PASOS:
 
-1. 🔍 Revisa la propuesta completa en tu panel
-2. 💭 Evalúa el diseño, presupuesto y materiales
-3. ✅ APRUEBA el diseño si te gusta
-4. 💵 Realiza el pago del monto restante
-5. 🚀 ¡Comenzamos a trabajar en tu jardín!
+1. Revisa la propuesta completa en tu panel
+2. Evalúa el diseño, presupuesto y materiales
+3. APRUEBA el diseño si te gusta
+4. Realiza el pago del monto restante
+5. ¡Comenzamos a trabajar en tu jardín!
 
 O si tienes observaciones:
-• 📝 Solicita cambios o revisiones
-• ❌ Rechaza la propuesta con tus comentarios
+• Solicita cambios o revisiones
+• Rechaza la propuesta con tus comentarios
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💰 INFORMACIÓN DE PAGO
+INFORMACIÓN DE PAGO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Presupuesto Total: ${presupuesto:,.2f} ARS
@@ -819,10 +760,8 @@ El monto restante se abonará después de aprobar esta propuesta.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🔗 VER Y APROBAR PROPUESTA:
+VER Y APROBAR PROPUESTA:
 {settings.FRONTEND_URL}/mis-servicios
-
-⚠️ IMPORTANTE: Debes iniciar sesión y acceder a "Mis Servicios" para ver todos los detalles de la propuesta, incluyendo las imágenes, y aprobarla o solicitar cambios.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -841,11 +780,6 @@ El equipo de El Edén
                 recipient_list=[cliente_email],
                 fail_silently=False,
             )
-            
-            logger.info(f"✅ [EmailService] Notificación de propuesta de diseño enviada exitosamente")
-            logger.info(f"   📬 Destinatario: {cliente_email}")
-            logger.info(f"   🎨 Diseño: #{diseno_id}")
-            
             return True
             
         except Exception as e:
@@ -876,15 +810,11 @@ El equipo de El Edén
             bool: True si el email fue enviado exitosamente
         """
         try:
-            logger.info(f"📧 [EmailService] Iniciando envío de notificación de rechazo de diseño")
-            logger.info(f"   📮 Para: {disenador_email}")
-            logger.info(f"   🎨 Diseño ID: {diseno_id}")
-            
             if cancelar_servicio:
-                subject = f'❌ Servicio Cancelado - El cliente rechazó la propuesta #{diseno_id}'
+                subject = f'Servicio Cancelado - El cliente rechazó la propuesta #{diseno_id}'
                 accion_cliente = 'CANCELÓ EL SERVICIO'
             else:
-                subject = f'🔄 Diseño Rechazado - Requiere Nueva Propuesta #{diseno_id}'
+                subject = f'Diseño Rechazado - Requiere Nueva Propuesta #{diseno_id}'
                 accion_cliente = 'RECHAZÓ EL DISEÑO'
             
             message = f"""
@@ -893,24 +823,24 @@ Hola {disenador_nombre},
 Te informamos que el cliente ha revisado tu propuesta de diseño.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-❌ NOTIFICACIÓN DE RECHAZO
+NOTIFICACIÓN DE RECHAZO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 El cliente {accion_cliente}.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 INFORMACIÓN DEL DISEÑO RECHAZADO
+INFORMACIÓN DEL DISEÑO RECHAZADO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🎨 Diseño N°: #{diseno_id}
-📋 Título: {titulo_diseno}
-🌿 Servicio: {servicio_nombre}
-🔢 Reserva N°: #{reserva_id}
-💰 Presupuesto Propuesto: ${presupuesto:,.2f} ARS
-👤 Cliente: {cliente_nombre}
+Diseño N°: #{diseno_id}
+Título: {titulo_diseno}
+Servicio: {servicio_nombre}
+Reserva N°: #{reserva_id}
+Presupuesto Propuesto: ${presupuesto:,.2f} ARS
+Cliente: {cliente_nombre}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💬 COMENTARIOS DEL CLIENTE
+COMENTARIOS DEL CLIENTE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 {feedback_cliente if feedback_cliente else 'El cliente no dejó comentarios específicos.'}
@@ -920,56 +850,42 @@ El cliente {accion_cliente}.
             
             if cancelar_servicio:
                 message += """
-⚠️ ACCIÓN REQUERIDA
+ACCIÓN REQUERIDA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 El cliente decidió cancelar completamente el servicio.
 
-📋 Próximos pasos:
-• ❌ El servicio ha sido cancelado
-• 📞 Contacta al cliente si necesitas aclaraciones
-• 📊 Revisa el feedback para futuros proyectos
-• 🔄 La reserva fue marcada como cancelada
+Próximos pasos:
+• El servicio ha sido cancelado
+• Contacta al cliente si necesitas aclaraciones
+• Revisa el feedback para mejorar las proximas propuestas
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
             else:
                 message += """
-🔄 ACCIÓN REQUERIDA
+ACCIÓN REQUERIDA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 El cliente rechazó esta propuesta pero mantiene el interés en el servicio.
 
-📋 Próximos pasos:
-1. 📝 Revisa cuidadosamente el feedback del cliente
-2. 💭 Considera los cambios o ajustes solicitados
-3. 🎨 Prepara una NUEVA propuesta de diseño
-4. 📞 Opcionalmente, contacta al cliente para aclaraciones
-5. ✅ Presenta la nueva propuesta cuando esté lista
-
-💡 TIPS:
-• Enfócate en los puntos específicos mencionados en el feedback
-• Ajusta el presupuesto si el cliente lo considera muy alto
-• Verifica que los materiales propuestos sean de su agrado
-• Considera alternativas que se ajusten mejor a sus expectativas
+Próximos pasos:
+1. Revisa cuidadosamente el feedback del cliente
+2. Considera los cambios o ajustes solicitados
+3. Prepara una NUEVA propuesta de diseño
+4. Opcionalmente, contacta al cliente para aclaraciones
+5. Presenta la nueva propuesta cuando esté lista
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
             
             message += f"""
-🔗 ACCEDER AL SISTEMA:
-{settings.FRONTEND_URL}/admin/disenos
-
-Desde allí podrás:
-• Ver todos los detalles de la propuesta rechazada
-• Revisar las imágenes y productos incluidos
-• Crear una nueva propuesta para el cliente
+ACCEDER AL SISTEMA:
+{settings.FRONTEND_URL}/disenos
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Recuerda que el cliente ya pagó la seña y está esperando una propuesta que se ajuste a sus expectativas.
-
-¡Ánimo! Esta es una oportunidad para crear algo aún mejor. 💪
 
 Saludos,
 Sistema de Gestión - El Edén
@@ -982,11 +898,6 @@ Sistema de Gestión - El Edén
                 recipient_list=[disenador_email],
                 fail_silently=False,
             )
-            
-            logger.info(f"✅ [EmailService] Notificación de rechazo de diseño enviada exitosamente")
-            logger.info(f"   📬 Destinatario: {disenador_email}")
-            logger.info(f"   🎨 Diseño: #{diseno_id}")
-            logger.info(f"   ❌ Cancelar servicio: {cancelar_servicio}")
             
             return True
             
@@ -1017,11 +928,7 @@ Sistema de Gestión - El Edén
         Returns:
             bool: True si el email fue enviado exitosamente
         """
-        try:
-            logger.info(f"📧 [EmailService] Iniciando envío de notificación de asignación de trabajo")
-            logger.info(f"   📮 Para: {empleado_email}")
-            logger.info(f"   🔢 Reserva: #{reserva_id}")
-            
+        try:    
             rol_texto = {
                 'responsable': 'Responsable',
                 'operador': 'Operador',
@@ -1029,7 +936,7 @@ Sistema de Gestión - El Edén
                 'asistente': 'Asistente'
             }.get(rol, 'Operador')
             
-            subject = f'🔔 Nuevo Trabajo Asignado - Reserva #{reserva_id}'
+            subject = f'Nuevo Trabajo Asignado - Reserva #{reserva_id}'
             
             # Formatear fecha
             fecha_formateada = fecha_servicio.strftime('%d/%m/%Y') if fecha_servicio else 'No especificada'
@@ -1038,28 +945,28 @@ Sistema de Gestión - El Edén
             message = f"""
 ¡Hola {empleado_nombre}!
 
-Se te ha asignado un nuevo trabajo. 📋
+Se te ha asignado un nuevo trabajo.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 INFORMACIÓN DEL SERVICIO
+INFORMACIÓN DEL SERVICIO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🔢 Reserva N°: #{reserva_id}
-👤 Cliente: {cliente_nombre}
-🌿 Servicio: {servicio_nombre}
-👷 Tu Rol: {rol_texto}
+Reserva N°: #{reserva_id}
+Cliente: {cliente_nombre}
+Servicio: {servicio_nombre}
+Tu Rol: {rol_texto}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📅 FECHA Y HORA
+FECHA Y HORA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📆 Fecha: {dia_semana}, {fecha_formateada}
-🕐 Hora: {hora_servicio}
+Fecha: {dia_semana}, {fecha_formateada}
+Hora: {hora_servicio}
 
-⚠️ IMPORTANTE: Debes presentarte en el domicilio a la hora indicada.
+IMPORTANTE: Debes presentarte en el domicilio a la hora indicada.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📍 UBICACIÓN
+UBICACIÓN
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 {direccion}
@@ -1069,7 +976,7 @@ Se te ha asignado un nuevo trabajo. 📋
             
             if observaciones:
                 message += f"""
-📝 OBSERVACIONES DEL CLIENTE
+OBSERVACIONES DEL CLIENTE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 {observaciones}
@@ -1078,18 +985,10 @@ Se te ha asignado un nuevo trabajo. 📋
 """
             
             message += f"""
-📋 PRÓXIMOS PASOS:
-
-1. ✅ Confirma que has recibido esta asignación
-2. 📅 Agenda la fecha en tu calendario
-3. 🛠️ Prepara las herramientas necesarias
-4. 📍 Revisa la ubicación con anticipación
-5. 🕐 Preséntate puntualmente el día del servicio
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 🔗 Ver detalles en el panel:
-{settings.FRONTEND_URL}/empleado/reservas
+{settings.FRONTEND_URL}/servicios
 
 Si tienes alguna duda o inconveniente, contacta con tu supervisor inmediatamente.
 
@@ -1105,12 +1004,7 @@ El equipo de El Edén
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[empleado_email],
                 fail_silently=False,
-            )
-            
-            logger.info(f"✅ [EmailService] Notificación de asignación de trabajo enviada exitosamente")
-            logger.info(f"   📬 Destinatario: {empleado_email}")
-            logger.info(f"   🔢 Reserva: #{reserva_id}")
-            
+            ) 
             return True
             
         except Exception as e:
@@ -1136,12 +1030,8 @@ El equipo de El Edén
         Returns:
             bool: True si el email fue enviado exitosamente
         """
-        try:
-            logger.info(f"📧 [EmailService] Iniciando envío de solicitud de encuesta")
-            logger.info(f"   📮 Para: {cliente_email}")
-            logger.info(f"   🔢 Reserva: #{reserva_id}")
-            
-            subject = f'📋 ¡Tu opinión nos importa! - Servicio Completado #{reserva_id}'
+        try:        
+            subject = f'¡Tu opinión nos importa! - Servicio Completado #{reserva_id}'
 
             # Enlace autenticado (requiere iniciar sesión). Se elimina soporte de token público.
             survey_url = f"{settings.FRONTEND_URL}/servicios/reservas/{reserva_id}#encuesta"
@@ -1149,25 +1039,23 @@ El equipo de El Edén
             message = f"""
 ¡Hola {cliente_nombre}!
 
-¡Nos complace informarte que tu servicio ha sido completado exitosamente! 🎉
+¡Nos complace informarte que tu servicio ha sido completado exitosamente!
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ SERVICIO COMPLETADO
+SERVICIO COMPLETADO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🔢 Reserva N°: #{reserva_id}
-🌿 Servicio: {servicio_nombre}
-📅 Estado: FINALIZADO
+Reserva N°: #{reserva_id}
+Servicio: {servicio_nombre}
+Estado: FINALIZADO
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 TU OPINIÓN ES MUY VALIOSA
+TU OPINIÓN ES MUY VALIOSA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Nos encantaría conocer tu experiencia con nuestro servicio.
 
-Por favor, tómate unos minutos para completar nuestra encuesta de satisfacción:
-
-"{encuesta_titulo}"
+Por favor, tómate unos minutos para completar nuestra encuesta de satisfacción
 
 Tu feedback nos ayuda a mejorar continuamente y a brindar un mejor servicio.
 
@@ -1178,11 +1066,6 @@ Tu feedback nos ayuda a mejorar continuamente y a brindar un mejor servicio.
 Haz clic en el siguiente enlace para acceder a la encuesta:
 
 {survey_url}
-
-⚠️ IMPORTANTE: 
-- Deberás iniciar sesión con tu cuenta
-- La encuesta se abrirá automáticamente
-- Solo tomará unos minutos completarla
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -1202,11 +1085,6 @@ El equipo de El Edén
                 recipient_list=[cliente_email],
                 fail_silently=False,
             )
-            
-            logger.info(f"✅ [EmailService] Solicitud de encuesta enviada exitosamente")
-            logger.info(f"   📬 Destinatario: {cliente_email}")
-            logger.info(f"   🔢 Reserva: #{reserva_id}")
-            
             return True
             
         except Exception as e:
