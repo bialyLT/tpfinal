@@ -815,14 +815,21 @@ class ReservaViewSet(viewsets.ModelViewSet):
         comprobante.update({
             'cliente': {
                 'nombre': f"{reserva.cliente.persona.nombre} {reserva.cliente.persona.apellido}",
-                'email': reserva.cliente.persona.email
+                'email': reserva.cliente.persona.email,
+                'telefono': reserva.cliente.persona.telefono
             },
             'servicio': {
                 'nombre': reserva.servicio.nombre,
                 'descripcion': reserva.servicio.descripcion
             },
             'fecha_solicitud': reserva.fecha_solicitud,
-            'fecha_reserva': reserva.fecha_reserva
+            'fecha_reserva': reserva.fecha_reserva,
+            'observaciones': reserva.observaciones,
+            'tipo_servicio_solicitado': reserva.tipo_servicio_solicitado,
+            'superficie_aproximada': reserva.superficie_aproximada,
+            'objetivo_diseno': reserva.objetivo_diseno,
+            'nivel_intervencion': reserva.nivel_intervencion,
+            'presupuesto_aproximado': reserva.presupuesto_aproximado
         })
         
         return Response(comprobante)
@@ -831,7 +838,6 @@ class ReservaViewSet(viewsets.ModelViewSet):
 class DisenoViewSet(viewsets.ModelViewSet):
     """ViewSet para gestión de diseños/propuestas"""
     queryset = Diseno.objects.select_related('servicio', 'disenador', 'disenador__persona', 'reserva', 'reserva__cliente__persona').prefetch_related('productos', 'imagenes').all()
-    pagination_class = StandardResultsSetPagination  # 10 items por página
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['estado', 'servicio', 'disenador', 'reserva']
     search_fields = ['titulo', 'descripcion', 'reserva__cliente__persona__nombre', 'reserva__cliente__persona__apellido']

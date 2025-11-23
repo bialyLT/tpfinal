@@ -108,12 +108,76 @@ class Reserva(models.Model):
         ('cancelado', 'Cancelado'),
     ]
 
+    # Nuevas opciones para el flujo de solicitud mejorado
+    TIPO_SERVICIO_SOLICITADO_CHOICES = [
+        ('diseno_completo', 'Diseño Completo de Jardín'),
+        ('consulta_express', 'Consulta Express / Idea Preliminar'),
+    ]
+
+    OBJETIVO_DISENO_CHOICES = [
+        ('bajo_mantenimiento', 'Bajo Mantenimiento'),
+        ('mucho_color', 'Mucho Color'),
+        ('selvatico', 'Estilo Selvático'),
+        ('minimalista', 'Estilo Minimalista'),
+        ('mascotas', 'Espacio para Mascotas'),
+        ('ninos', 'Espacio para Niños'),
+        ('huerta', 'Huerta'),
+        ('otro', 'Otro'),
+    ]
+
+    NIVEL_INTERVENCION_CHOICES = [
+        ('remodelacion', 'Remodelación Parcial'),
+        ('desde_cero', 'Diseño Completo desde Cero'),
+    ]
+
+    PRESUPUESTO_CHOICES = [
+        ('bajo', 'Económico / Ajustado'),
+        ('medio', 'Intermedio / Flexible'),
+        ('alto', 'Premium / Sin Restricciones'),
+    ]
+
     id_reserva = models.AutoField(primary_key=True)
     fecha_reserva = models.DateTimeField()
     fecha_solicitud = models.DateTimeField(auto_now_add=True)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
     observaciones = models.TextField(blank=True, null=True)
     direccion = models.CharField(max_length=500, blank=True, null=True, help_text='Dirección donde se realizará el servicio')
+    
+    # Nuevos campos estructurados para la solicitud
+    tipo_servicio_solicitado = models.CharField(
+        max_length=50, 
+        choices=TIPO_SERVICIO_SOLICITADO_CHOICES,
+        default='consulta_express',
+        help_text='Tipo de servicio seleccionado por el cliente'
+    )
+    superficie_aproximada = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        help_text='Superficie aproximada en m2'
+    )
+    objetivo_diseno = models.CharField(
+        max_length=50,
+        choices=OBJETIVO_DISENO_CHOICES,
+        null=True,
+        blank=True,
+        help_text='Objetivo principal del diseño'
+    )
+    nivel_intervencion = models.CharField(
+        max_length=50,
+        choices=NIVEL_INTERVENCION_CHOICES,
+        null=True,
+        blank=True,
+        help_text='Nivel de intervención requerido'
+    )
+    presupuesto_aproximado = models.CharField(
+        max_length=50,
+        choices=PRESUPUESTO_CHOICES,
+        null=True,
+        blank=True,
+        help_text='Rango de presupuesto estimado por el cliente'
+    )
     
     # Campos de pago simplificados - MercadoPago.js manejará el frontend
     monto_sena = models.DecimalField(

@@ -1,12 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { CheckCircle, Printer, FileText, Calendar, DollarSign, CreditCard, User, Mail, Phone, AlertCircle, Loader } from 'lucide-react';
+import { CheckCircle, Printer, FileText, Calendar, DollarSign, CreditCard, User, Mail, Phone, AlertCircle, Loader, Info, Ruler, Palette, Hammer } from 'lucide-react';
 import api from '../../services/api';
 import { serviciosService } from '../../services';
 import { error as showError, success as showSuccess } from '../../utils/notifications';
 import { useAuth } from '../../context/AuthContext';
 
 const PagoExitoso = () => {
+  // Opciones para mapeo de etiquetas
+  const OBJETIVO_OPCIONES = [
+    { value: 'bajo_mantenimiento', label: 'Bajo Mantenimiento' },
+    { value: 'mucho_color', label: 'Mucho Color' },
+    { value: 'selvatico', label: 'Estilo Selvático' },
+    { value: 'minimalista', label: 'Estilo Minimalista' },
+    { value: 'mascotas', label: 'Espacio para Mascotas' },
+    { value: 'ninos', label: 'Espacio para Niños' },
+    { value: 'huerta', label: 'Huerta' },
+    { value: 'otro', label: 'Otro' }
+  ];
+
+  const NIVEL_INTERVENCION_OPCIONES = [
+    { value: 'remodelacion', label: 'Remodelación Parcial' },
+    { value: 'desde_cero', label: 'Diseño Completo desde Cero' }
+  ];
+
+  const PRESUPUESTO_OPCIONES = [
+    { value: 'bajo', label: 'Económico / Ajustado' },
+    { value: 'medio', label: 'Intermedio / Flexible' },
+    { value: 'alto', label: 'Premium / Sin Restricciones' }
+  ];
+
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
@@ -67,7 +90,7 @@ const PagoExitoso = () => {
     }
 
     console.log('✅ Usuario autenticado:', user.email);
-    
+
     if (!reservaId) {
       setErrorMsg('No se especificó el ID de la reserva');
       setLoading(false);
@@ -89,12 +112,12 @@ const PagoExitoso = () => {
     const confirmarYCargarPago = async () => {
       try {
         setLoading(true);
-        
+
         // Obtener el payment_id correcto (puede venir como payment_id o collection_id)
         const finalPaymentId = paymentId || collectionId;
-        
+
         console.log('💳 Intentando confirmar pago con ID:', finalPaymentId);
-        
+
         // Si tenemos payment_id, primero confirmar el pago en el backend
         if (finalPaymentId && (status === 'approved' || collectionStatus === 'approved')) {
           try {
@@ -123,7 +146,7 @@ const PagoExitoso = () => {
               preference_id: preferenceId,
               tipo_pago: tipoPago
             });
-            
+
             if (response.data.payment_id) {
               console.log('✅ Pago encontrado:', response.data.payment_id);
               showSuccess('¡Pago confirmado exitosamente!');
@@ -137,10 +160,10 @@ const PagoExitoso = () => {
           console.warn('  - status:', status);
           console.warn('  - collectionStatus:', collectionStatus);
         }
-        
+
         // Esperar un poco para que el backend procese
         await new Promise(resolve => setTimeout(resolve, 1000));
-        
+
         // Cargar comprobante
         console.log('📄 Cargando comprobante...');
         const response = await api.get(
@@ -245,7 +268,7 @@ const PagoExitoso = () => {
             </h2>
             <p className="text-gray-600">{errorMsg}</p>
           </div>
-          
+
           <div className="space-y-3">
             <button
               onClick={handleGoToReservas}
@@ -402,10 +425,58 @@ const PagoExitoso = () => {
                 <p className="font-semibold text-gray-800 mb-2">
                   {comprobante.servicio.nombre}
                 </p>
-                <p className="text-gray-600 text-sm">
-                  {comprobante.servicio.descripcion}
-                </p>
-                <p className="text-sm text-gray-500 mt-2">
+
+                {comprobante.tipo_servicio_solicitado === 'diseno_completo' ? (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-start text-sm">
+                      <Ruler className="w-4 h-4 text-green-600 mr-2 mt-0.5" />
+                      <div>
+                        <span className="font-medium text-gray-700">Superficie:</span>
+                        <span className="text-gray-600 ml-1">{comprobante.superficie_aproximada || 'A medir'} m²</span>
+                      </div>
+                    </div>
+                    <div className="flex items-start text-sm">
+                      <Palette className="w-4 h-4 text-green-600 mr-2 mt-0.5" />
+                      <div>
+                        <span className="font-medium text-gray-700">Objetivo:</span>
+                        <span className="text-gray-600 ml-1">
+                          {OBJETIVO_OPCIONES.find(o => o.value === comprobante.objetivo_diseno)?.label || comprobante.objetivo_diseno || 'No especificado'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-start text-sm">
+                      <Hammer className="w-4 h-4 text-green-600 mr-2 mt-0.5" />
+                      <div>
+                        <span className="font-medium text-gray-700">Intervención:</span>
+                        <span className="text-gray-600 ml-1">
+                          {NIVEL_INTERVENCION_OPCIONES.find(o => o.value === comprobante.nivel_intervencion)?.label || comprobante.nivel_intervencion || 'No especificado'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-start text-sm">
+                      <DollarSign className="w-4 h-4 text-green-600 mr-2 mt-0.5" />
+                      <div>
+                        <span className="font-medium text-gray-700">Presupuesto:</span>
+                        <span className="text-gray-600 ml-1">
+                          {PRESUPUESTO_OPCIONES.find(o => o.value === comprobante.presupuesto_aproximado)?.label || comprobante.presupuesto_aproximado || 'No especificado'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-gray-600 text-sm">
+                    {comprobante.servicio.descripcion}
+                  </p>
+                )}
+
+                {comprobante.observaciones && (
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <p className="text-sm text-gray-800 font-medium mb-1">Observaciones:</p>
+                    <p className="text-sm text-gray-600 whitespace-pre-line">{comprobante.observaciones}</p>
+                  </div>
+                )}
+
+                <p className="text-sm text-gray-500 mt-3 pt-2 border-t border-gray-200">
                   Reserva #{comprobante.reserva_id}
                 </p>
               </div>
@@ -415,8 +486,8 @@ const PagoExitoso = () => {
             {tipoPago === 'sena' && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <p className="text-sm text-blue-800">
-                  <span className="font-semibold">Nota:</span> Has pagado la seña de tu reserva. 
-                  El saldo restante deberá ser abonado una vez que nuestro diseñador presente la propuesta 
+                  <span className="font-semibold">Nota:</span> Has pagado la seña de tu reserva.
+                  El saldo restante deberá ser abonado una vez que nuestro diseñador presente la propuesta
                   y sea aceptada por ti.
                 </p>
               </div>
