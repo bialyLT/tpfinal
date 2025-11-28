@@ -268,7 +268,11 @@ class Reserva(models.Model):
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
     # Token único para acceso público a encuesta de satisfacción (link por email)
+    # Token único para acceso público a encuesta de satisfacción (link por email)
     encuesta_token = models.UUIDField(unique=True, null=True, blank=True, help_text='Token público para responder la encuesta de la reserva')
+    
+    # Fecha real de finalización del servicio
+    fecha_realizacion = models.DateTimeField(null=True, blank=True, help_text='Fecha y hora real en que se completó el servicio')
 
     class Meta:
         verbose_name = 'Reserva'

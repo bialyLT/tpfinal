@@ -17,6 +17,8 @@ const ServiciosPage = () => {
   const activeTab = 'solicitudes';
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState('');
   const [isDisenoModalOpen, setIsDisenoModalOpen] = useState(false);
   const [isDisenoClienteModalOpen, setIsDisenoClienteModalOpen] = useState(false);
   const [servicioParaDiseno, setServicioParaDiseno] = useState(null);
@@ -48,10 +50,14 @@ const ServiciosPage = () => {
         serviciosService.getServicios(),
         serviciosService.getReservas({
           page: solicitudesPagination.currentPage,
-          page_size: solicitudesPagination.pageSize
+          page_size: solicitudesPagination.pageSize,
+          estado: statusFilter || undefined,
+          fecha_solicitud: dateFilter || undefined,
+          estado_pago_sena: paymentFilter || undefined,
+          search: searchTerm || undefined
         })
       ];
-      
+
       // Si es cliente, también obtener sus diseños
       if (isCliente) {
         promises.push(serviciosService.getDisenos({
@@ -59,12 +65,12 @@ const ServiciosPage = () => {
           page_size: disenosPagination.pageSize
         }));
       }
-      
+
       const results = await Promise.all(promises);
       const [serviciosData, reservasData, disenosData] = results;
-      
-  setServicios(serviciosData.results || serviciosData);
-      
+
+      setServicios(serviciosData.results || serviciosData);
+
       // Actualizar solicitudes con datos de paginación
       if (reservasData.results) {
         setSolicitudes(reservasData.results);
@@ -77,7 +83,7 @@ const ServiciosPage = () => {
       } else {
         setSolicitudes(reservasData);
       }
-      
+
       // Actualizar diseños con datos de paginación
       if (disenosData) {
         if (disenosData.results) {
@@ -102,7 +108,11 @@ const ServiciosPage = () => {
     disenosPagination.pageSize,
     solicitudesPagination.currentPage,
     solicitudesPagination.pageSize,
-    isCliente
+    isCliente,
+    statusFilter,
+    dateFilter,
+    paymentFilter,
+    searchTerm
   ]);
 
   useEffect(() => {
@@ -113,7 +123,7 @@ const ServiciosPage = () => {
     if (!window.confirm('¿Está seguro de finalizar este servicio?')) {
       return;
     }
-    
+
     try {
       await serviciosService.finalizarServicio(id);
       success('Servicio finalizado correctamente');
@@ -129,7 +139,7 @@ const ServiciosPage = () => {
     if (isAdmin) {
       return true;
     }
-    
+
     // Verificar si es empleado asignado
     if (isEmpleado && reserva.empleados_asignados) {
       const empleadoAsignado = reserva.empleados_asignados.find(
@@ -137,7 +147,7 @@ const ServiciosPage = () => {
       );
       return !!empleadoAsignado;
     }
-    
+
     return false;
   };
 
@@ -202,36 +212,17 @@ const ServiciosPage = () => {
       'revision_diseño': 'bg-orange-500',
       'aprobado': 'bg-green-500',
       'pausado': 'bg-gray-500',
-      'completado': 'bg-green-500', // Legacy, ahora es completada
-      'cancelado': 'bg-red-500', // Legacy, ahora es cancelada
-      'rechazado': 'bg-red-700'
+      'completado': 'bg-green-500',
+      'cancelado': 'bg-red-500'
     };
-    return colors[status] || 'bg-gray-400';
+    return colors[status] || 'bg-gray-500';
   };
-
-  const filteredData = activeTab === 'solicitudes' 
-    ? solicitudes.filter(item => 
-        (item.servicio_nombre || item.observaciones || '')?.toLowerCase().includes(searchTerm.toLowerCase()) &&
-        (!statusFilter || item.estado === statusFilter)
-      )
-    : servicios.filter(item => 
-        (item.nombre || item.descripcion || '')?.toLowerCase().includes(searchTerm.toLowerCase()) &&
-        (!statusFilter || item.activo === (statusFilter === 'activo'))
-      );
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-400"></div>
-          <p className="text-gray-300 mt-4">Cargando servicios...</p>
-        </div>
-      </div>
-    );
-  }
 
   // Contar diseños pendientes para clientes
   const disenosPendientes = isCliente ? disenos.filter(d => d.estado === 'presentado').length : 0;
+
+  // Determinar qué datos mostrar según el tab activo
+  const filteredData = activeTab === 'solicitudes' ? solicitudes : [];
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-300 p-4 sm:p-6 lg:p-8">
@@ -305,6 +296,33 @@ const ServiciosPage = () => {
                 <option value="cancelada">Cancelada</option>
               </select>
             </div>
+
+            {/* Date Filter */}
+            <div className="relative">
+              <Calendar className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              />
+            </div>
+
+            {/* Payment Filter */}
+            <div className="relative">
+              <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-bold">$</div>
+              <select
+                value={paymentFilter}
+                onChange={(e) => setPaymentFilter(e.target.value)}
+                className="pl-10 pr-8 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              >
+                <option value="">Todos los pagos</option>
+                <option value="pendiente">Pendiente</option>
+                <option value="pendiente_pago_sena">Pendiente Seña</option>
+                <option value="sena_pagada">Seña Pagada</option>
+                <option value="pagado">Pagado Total</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -318,7 +336,9 @@ const ServiciosPage = () => {
                     {activeTab === 'solicitudes' ? 'Solicitud' : 'Servicio'}
                   </th>
                   <th scope="col" className="px-6 py-3">Cliente</th>
-                  <th scope="col" className="px-6 py-3">Fecha</th>
+                  <th scope="col" className="px-6 py-3">Fecha Solicitud</th>
+                  <th scope="col" className="px-6 py-3">Fecha Cita</th>
+                  <th scope="col" className="px-6 py-3">Realización</th>
                   <th scope="col" className="px-6 py-3">Estado</th>
                   {isCliente && activeTab === 'solicitudes' && (
                     <th scope="col" className="px-6 py-3">Diseño</th>
@@ -334,8 +354,10 @@ const ServiciosPage = () => {
                     const id = esReserva ? item.id_reserva : item.id_servicio;
                     const nombre = esReserva ? item.servicio_nombre : item.nombre;
                     const cliente = esReserva ? `${item.cliente_nombre || ''} ${item.cliente_apellido || ''}`.trim() : 'N/A';
-                    const fecha = esReserva ? (item.fecha_reserva || item.fecha_solicitud) : item.fecha_creacion;
-                    
+                    const fechaSolicitud = esReserva ? item.fecha_solicitud : item.fecha_creacion;
+                    const fechaCita = esReserva ? item.fecha_reserva : null;
+                    const fechaRealizacion = esReserva ? item.fecha_realizacion : null;
+
                     return (
                       <tr key={id} className="bg-gray-800 border-b border-gray-700 hover:bg-gray-600">
                         <td className="px-6 py-4">
@@ -366,7 +388,13 @@ const ServiciosPage = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          {fecha ? new Date(fecha).toLocaleDateString() : 'N/A'}
+                          {fechaSolicitud ? new Date(fechaSolicitud).toLocaleDateString() : 'N/A'}
+                        </td>
+                        <td className="px-6 py-4">
+                          {fechaCita ? new Date(fechaCita).toLocaleDateString() : '-'}
+                        </td>
+                        <td className="px-6 py-4">
+                          {fechaRealizacion ? new Date(fechaRealizacion).toLocaleDateString() : '-'}
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center">
@@ -426,7 +454,7 @@ const ServiciosPage = () => {
                         })()}
                         <td className="px-6 py-4">
                           <div className="flex items-center space-x-2">
-                            <button 
+                            <button
                               onClick={() => handleVerDetalle(id, esReserva ? 'reserva' : 'servicio')}
                               className="p-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded"
                               title="Ver detalles"
@@ -439,24 +467,24 @@ const ServiciosPage = () => {
                                 {(() => {
                                   // Verificar si hay diseños
                                   const tieneDisenos = item.disenos && item.disenos.length > 0;
-                                  
+
                                   // Si no hay diseños, mostrar botón
                                   if (!tieneDisenos) return true;
-                                  
+
                                   // Si hay diseños, verificar que todos estén rechazados
                                   const todosRechazados = item.disenos.every(d => d.estado === 'rechazado');
                                   return todosRechazados;
                                 })() && (
-                                  <button
-                                    onClick={() => handleCrearDiseno(item)}
-                                    className="inline-flex items-center px-2 py-1 text-xs font-medium rounded text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-                                    title="Crear diseño para este servicio"
-                                  >
-                                    <Palette className="w-3 h-3 mr-1" />
-                                    Crear Diseño
-                                  </button>
-                                )}
-                                
+                                    <button
+                                      onClick={() => handleCrearDiseno(item)}
+                                      className="inline-flex items-center px-2 py-1 text-xs font-medium rounded text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                                      title="Crear diseño para este servicio"
+                                    >
+                                      <Palette className="w-3 h-3 mr-1" />
+                                      Crear Diseño
+                                    </button>
+                                  )}
+
                                 {/* Botón Finalizar Servicio - solo para empleados asignados y administradores */}
                                 {puedeFinalizarServicio(item) && item.estado !== 'completada' && item.estado !== 'cancelada' && (
                                   <button

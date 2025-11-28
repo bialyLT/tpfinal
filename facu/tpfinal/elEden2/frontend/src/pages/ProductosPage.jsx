@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { productosService, categoriasService, marcasService } from '../services';
+import ProductSelector from '../components/ProductSelector';
 import { handleApiError, success } from '../utils/notifications';
-import { 
-  Search, 
-  Filter, 
-  Package, 
-  DollarSign, 
+import {
+  Search,
+  Filter,
+  Package,
+  DollarSign,
   Grid,
   List,
   Plus,
@@ -24,10 +25,11 @@ const ProductosPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('grid');
   const [priceRange, setPriceRange] = useState({ min: '', max: '' });
+  const [stockRange, setStockRange] = useState({ min: '', max: '' });
   const [showModal, setShowModal] = useState(false);
   const [selectedProducto, setSelectedProducto] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
-  
+
   const [formData, setFormData] = useState({
     nombre: '',
     descripcion: '',
@@ -43,8 +45,17 @@ const ProductosPage = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
+
+      const params = {};
+      if (searchTerm) params.search = searchTerm;
+      if (selectedCategoria) params.categoria = selectedCategoria;
+      if (priceRange.min) params.precio__gte = priceRange.min;
+      if (priceRange.max) params.precio__lte = priceRange.max;
+      if (stockRange.min) params.stock__cantidad__gte = stockRange.min;
+      if (stockRange.max) params.stock__cantidad__lte = stockRange.max;
+
       const [productosData, categoriasData, marcasData] = await Promise.all([
-        productosService.getProductos(),
+        productosService.getProductos(params),
         categoriasService.getAll(),
         marcasService.getAll()
       ]);
@@ -62,7 +73,7 @@ const ProductosPage = () => {
     if (producto) {
       console.log('Producto recibido:', producto);
       console.log('Categoria:', producto.categoria, 'Marca:', producto.marca, 'Imagen:', producto.imagen);
-      
+
       setSelectedProducto(producto);
       setFormData({
         nombre: producto.nombre,
@@ -73,7 +84,7 @@ const ProductosPage = () => {
       });
       // Si el producto tiene imagen, mostrarla como preview
       setImagePreview(producto.imagen || null);
-      
+
       console.log('FormData después de setear:', {
         categoria: producto.categoria ? String(producto.categoria) : '',
         marca: producto.marca ? String(producto.marca) : '',
@@ -128,14 +139,14 @@ const ProductosPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     try {
       const submitData = new FormData();
       submitData.append('nombre', formData.nombre);
       submitData.append('descripcion', formData.descripcion);
       submitData.append('categoria', formData.categoria);
       submitData.append('marca', formData.marca);
-      
+
       if (formData.imagen instanceof File) {
         submitData.append('imagen', formData.imagen);
       }
@@ -167,14 +178,8 @@ const ProductosPage = () => {
     }
   };
 
-  const filteredProductos = productos.filter(producto => {
-    const matchesSearch = producto.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         producto.descripcion?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategoria = !selectedCategoria || producto.categoria_nombre === selectedCategoria;
-    const matchesPrice = (!priceRange.min || producto.precio >= priceRange.min) &&
-                        (!priceRange.max || producto.precio <= priceRange.max);
-    return matchesSearch && matchesCategoria && matchesPrice;
-  });
+  // Client-side filtering removed in favor of server-side filtering
+  const filteredProductos = productos;
 
   if (loading) {
     return (
@@ -230,6 +235,7 @@ const ProductosPage = () => {
         <div className="mb-6 bg-gray-800 p-4 rounded-lg">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Search */}
+            {/* Simple search input (server-side) */}
             <div className="relative">
               <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <input
@@ -238,6 +244,15 @@ const ProductosPage = () => {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              />
+            </div>
+            {/* Quick product selector to avoid duplicate search views – opens edit modal */}
+            <div className="relative">
+              <ProductSelector
+                productos={productos}
+                selectedProductId={selectedProducto?.id_producto}
+                onSelect={(prod) => handleOpenModal(prod)}
+                placeholder="Buscar y editar producto..."
               />
             </div>
 
@@ -264,22 +279,51 @@ const ProductosPage = () => {
                 type="number"
                 placeholder="Costo mín."
                 value={priceRange.min}
-                onChange={(e) => setPriceRange({...priceRange, min: e.target.value})}
+                onChange={(e) => setPriceRange({ ...priceRange, min: e.target.value })}
                 className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
               />
               <input
                 type="number"
                 placeholder="Costo máx."
                 value={priceRange.max}
-                onChange={(e) => setPriceRange({...priceRange, max: e.target.value})}
+                onChange={(e) => setPriceRange({ ...priceRange, max: e.target.value })}
                 className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
               />
             </div>
 
+            {/* Stock Range */}
+            <div className="flex space-x-2">
+              <input
+                type="number"
+                placeholder="Stock mín."
+                value={stockRange.min}
+                onChange={(e) => setStockRange({ ...stockRange, min: e.target.value })}
+                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              />
+              <input
+                type="number"
+                placeholder="Stock máx."
+                value={stockRange.max}
+                onChange={(e) => setStockRange({ ...stockRange, max: e.target.value })}
+                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              />
+            </div>
+
+            {/* Apply Filters Button */}
+            <div className="flex items-center">
+              <button
+                onClick={fetchData}
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
+              >
+                <Filter className="w-4 h-4 mr-2" />
+                Filtrar
+              </button>
+            </div>
+
             {/* Results Count */}
-            <div className="flex items-center justify-end">
+            <div className="flex items-center justify-end col-span-1 md:col-span-4">
               <span className="text-sm text-gray-400">
-                {filteredProductos.length} producto{filteredProductos.length !== 1 ? 's' : ''} encontrado{filteredProductos.length !== 1 ? 's' : ''}
+                {productos.length} producto{productos.length !== 1 ? 's' : ''} encontrado{productos.length !== 1 ? 's' : ''}
               </span>
             </div>
           </div>
@@ -305,9 +349,8 @@ const ProductosPage = () => {
                   )}
                   {/* Badge de disponibilidad */}
                   <div className="absolute top-2 right-2">
-                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                      producto.stock_actual > 0 ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
-                    }`}>
+                    <span className={`px-2 py-1 rounded text-xs font-semibold ${producto.stock_actual > 0 ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+                      }`}>
                       {producto.stock_actual > 0 ? 'Disponible' : 'Sin Stock'}
                     </span>
                   </div>
@@ -318,7 +361,7 @@ const ProductosPage = () => {
                   <h3 className="text-lg font-semibold text-white mb-2 line-clamp-2">
                     {producto.nombre}
                   </h3>
-                  
+
                   <p className="text-gray-400 text-sm mb-3 line-clamp-2">
                     {producto.descripcion || 'Sin descripción'}
                   </p>
@@ -411,9 +454,8 @@ const ProductosPage = () => {
                       <span className="text-gray-400 text-xs ml-1">unid.</span>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                        producto.stock_actual > 0 ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'
-                      }`}>
+                      <span className={`px-2 py-1 rounded text-xs font-semibold ${producto.stock_actual > 0 ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'
+                        }`}>
                         {producto.stock_actual > 0 ? 'Disponible' : 'Sin Stock'}
                       </span>
                     </td>
@@ -457,11 +499,11 @@ const ProductosPage = () => {
 
         {/* Modal Crear/Editar Producto */}
         {showModal && (
-          <div 
+          <div
             className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
             onClick={handleCloseModal}
           >
-            <div 
+            <div
               className="bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
@@ -476,7 +518,7 @@ const ProductosPage = () => {
                   <X className="w-6 h-6" />
                 </button>
               </div>
-              
+
               <form onSubmit={handleSubmit} className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Nombre */}

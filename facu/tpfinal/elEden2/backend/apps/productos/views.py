@@ -49,7 +49,12 @@ class ProductoViewSet(viewsets.ModelViewSet):
     queryset = Producto.objects.select_related('categoria', 'marca').all()
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['categoria', 'marca']
+    filterset_fields = {
+        'categoria': ['exact'],
+        'marca': ['exact'],
+        'precio': ['gte', 'lte', 'exact'],
+        'stock__cantidad': ['gte', 'lte'],
+    }
     search_fields = ['nombre', 'descripcion']
     ordering_fields = ['nombre', 'fecha_creacion']
     ordering = ['nombre']
@@ -133,19 +138,6 @@ class StockViewSet(viewsets.ModelViewSet):
         
         return Response(resumen)
 
-
-# MovimientoStockViewSet comentado - modelo no existe en el diagrama ER
-# class MovimientoStockViewSet(viewsets.ModelViewSet):
-#     queryset = MovimientoStock.objects.select_related('producto').all()
-#     serializer_class = MovimientoStockSerializer
-#     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-#     filterset_fields = ['tipo', 'motivo', 'producto']
-#     search_fields = ['producto__nombre', 'producto__codigo', 'observaciones', 'numero_documento']
-#     ordering_fields = ['fecha_movimiento', 'cantidad']
-#     ordering = ['-fecha_movimiento']
-#
-#     @action(detail=False, methods=['get'])
-#     def por_producto(self, request):
 #         """Obtiene movimientos de stock por producto"""
 #         producto_id = request.query_params.get('producto_id')
 #         if not producto_id:

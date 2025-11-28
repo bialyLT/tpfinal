@@ -659,6 +659,25 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
                   </div>
                 )}
 
+                {/* Dirección */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <MapPin className="w-4 h-4 inline mr-2" />
+                    Dirección del servicio
+                  </label>
+                  <input
+                    type="text"
+                    name="direccion_servicio"
+                    value={formData.direccion_servicio}
+                    onChange={handleChange}
+                    placeholder="Calle, número, ciudad..."
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
+                  <p className="text-xs text-gray-400 mt-2">
+                    Se ha cargado tu dirección registrada por defecto. Puedes modificarla si el servicio será en otra ubicación.
+                  </p>
+                </div>
+
                 {/* Sección de imágenes */}
                 <div className="space-y-6 p-4 bg-gray-800/50 rounded-lg border border-gray-600 mt-6">
                   <h3 className="text-lg font-medium text-white flex items-center">
@@ -787,24 +806,7 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
                   />
                 </div>
 
-                {/* Dirección */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    <MapPin className="w-4 h-4 inline mr-2" />
-                    Dirección del servicio
-                  </label>
-                  <input
-                    type="text"
-                    name="direccion_servicio"
-                    value={formData.direccion_servicio}
-                    onChange={handleChange}
-                    placeholder="Calle, número, ciudad..."
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                  />
-                  <p className="text-xs text-gray-400 mt-2">
-                    Se ha cargado tu dirección registrada por defecto. Puedes modificarla si el servicio será en otra ubicación.
-                  </p>
-                </div>
+
               </div>
             </div>
           )}

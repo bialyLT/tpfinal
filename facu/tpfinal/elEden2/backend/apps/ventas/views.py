@@ -24,7 +24,11 @@ class CompraViewSet(viewsets.ModelViewSet):
     queryset = Compra.objects.select_related('proveedor').prefetch_related('detalles').all()
     serializer_class = CompraSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['proveedor', 'fecha']
+    filterset_fields = {
+        'proveedor': ['exact'],
+        'fecha': ['gte', 'lte', 'exact'],
+        'total': ['gte', 'lte', 'exact'],
+    }
     search_fields = ['proveedor__razon_social', 'observaciones']
     ordering_fields = ['fecha', 'total']
     ordering = ['-fecha']

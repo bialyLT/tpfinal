@@ -244,6 +244,10 @@ class ProveedorViewSet(viewsets.ModelViewSet):
     queryset = Proveedor.objects.all()
     serializer_class = ProveedorSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = {
+        'activo': ['exact'],
+        'fecha_alta': ['gte', 'lte'],
+    }
     search_fields = ['razon_social', 'cuit', 'nombre_contacto', 'email']
     ordering_fields = ['razon_social', 'nombre_contacto']
     ordering = ['razon_social']

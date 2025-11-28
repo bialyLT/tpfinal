@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Upload, Plus, Trash2, Palette, DollarSign, Calendar, Image as ImageIcon, Package } from 'lucide-react';
+import { X, Upload, Plus, Trash2, Palette, DollarSign, Calendar, Image as ImageIcon, Package, Search } from 'lucide-react';
 import { serviciosService, productosService } from '../services';
+import ProductSelector from '../components/ProductSelector';
 import { success, error as showError } from '../utils/notifications';
 
 const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDisenoCreado }) => {
@@ -69,9 +70,12 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
         console.log('📦 Productos del backend:', disenoData.productos);
         const productosEditados = disenoData.productos.map(p => {
           console.log('📦 Producto individual:', p);
+          const cantidadRaw = parseInt(p.cantidad, 10) || 0;
+          const stockActual = getStockForProduct(p.producto);
+          const cantidad = stockActual > 0 ? Math.min(Math.max(cantidadRaw || 1, 1), stockActual) : 0;
           return {
             producto_id: p.producto,  // ID del producto
-            cantidad: parseInt(p.cantidad) || 1,  // Asegurar que sea un número
+            cantidad: cantidad,  // Ajustar a stock disponible
             precio_unitario: parseFloat(p.precio_unitario) || 0,  // Asegurar que sea un número
             notas: p.notas || ''
           };
@@ -132,6 +136,22 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
     }
   };
 
+  // Helper para obtener stock numérico de un producto (prefiere stock_actual). Devuelve 0 si no existe.
+  const getStockForProduct = (productId) => {
+    if (!productId && productId !== 0) return 0;
+    const id = parseInt(productId, 10);
+    if (Number.isNaN(id)) return 0;
+    const prod = productos.find(p => p.id_producto === id);
+    if (!prod) return 0;
+    if (typeof prod.stock_actual !== 'undefined' && prod.stock_actual !== null) {
+      return parseInt(prod.stock_actual, 10) || 0;
+    }
+    if (prod.stock && typeof prod.stock.cantidad !== 'undefined' && prod.stock.cantidad !== null) {
+      return parseInt(prod.stock.cantidad, 10) || 0;
+    }
+    return 0;
+  };
+
   const resetForm = () => {
     setFormData({
       descripcion_tecnica: '',
@@ -180,6 +200,12 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
   };
 
   const agregarProducto = () => {
+    // Si no hay productos con stock > 0, no permitir agregar
+    const anyStockAvailable = productos.some(p => getStockForProduct(p.id_producto) > 0);
+    if (!anyStockAvailable) {
+      showError('No hay productos con stock disponible');
+      return;
+    }
     setProductosSeleccionados([...productosSeleccionados, {
       producto_id: '',
       cantidad: 1,
@@ -190,16 +216,44 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
 
   const actualizarProducto = (index, campo, valor) => {
     const nuevosProductos = [...productosSeleccionados];
-    
-    // Si se está cambiando el producto, actualizar automáticamente el precio
-    if (campo === 'producto_id' && valor) {
-      const productoSeleccionado = productos.find(p => p.id_producto === parseInt(valor));
+
+    if (campo === 'producto_id') {
+      nuevosProductos[index][campo] = valor;
+
+      const productoSeleccionado = productos.find(p => p.id_producto === parseInt(valor, 10));
       if (productoSeleccionado) {
         nuevosProductos[index]['precio_unitario'] = productoSeleccionado.precio;
+        const stock = getStockForProduct(productoSeleccionado.id_producto);
+        const prevCantidad = parseInt(nuevosProductos[index].cantidad, 10) || 0;
+        if (stock > 0) {
+          nuevosProductos[index]['cantidad'] = Math.min(Math.max(prevCantidad || 1, 1), stock);
+        } else {
+          nuevosProductos[index]['cantidad'] = 0;
+        }
+      } else {
+        nuevosProductos[index]['precio_unitario'] = '';
+        nuevosProductos[index]['cantidad'] = 1;
       }
+    } else if (campo === 'cantidad') {
+      let cantidad = parseInt(valor, 10);
+      if (Number.isNaN(cantidad)) cantidad = 0;
+
+      const prodIdForIndex = parseInt(nuevosProductos[index].producto_id, 10);
+      const stock = prodIdForIndex ? getStockForProduct(prodIdForIndex) : null;
+
+      if (stock !== null && stock !== undefined) {
+        const min = stock > 0 ? 1 : 0;
+        const max = stock;
+        if (cantidad < min) cantidad = min;
+        if (cantidad > max) cantidad = max;
+      } else {
+        if (cantidad < 1) cantidad = 1;
+      }
+      nuevosProductos[index][campo] = cantidad;
+    } else {
+      nuevosProductos[index][campo] = valor;
     }
-    
-    nuevosProductos[index][campo] = valor;
+
     setProductosSeleccionados(nuevosProductos);
   };
 
@@ -446,7 +500,8 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                 <button
                   type="button"
                   onClick={agregarProducto}
-                  className="flex items-center space-x-2 px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                  disabled={!productos.some(p => getStockForProduct(p.id_producto) > 0)}
+                  className="flex items-center space-x-2 px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Agregar Producto</span>
@@ -458,29 +513,28 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                   <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
                     <div>
                       <label className="block text-xs text-gray-400 mb-1">Producto</label>
-                      <select
-                        value={producto.producto_id}
-                        onChange={(e) => actualizarProducto(index, 'producto_id', e.target.value)}
-                        className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                      >
-                        <option value="">Seleccionar...</option>
-                        {productos.map((prod) => (
-                          <option key={prod.id_producto} value={prod.id_producto}>
-                            {prod.nombre} - ${parseFloat(prod.precio).toFixed(2)}
-                          </option>
-                        ))}
-                      </select>
+                      <ProductSelector
+                        productos={productos}
+                        selectedProductId={producto.producto_id}
+                        onSelect={(selectedProd) => actualizarProducto(index, 'producto_id', selectedProd ? String(selectedProd.id_producto) : '')}
+                        placeholder="Buscar producto..."
+                        showStock={true}
+                        allowSelectZeroStock={!!producto.producto_id}
+                      />
                     </div>
                     
                     <div>
                       <label className="block text-xs text-gray-400 mb-1">Cantidad</label>
                       <input
                         type="number"
-                        min="1"
+                        min={getStockForProduct(producto.producto_id) > 0 ? 1 : 0}
+                        max={getStockForProduct(producto.producto_id)}
                         value={producto.cantidad}
                         onChange={(e) => actualizarProducto(index, 'cantidad', e.target.value)}
+                        disabled={getStockForProduct(producto.producto_id) === 0}
                         className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                       />
+                      <p className="text-xs text-gray-400 mt-1">Stock disponible: {getStockForProduct(producto.producto_id)}</p>
                     </div>
                     
                     <div>

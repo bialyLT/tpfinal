@@ -43,9 +43,16 @@ class ReservaViewSet(viewsets.ModelViewSet):
     serializer_class = ReservaSerializer
     pagination_class = SmallResultsSetPagination  # 5 items por página (para "Mis Reservas")
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['estado', 'servicio']
+    filterset_fields = {
+        'estado': ['exact'],
+        'servicio': ['exact'],
+        'fecha_solicitud': ['date', 'range'],
+        'fecha_realizacion': ['date', 'range'],
+        'estado_pago_sena': ['exact'],
+        'estado_pago_final': ['exact'],
+    }
     search_fields = ['cliente__persona__nombre', 'cliente__persona__apellido', 'servicio__nombre']
-    ordering = ['-fecha_solicitud']
+    ordering = ['-fecha_solicitud', '-id_reserva']
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_queryset(self):
@@ -715,7 +722,9 @@ class ReservaViewSet(viewsets.ModelViewSet):
             )
         
         # Cambiar estado a completada
+        from django.utils import timezone
         reserva.estado = 'completada'
+        reserva.fecha_realizacion = timezone.now()
         reserva.save()
         # Enviar email al cliente con la encuesta de satisfacción (sin token público)
         try:
@@ -839,9 +848,18 @@ class DisenoViewSet(viewsets.ModelViewSet):
     """ViewSet para gestión de diseños/propuestas"""
     queryset = Diseno.objects.select_related('servicio', 'disenador', 'disenador__persona', 'reserva', 'reserva__cliente__persona').prefetch_related('productos', 'imagenes').all()
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['estado', 'servicio', 'disenador', 'reserva']
+    filterset_fields = {
+        'estado': ['exact'],
+        'servicio': ['exact'],
+        'disenador': ['exact'],
+        'reserva': ['exact'],
+        'fecha_creacion': ['date', 'range'],
+        'reserva__fecha_solicitud': ['date', 'range'],
+        'reserva__fecha_realizacion': ['date', 'range'],
+        'reserva__estado': ['exact'],
+    }
     search_fields = ['titulo', 'descripcion', 'reserva__cliente__persona__nombre', 'reserva__cliente__persona__apellido']
-    ordering = ['-fecha_creacion']
+    ordering = ['-fecha_creacion', '-id_diseno']
     parser_classes = [JSONParser, MultiPartParser, FormParser]
     
     def get_queryset(self):

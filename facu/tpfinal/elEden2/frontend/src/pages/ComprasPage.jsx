@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { success, handleApiError } from '../utils/notifications';
-import { 
-  Plus, Edit, Trash2, Search, ShoppingCart, X, Calendar, 
-  FileText, Package, DollarSign, Minus 
+import {
+  Plus, Edit, Trash2, Search, ShoppingCart, X, Calendar,
+  FileText, Package, DollarSign, Minus, Filter
 } from 'lucide-react';
-import { 
-  comprasService, 
+import {
+  comprasService,
   proveedoresService,
-  productosService 
+  productosService
 } from '../services';
 
 const ComprasPage = () => {
@@ -19,7 +19,9 @@ const ComprasPage = () => {
   const [showDetallesModal, setShowDetallesModal] = useState(false);
   const [selectedCompra, setSelectedCompra] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [totalRange, setTotalRange] = useState({ min: '', max: '' });
+
   // Estados para el formulario de compra
   const [formData, setFormData] = useState({
     proveedor: '',
@@ -27,7 +29,7 @@ const ComprasPage = () => {
     observaciones: '',
     porcentaje_ganancia: 0
   });
-  
+
   // Estados para detalles de compra (inline)
   const [detalles, setDetalles] = useState([]);
   const [nuevoDetalle, setNuevoDetalle] = useState({
@@ -43,12 +45,20 @@ const ComprasPage = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
+
+      const params = {};
+      if (searchTerm) params.search = searchTerm;
+      if (dateRange.start) params.fecha__gte = dateRange.start;
+      if (dateRange.end) params.fecha__lte = dateRange.end;
+      if (totalRange.min) params.total__gte = totalRange.min;
+      if (totalRange.max) params.total__lte = totalRange.max;
+
       const [comprasData, proveedoresData, productosData] = await Promise.all([
-        comprasService.getAll(),
+        comprasService.getAll(params),
         proveedoresService.getAll(),
         productosService.getAll()
       ]);
-      
+
       setCompras(Array.isArray(comprasData) ? comprasData : comprasData.results || []);
       setProveedores(Array.isArray(proveedoresData) ? proveedoresData : proveedoresData.results || []);
       setProductos(Array.isArray(productosData) ? productosData : productosData.results || []);
@@ -133,7 +143,7 @@ const ComprasPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (detalles.length === 0) {
       handleApiError({ message: 'Debe agregar al menos un producto' }, 'Datos incompletos');
       return;
@@ -183,11 +193,8 @@ const ComprasPage = () => {
     setShowDetallesModal(true);
   };
 
-  const filteredCompras = compras.filter(compra =>
-    compra.proveedor_nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    compra.fecha?.includes(searchTerm) ||
-    compra.observaciones?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Client-side filtering removed in favor of server-side filtering
+  const filteredCompras = compras;
 
   const calcularTotal = () => {
     return detalles.reduce((sum, detalle) => sum + (detalle.cantidad * detalle.precio_unitario), 0);
@@ -238,6 +245,55 @@ const ComprasPage = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
             />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+            {/* Date Range */}
+            <div className="flex space-x-2">
+              <input
+                type="date"
+                placeholder="Desde"
+                value={dateRange.start}
+                onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              />
+              <input
+                type="date"
+                placeholder="Hasta"
+                value={dateRange.end}
+                onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              />
+            </div>
+
+            {/* Total Range */}
+            <div className="flex space-x-2">
+              <input
+                type="number"
+                placeholder="Total mín."
+                value={totalRange.min}
+                onChange={(e) => setTotalRange({ ...totalRange, min: e.target.value })}
+                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              />
+              <input
+                type="number"
+                placeholder="Total máx."
+                value={totalRange.max}
+                onChange={(e) => setTotalRange({ ...totalRange, max: e.target.value })}
+                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              />
+            </div>
+
+            {/* Apply Filters Button */}
+            <div className="flex items-center">
+              <button
+                onClick={fetchData}
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
+              >
+                <Filter className="w-4 h-4 mr-2" />
+                Filtrar
+              </button>
+            </div>
           </div>
         </div>
 
@@ -326,11 +382,11 @@ const ComprasPage = () => {
 
         {/* Modal Crear/Editar Compra */}
         {showModal && (
-          <div 
+          <div
             className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
             onClick={handleCloseModal}
           >
-            <div 
+            <div
               className="bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
@@ -345,7 +401,7 @@ const ComprasPage = () => {
                   <X className="w-6 h-6" />
                 </button>
               </div>
-              
+
               <form onSubmit={handleSubmit} className="p-6">
                 {/* Datos de la Compra */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -545,11 +601,11 @@ const ComprasPage = () => {
 
         {/* Modal Ver Detalles */}
         {showDetallesModal && selectedCompra && (
-          <div 
+          <div
             className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
             onClick={() => setShowDetallesModal(false)}
           >
-            <div 
+            <div
               className="bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full"
               onClick={(e) => e.stopPropagation()}
             >
@@ -564,7 +620,7 @@ const ComprasPage = () => {
                   <X className="w-6 h-6" />
                 </button>
               </div>
-              
+
               <div className="p-6">
                 <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
                   <div>
