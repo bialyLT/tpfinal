@@ -250,6 +250,7 @@ const ProductosPage = () => {
             <div className="relative">
               <ProductSelector
                 productos={productos}
+                serverSide={false}
                 selectedProductId={selectedProducto?.id_producto}
                 onSelect={(prod) => handleOpenModal(prod)}
                 placeholder="Buscar y editar producto..."
