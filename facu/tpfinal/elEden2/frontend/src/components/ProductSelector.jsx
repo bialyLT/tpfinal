@@ -77,9 +77,18 @@ const ProductSelector = ({ productos = [], selectedProductId, onSelect, placehol
                   onClick={() => !disabled && handleSelect(prod)}
                   role="button"
                 >
-                  <div className="flex-1">
+                  <div className="flex items-center gap-3 flex-1">
+                    {prod.imagen ? (
+                      <img src={prod.imagen} alt={prod.nombre || 'producto'} className="w-10 h-10 object-cover rounded-md" />
+                    ) : (
+                      <div className="w-10 h-10 flex items-center justify-center rounded-md bg-gray-700 text-gray-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M4 3a2 2 0 00-2 2v9.5A1.5 1.5 0 003.5 16h13A1.5 1.5 0 0018 14.5V5a2 2 0 00-2-2H4z" /><path d="M7 7a1 1 0 110-2 1 1 0 010 2zM4 13l2.5-3 3 4 3.5-5L16 13H4z"/></svg>
+                      </div>
+                    )}
+                    <div>
                     <div className="text-sm font-medium text-white truncate">{prod.nombre}</div>
                     <div className="text-xs text-gray-400 truncate">{prod.descripcion || ''}</div>
+                    </div>
                   </div>
                   <div className="ml-3 text-right flex items-center gap-3">
                     <div className="text-sm text-green-400 font-semibold">${parseFloat(prod.precio || 0).toFixed(2)}</div>

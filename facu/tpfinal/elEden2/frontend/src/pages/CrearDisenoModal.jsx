@@ -152,6 +152,14 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
     return 0;
   };
 
+  const getProductImage = (productId) => {
+    if (!productId && productId !== 0) return null;
+    const id = parseInt(productId, 10);
+    if (Number.isNaN(id)) return null;
+    const prod = productos.find(p => p.id_producto === id || p.id === id);
+    return prod?.imagen || null;
+  };
+
   const resetForm = () => {
     setFormData({
       descripcion_tecnica: '',
@@ -509,8 +517,17 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
               </div>
 
               {productosSeleccionados.map((producto, index) => (
-                <div key={index} className="bg-gray-700 rounded-lg p-4 mb-3">
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+                  <div key={index} className="bg-gray-700 rounded-lg p-4 mb-3">
+                  <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
+                    <div className="flex items-center justify-center">
+                      {getProductImage(producto.producto_id) ? (
+                        <img src={getProductImage(producto.producto_id)} alt="producto" className="w-14 h-14 object-cover rounded-md" />
+                      ) : (
+                        <div className="w-14 h-14 flex items-center justify-center rounded-md bg-gray-600 text-gray-400">
+                          <Package className="w-6 h-6" />
+                        </div>
+                      )}
+                    </div>
                     <div>
                       <label className="block text-xs text-gray-400 mb-1">Producto</label>
                       <ProductSelector
