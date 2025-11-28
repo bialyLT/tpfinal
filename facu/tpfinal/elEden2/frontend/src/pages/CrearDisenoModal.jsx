@@ -520,8 +520,8 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                   <div key={index} className="bg-gray-700 rounded-lg p-4 mb-3">
                   <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
                     <div className="flex items-center justify-center">
-                      {getProductImage(producto.producto_id) ? (
-                        <img src={getProductImage(producto.producto_id)} alt="producto" className="w-14 h-14 object-cover rounded-md" />
+                      { (producto.imagen || getProductImage(producto.producto_id)) ? (
+                        <img src={producto.imagen || getProductImage(producto.producto_id)} alt="producto" className="w-14 h-14 object-cover rounded-md" />
                       ) : (
                         <div className="w-14 h-14 flex items-center justify-center rounded-md bg-gray-600 text-gray-400">
                           <Package className="w-6 h-6" />
@@ -533,7 +533,19 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                       <ProductSelector
                         productos={productos}
                         selectedProductId={producto.producto_id}
-                        onSelect={(selectedProd) => actualizarProducto(index, 'producto_id', selectedProd ? String(selectedProd.id_producto ?? selectedProd.id) : '')}
+                        onSelect={(selectedProd) => {
+                          if (!selectedProd) return;
+                          // Propagar selección: id, precio e imagen
+                          actualizarProducto(index, 'producto_id', String(selectedProd.id_producto ?? selectedProd.id));
+                          actualizarProducto(index, 'precio_unitario', selectedProd.precio);
+                          // Guardar imagen en el producto seleccionado para mostrar thumbnail
+                          const nuevosProductos = [...productosSeleccionados];
+                          nuevosProductos[index] = {
+                            ...nuevosProductos[index],
+                            imagen: selectedProd.imagen || null
+                          };
+                          setProductosSeleccionados(nuevosProductos);
+                        }}
                         placeholder="Buscar producto..."
                         showStock={true}
                         allowSelectZeroStock={!!producto.producto_id}
