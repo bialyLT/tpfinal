@@ -533,7 +533,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                       <ProductSelector
                         productos={productos}
                         selectedProductId={producto.producto_id}
-                        onSelect={(selectedProd) => actualizarProducto(index, 'producto_id', selectedProd ? String(selectedProd.id_producto) : '')}
+                        onSelect={(selectedProd) => actualizarProducto(index, 'producto_id', selectedProd ? String(selectedProd.id_producto ?? selectedProd.id) : '')}
                         placeholder="Buscar producto..."
                         showStock={true}
                         allowSelectZeroStock={!!producto.producto_id}
