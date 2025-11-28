@@ -12,6 +12,7 @@ const ProductSelector = ({ productos = [], selectedProductId, onSelect, placehol
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
+  const [hoveredProduct, setHoveredProduct] = useState(null);
   const containerRef = useRef(null);
   const queryRef = useRef('');
 
@@ -185,6 +186,8 @@ const ProductSelector = ({ productos = [], selectedProductId, onSelect, placehol
                   key={prodId}
                   className={`flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-gray-700 ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${isFocused ? 'bg-gray-700 outline outline-1 outline-green-500' : ''}`}
                   onClick={() => !disabled && handleSelect(prod)}
+                  onMouseEnter={() => { setHoveredProduct(prod); }}
+                  onMouseLeave={() => { setHoveredProduct(null); }}
                   role="button"
                 >
                   <div className="flex items-center gap-3 flex-1">
@@ -209,6 +212,18 @@ const ProductSelector = ({ productos = [], selectedProductId, onSelect, placehol
                 </div>
               );
             })
+          )}
+          {/* Preview panel on the right if hovered product */}
+          {hoveredProduct && (
+            <div className="absolute right-0 top-0 w-36 p-2 hidden md:block">
+              {hoveredProduct.imagen ? (
+                <img src={hoveredProduct.imagen} alt={hoveredProduct.nombre || ''} className="w-full h-24 object-cover rounded-md" />
+              ) : (
+                <div className="w-full h-24 flex items-center justify-center rounded-md bg-gray-700 text-gray-400">
+                  No imagen
+                </div>
+              )}
+            </div>
           )}
           {hasMore && !loading && (
             <div className="p-2 border-t border-gray-700 flex items-center justify-center">
