@@ -238,6 +238,9 @@ class ReservaViewSet(viewsets.ModelViewSet):
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error al crear/actualizar jardín: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
     class FormaTerrenoViewSet(viewsets.ModelViewSet):
