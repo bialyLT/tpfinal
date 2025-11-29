@@ -134,6 +134,22 @@ export const serviciosService = {
     return response.data;
   },
 
+  // Jardín relacionado a reserva
+  getJardinByReserva: async (reservaId) => {
+    const response = await api.get(`/servicios/reservas/${reservaId}/jardin/`);
+    return response.data;
+  },
+
+  upsertJardin: async (reservaId, data) => {
+    const response = await api.post(`/servicios/reservas/${reservaId}/jardin/`, data);
+    return response.data;
+  },
+
+  getFormasTerreno: async () => {
+    const response = await api.get('/servicios/formas-terreno/');
+    return response.data;
+  },
+
   updateReserva: async (id, data) => {
     const response = await api.patch(`/servicios/reservas/${id}/`, data);
     return response.data;

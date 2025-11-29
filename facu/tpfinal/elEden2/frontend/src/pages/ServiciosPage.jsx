@@ -20,6 +20,7 @@ const ServiciosPage = () => {
   const [dateFilter, setDateFilter] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('');
   const [isDisenoModalOpen, setIsDisenoModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState('diseno');
   const [isDisenoClienteModalOpen, setIsDisenoClienteModalOpen] = useState(false);
   const [servicioParaDiseno, setServicioParaDiseno] = useState(null);
   const [reservaSeleccionada, setReservaSeleccionada] = useState(null);
@@ -160,6 +161,14 @@ const ServiciosPage = () => {
   const handleCrearDiseno = (reserva) => {
     // Pasar la reserva completa al modal
     setServicioParaDiseno(reserva);
+    // Open the design modal, but only if reservation has garden
+    setModalMode('diseno');
+    setIsDisenoModalOpen(true);
+  };
+
+  const handleCargarJardin = (reserva) => {
+    setServicioParaDiseno(reserva);
+    setModalMode('jardin');
     setIsDisenoModalOpen(true);
   };
 
@@ -476,12 +485,12 @@ const ServiciosPage = () => {
                                   return todosRechazados;
                                 })() && (
                                     <button
-                                      onClick={() => handleCrearDiseno(item)}
+                                      onClick={() => handleCargarJardin(item)}
                                       className="inline-flex items-center px-2 py-1 text-xs font-medium rounded text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-                                      title="Crear diseño para este servicio"
+                                      title="Cargar información del jardín"
                                     >
                                       <Palette className="w-3 h-3 mr-1" />
-                                      Crear Diseño
+                                      Cargar información del jardín
                                     </button>
                                   )}
 
@@ -547,6 +556,7 @@ const ServiciosPage = () => {
         isOpen={isDisenoModalOpen}
         onClose={handleCloseDisenoModal}
         onDisenoCreado={handleDisenoCreado}
+        mode={modalMode}
       />
 
       {/* Modal de Diseño para Clientes */}

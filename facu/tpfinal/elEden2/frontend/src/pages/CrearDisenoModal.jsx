@@ -4,7 +4,7 @@ import { serviciosService, productosService } from '../services';
 import ProductSelector from '../components/ProductSelector';
 import { success, error as showError } from '../utils/notifications';
 
-const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDisenoCreado }) => {
+const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDisenoCreado, mode = 'diseno' }) => {
   const [loading, setLoading] = useState(false);
   const [productos, setProductos] = useState([]);
   const [disenoCompleto, setDisenoCompleto] = useState(null);
@@ -36,6 +36,10 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
     presupuesto_final: '',
     fecha_estimada_realizacion: ''
   });
+  // Garden-related states (to support 'jardin' mode)
+  const [formasTerreno, setFormasTerreno] = useState([]);
+  const [jardinData, setJardinData] = useState({ ancho: '', largo: '', forma: null, descripcion: '' });
+  const [zonasJardin, setZonasJardin] = useState([]);
   
   const [imagenesDiseno, setImagenesDiseno] = useState([]);
   const [imagenesExistentes, setImagenesExistentes] = useState([]); // Imágenes ya guardadas del diseño
@@ -118,10 +122,23 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
   useEffect(() => {
     if (isOpen) {
       fetchProductos();
+      fetchFormasTerreno();
       if (modoEdicion && diseno) {
         cargarDisenoParaEditar();
       } else {
         resetForm();
+      }
+      if (reservaId) {
+        // Try to load existing garden data if any
+        serviciosService.getJardinByReserva(reservaId).then((data) => {
+          if (data && data.id_jardin) {
+            setJardinData({ ancho: data.ancho || '', largo: data.largo || '', forma: data.forma || null, descripcion: data.descripcion || '' });
+            setZonasJardin(data.zonas || []);
+          }
+        }).catch((err) => {
+          // It's ok if there's none
+          console.debug('No garden found or error fetching garden', err?.response?.data || err.message);
+        });
       }
     }
   }, [isOpen, modoEdicion, diseno, cargarDisenoParaEditar]);
@@ -133,6 +150,15 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
     } catch (error) {
       showError('Error al cargar productos');
       console.error(error);
+    }
+  };
+
+  const fetchFormasTerreno = async () => {
+    try {
+      const data = await serviciosService.getFormasTerreno();
+      setFormasTerreno(Array.isArray(data) ? data : data.results || []);
+    } catch (error) {
+      console.error('Error al cargar formas de terreno', error);
     }
   };
 
@@ -286,10 +312,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!formData.descripcion_tecnica.trim()) {
-      showError('La descripción técnica es obligatoria');
-      return;
-    }
+    // Descripción técnica no es obligatoria (opcional al final)
 
     try {
       setLoading(true);
@@ -325,6 +348,24 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       }
 
       let response;
+      if (mode === 'jardin') {
+        // Validate garden payload
+        if (!jardinData.ancho || !jardinData.largo) {
+          showError('Debe completar ancho y largo del jardín');
+          return;
+        }
+        const payload = {
+          ancho: jardinData.ancho,
+          largo: jardinData.largo,
+          forma: jardinData.forma,
+          descripcion: jardinData.descripcion,
+          zonas: zonasJardin
+        };
+        const result = await serviciosService.upsertJardin(reservaId, payload);
+        success('Jardín guardado correctamente');
+        onClose();
+        return;
+      }
       if (modoEdicion) {
         // Actualizar diseño existente
         response = await serviciosService.updateDiseno(diseno.id_diseno, formDataToSend);
@@ -383,22 +424,69 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
         {/* Content */}
         <form onSubmit={handleSubmit} className="overflow-y-auto max-h-[calc(90vh-100px)]">
           <div className="p-6 space-y-6">
+            {/* Garden info step if mode is jardin */}
+            {mode === 'jardin' && (
+              <div className="bg-gray-700 rounded-lg p-4">
+                <h3 className="text-white font-semibold mb-2">Información del Jardín</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Ancho (m)</label>
+                    <input type="number" value={jardinData.ancho}
+                      onChange={(e) => setJardinData(prev => ({ ...prev, ancho: e.target.value }))} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Largo (m)</label>
+                    <input type="number" value={jardinData.largo}
+                      onChange={(e) => setJardinData(prev => ({ ...prev, largo: e.target.value }))} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Forma</label>
+                    <select value={jardinData.forma || ''} onChange={(e) => setJardinData(prev => ({ ...prev, forma: e.target.value }))} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm">
+                      <option value="">Seleccionar...</option>
+                      {formasTerreno.map(f => (
+                        <option key={f.id_forma} value={f.id_forma}>{f.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-medium text-white">Zonas del Jardín</h4>
+                    <button type="button" onClick={() => setZonasJardin(prev => [...prev, { nombre: '', ancho: '', largo: '', forma: '' }])} className="px-3 py-1 bg-green-600 rounded">Agregar Zona</button>
+                  </div>
+                  {zonasJardin.map((zona, zi) => (
+                    <div key={zi} className="grid grid-cols-1 md:grid-cols-6 gap-3 mb-2 items-end">
+                      <div className="md:col-span-2">
+                        <label className="block text-xs text-gray-400 mb-1">Nombre</label>
+                        <input type="text" value={zona.nombre} onChange={(e) => setZonasJardin(prev => { const next = [...prev]; next[zi].nombre = e.target.value; return next; })} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Ancho (m)</label>
+                        <input type="number" value={zona.ancho} onChange={(e) => setZonasJardin(prev => { const next = [...prev]; next[zi].ancho = e.target.value; return next; })} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Largo (m)</label>
+                        <input type="number" value={zona.largo} onChange={(e) => setZonasJardin(prev => { const next = [...prev]; next[zi].largo = e.target.value; return next; })} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Forma</label>
+                        <select value={zona.forma || ''} onChange={(e) => setZonasJardin(prev => { const next = [...prev]; next[zi].forma = e.target.value; return next; })} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm">
+                          <option value="">Seleccionar...</option>
+                          {formasTerreno.map(f => (
+                            <option key={f.id_forma} value={f.id_forma}>{f.nombre}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-2 md:col-span-1">
+                        <button type="button" onClick={() => setZonasJardin(prev => prev.filter((_, i) => i !== zi))} className="px-3 py-1 bg-red-600 rounded">Eliminar</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             
-            {/* Descripción Técnica */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Descripción Técnica *
-              </label>
-              <textarea
-                name="descripcion_tecnica"
-                value={formData.descripcion_tecnica}
-                onChange={handleInputChange}
-                rows={4}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="Describe detalladamente el diseño propuesto..."
-                required
-              />
-            </div>
+            {/* Descripción Técnica (opcional, se puede agregar al final) */}
 
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -416,7 +504,8 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
               </div>
             </div>
 
-            {/* Imágenes del Diseño */}
+            {/* Imágenes del Diseño (solo en modo diseño) */}
+            {mode !== 'jardin' && (
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center">
                 <ImageIcon className="w-4 h-4 mr-2" />
@@ -497,8 +586,10 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                 )}
               </div>
             </div>
+            )}
 
-            {/* Productos Necesarios */}
+            {/* Productos Necesarios (solo en modo diseño) */}
+            {mode !== 'jardin' && (
             <div>
               <div className="flex items-center justify-between mb-4">
                 <label className="block text-sm font-medium text-gray-300 flex items-center">
@@ -610,10 +701,11 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                   </div>
                 </div>
               ))}
-            
             </div>
+            )}
             
-            {/* Presupuestos y Fecha */}
+            {/* Presupuestos y Fecha (solo en modo diseño) */}
+            {mode !== 'jardin' && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -663,6 +755,22 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                   />
                 </div>
               </div>
+            </div>
+            )}
+
+            {/* Descripción Técnica (opcional) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Descripción Técnica (opcional)
+              </label>
+              <textarea
+                name="descripcion_tecnica"
+                value={formData.descripcion_tecnica}
+                onChange={handleInputChange}
+                rows={4}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                placeholder="Describe detalladamente el diseño propuesto..."
+              />
             </div>
 
             {/* Botones */}
