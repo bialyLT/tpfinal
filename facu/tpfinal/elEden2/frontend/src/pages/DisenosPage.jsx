@@ -212,6 +212,32 @@ const DisenosPage = () => {
             </p>
           </div>
         </div>
+        <div className="flex items-center gap-3">
+          {(isAdmin || isEmpleado) && (
+            <button
+              onClick={async () => {
+                // Fetch reservas and only show those with jardin
+                try {
+                  const data = await serviciosService.getReservas({ page: 1, page_size: 50 });
+                  const reservasConJardin = (data.results || data).filter(r => r.jardin);
+                  if (reservasConJardin.length === 0) {
+                    alert('No hay reservas con jardín cargado. Cargue la información del jardín desde la sección de Servicios.');
+                    return;
+                  }
+                  // Open modal and preselect nothing - choose in modal
+                  setDisenoParaEditar(null);
+                  setIsDisenoModalOpen(true);
+                } catch (err) {
+                  handleApiError(err, 'Error al obtener reservas');
+                }
+              }}
+              className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+            >
+              <Palette className="w-4 h-4 mr-2" />
+              Crear Diseño
+            </button>
+          )}
+        </div>
 
       {/* Filtros */}
       <div className="bg-gray-800 rounded-lg shadow p-4">

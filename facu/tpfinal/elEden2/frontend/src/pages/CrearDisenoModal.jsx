@@ -45,6 +45,8 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
   const [imagenesExistentes, setImagenesExistentes] = useState([]); // Imágenes ya guardadas del diseño
   const [productosSeleccionados, setProductosSeleccionados] = useState([]);
   const [previewImages, setPreviewImages] = useState([]);
+  const [reservasConJardin, setReservasConJardin] = useState([]);
+  const [reservaSeleccionadaId, setReservaSeleccionadaId] = useState(null);
 
   const cargarDisenoParaEditar = useCallback(async () => {
     if (!diseno?.id_diseno) return;
@@ -139,6 +141,17 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
           // It's ok if there's none
           console.debug('No garden found or error fetching garden', err?.response?.data || err.message);
         });
+      }
+      // If no reservation (reserva prop) and we're in diseno mode, fetch reservas with garden
+      if (!reserva && mode === 'diseno') {
+        try {
+          const data = await serviciosService.getReservas({ page: 1, page_size: 100 });
+          const allReservas = data.results || data;
+          const withJardin = allReservas.filter(r => !!r.jardin);
+          setReservasConJardin(withJardin);
+        } catch (err) {
+          console.error('Error fetching reservas with jardn', err);
+        }
       }
     }
   }, [isOpen, modoEdicion, diseno, cargarDisenoParaEditar]);
@@ -320,12 +333,29 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       const formDataToSend = new FormData();
       
       // Agregar datos básicos
-      formDataToSend.append('servicio_id', servicioId);
+      // Determine servicio_id: use existing servicioId or derive from selected reserva
+      let servicioParaEnviarId = servicioId;
+      if (!servicioParaEnviarId) {
+        const sel = reserva || reservasConJardin.find(r => `${r.id_reserva}` === `${reservaSeleccionadaId}`);
+        servicioParaEnviarId = sel ? (sel.servicio || sel.servicio_id || sel.id_servicio) : null;
+      }
+      if (!servicioParaEnviarId) {
+        showError('El servicio asociado a la reserva no está disponible. Seleccione otra reserva.');
+        return;
+      }
+      formDataToSend.append('servicio_id', servicioParaEnviarId);
       // Agregar el ID de la reserva si existe
       if (reservaId) {
         formDataToSend.append('reserva_id', reservaId);
       }
-      formDataToSend.append('titulo', formData.descripcion_tecnica.substring(0, 100)); // Usar primeras 100 palabras como título
+      // Usar valor de descripcion como titulo si existe; si no, usar reserva como fallback
+      let titulo = (formData.descripcion_tecnica || '').trim().substring(0, 100);
+      // Determine createReservaId for fallbacks
+      const createReservaId = reservaId || reservaSeleccionadaId;
+      if (!titulo) {
+        titulo = createReservaId ? `Diseño - Reserva #${createReservaId}` : `Diseño - Servicio #${servicioId || 'N/A'}`;
+      }
+      formDataToSend.append('titulo', titulo);
       formDataToSend.append('descripcion', formData.descripcion_tecnica);
       formDataToSend.append('presupuesto', calcularPresupuestoFinal());
       
@@ -363,6 +393,9 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
         };
         const result = await serviciosService.upsertJardin(reservaId, payload);
         success('Jardín guardado correctamente');
+        if (onDisenoCreado && typeof onDisenoCreado === 'function') {
+          onDisenoCreado(result);
+        }
         onClose();
         return;
       }
@@ -372,6 +405,12 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
         success('Diseño actualizado exitosamente');
       } else {
         // Crear nuevo diseño
+        const createReservaId = reservaId || reservaSeleccionadaId;
+        if (!createReservaId) {
+          showError('Debe seleccionar una reserva que tenga información del jardín antes de crear el diseño');
+          return;
+        }
+        formDataToSend.append('reserva_id', createReservaId);
         response = await serviciosService.crearDisenoCompleto(formDataToSend);
         success('Diseño creado exitosamente');
       }
@@ -424,6 +463,18 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
         {/* Content */}
         <form onSubmit={handleSubmit} className="overflow-y-auto max-h-[calc(90vh-100px)]">
           <div className="p-6 space-y-6">
+            {/* If it's diseno mode but no reserva passed, let user choose a reserva (only those with jardin) */}
+            {mode === 'diseno' && !reserva && (
+              <div className="bg-gray-700 rounded-lg p-4">
+                <h3 className="text-white font-semibold mb-2">Seleccionar Reserva (con jardín)</h3>
+                <select value={reservaSeleccionadaId || ''} onChange={(e) => setReservaSeleccionadaId(e.target.value)} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm">
+                  <option value="">Seleccionar reserva...</option>
+                  {reservasConJardin.map(r => (
+                    <option key={r.id_reserva} value={r.id_reserva}>#{r.id_reserva} - {r.cliente_nombre} - {r.servicio_nombre}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             {/* Garden info step if mode is jardin */}
             {mode === 'jardin' && (
               <div className="bg-gray-700 rounded-lg p-4">

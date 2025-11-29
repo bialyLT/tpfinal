@@ -313,7 +313,7 @@ class DisenoDetalleSerializer(serializers.ModelSerializer):
 class CrearDisenoSerializer(serializers.Serializer):
     """Serializer para crear un diseño completo con productos e imágenes"""
     titulo = serializers.CharField(max_length=200)
-    descripcion = serializers.CharField()
+    descripcion = serializers.CharField(required=False, allow_blank=True)
     presupuesto = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0)
     reserva_id = serializers.IntegerField(required=False, allow_null=True)
     servicio_id = serializers.IntegerField()
