@@ -155,6 +155,9 @@ class ReservaSerializer(serializers.ModelSerializer):
         return resultado
 
 
+
+
+
 class ImagenDisenoSerializer(serializers.ModelSerializer):
     """Serializer para las imágenes de un diseño"""
     imagen_url = serializers.SerializerMethodField()
