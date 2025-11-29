@@ -246,8 +246,6 @@ class ReservaViewSet(viewsets.ModelViewSet):
         serializer_class = FormaTerrenoSerializer
         permission_classes = [IsAdminUser]
         pagination_class = None
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['post'], url_path='confirmar-pago-sena')
     def confirmar_pago_sena(self, request, pk=None):
@@ -506,18 +504,6 @@ class ReservaViewSet(viewsets.ModelViewSet):
             
         except Exception as e:
             logger.error(f"Error al crear preferencia de MercadoPago: {str(e)}")
-        """
-        Crea una preferencia de MercadoPago para el pago final.
-        """
-        try:
-            import mercadopago
-        except ImportError:
-            logger.error("MercadoPago SDK no instalado: mercadopago")
-            return Response(
-                {'error': 'MercadoPago SDK no instalado en el servidor. Instale la librería \"mercadopago\".'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-        from django.conf import settings
     @action(detail=True, methods=['post'], url_path='crear-preferencia-final')
     def crear_preferencia_final(self, request, pk=None):
         """
