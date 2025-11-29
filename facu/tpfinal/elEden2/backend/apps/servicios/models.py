@@ -485,7 +485,7 @@ class Diseno(models.Model):
     
     id_diseno = models.AutoField(primary_key=True)
     titulo = models.CharField(max_length=200, help_text="Título del diseño")
-    descripcion = models.TextField(help_text="Descripción detallada del diseño propuesto")
+    descripcion = models.TextField(blank=True, null=True, help_text="Descripción detallada del diseño propuesto")
     presupuesto = models.DecimalField(
         max_digits=10,
         decimal_places=2,
