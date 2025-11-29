@@ -71,6 +71,45 @@ class EmpleadoAsignadoSerializer(serializers.ModelSerializer):
         return float(obj.empleado.puntuacion_acumulada)
 
 
+class ZonaJardinSerializer(serializers.ModelSerializer):
+    forma_nombre = serializers.CharField(source='forma.nombre', read_only=True)
+
+    class Meta:
+        model = ZonaJardin
+        fields = ['id_zona', 'jardin', 'nombre', 'ancho', 'largo', 'forma', 'forma_nombre', 'notas']
+        read_only_fields = ['id_zona']
+
+
+class JardinSerializer(serializers.ModelSerializer):
+    zonas = ZonaJardinSerializer(many=True, required=False)
+    forma_nombre = serializers.CharField(source='forma.nombre', read_only=True)
+    reserva_id = serializers.IntegerField(source='reserva.id_reserva', read_only=True)
+
+    class Meta:
+        model = Jardin
+        fields = ['id_jardin', 'reserva', 'reserva_id', 'ancho', 'largo', 'forma', 'forma_nombre', 'descripcion', 'zonas']
+        read_only_fields = ['id_jardin', 'reserva_id']
+
+    def create(self, validated_data):
+        zonas_data = validated_data.pop('zonas', [])
+        jardin = Jardin.objects.create(**validated_data)
+        for z in zonas_data:
+            ZonaJardin.objects.create(jardin=jardin, **z)
+        return jardin
+
+    def update(self, instance, validated_data):
+        zonas_data = validated_data.pop('zonas', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        if zonas_data is not None:
+            # Simplistic sync: remove existing zones and recreate
+            instance.zonas.all().delete()
+            for z in zonas_data:
+                ZonaJardin.objects.create(jardin=instance, **z)
+        return instance
+
+
 class ReservaSerializer(serializers.ModelSerializer):
     cliente_nombre = serializers.CharField(source='cliente.persona.nombre', read_only=True)
     cliente_apellido = serializers.CharField(source='cliente.persona.apellido', read_only=True)
@@ -191,43 +230,7 @@ class DisenoProductoSerializer(serializers.ModelSerializer):
         read_only_fields = ['id_diseno_producto', 'subtotal']
 
 
-class ZonaJardinSerializer(serializers.ModelSerializer):
-    forma_nombre = serializers.CharField(source='forma.nombre', read_only=True)
 
-    class Meta:
-        model = ZonaJardin
-        fields = ['id_zona', 'jardin', 'nombre', 'ancho', 'largo', 'forma', 'forma_nombre', 'notas']
-        read_only_fields = ['id_zona']
-
-
-class JardinSerializer(serializers.ModelSerializer):
-    zonas = ZonaJardinSerializer(many=True, required=False)
-    forma_nombre = serializers.CharField(source='forma.nombre', read_only=True)
-    reserva_id = serializers.IntegerField(source='reserva.id_reserva', read_only=True)
-
-    class Meta:
-        model = Jardin
-        fields = ['id_jardin', 'reserva', 'reserva_id', 'ancho', 'largo', 'forma', 'forma_nombre', 'descripcion', 'zonas']
-        read_only_fields = ['id_jardin', 'reserva_id']
-
-    def create(self, validated_data):
-        zonas_data = validated_data.pop('zonas', [])
-        jardin = Jardin.objects.create(**validated_data)
-        for z in zonas_data:
-            ZonaJardin.objects.create(jardin=jardin, **z)
-        return jardin
-
-    def update(self, instance, validated_data):
-        zonas_data = validated_data.pop('zonas', None)
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        if zonas_data is not None:
-            # Simplistic sync: remove existing zones and recreate
-            instance.zonas.all().delete()
-            for z in zonas_data:
-                ZonaJardin.objects.create(jardin=instance, **z)
-        return instance
 
 
 class FormaTerrenoSerializer(serializers.ModelSerializer):
