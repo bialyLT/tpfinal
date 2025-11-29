@@ -243,12 +243,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-    class FormaTerrenoViewSet(viewsets.ModelViewSet):
-        """ViewSet para CRUD de formas de terreno (podrán acceder admin vía API)"""
-        queryset = FormaTerreno.objects.all()
-        serializer_class = FormaTerrenoSerializer
-        permission_classes = [IsAdminUser]
-        pagination_class = None
+    # FormaTerrenoViewSet moved to module level below
     
     @action(detail=True, methods=['post'], url_path='confirmar-pago-sena')
     def confirmar_pago_sena(self, request, pk=None):
@@ -873,6 +868,14 @@ class ReservaViewSet(viewsets.ModelViewSet):
         })
         
         return Response(comprobante)
+
+
+class FormaTerrenoViewSet(viewsets.ModelViewSet):
+    """ViewSet para CRUD de formas de terreno (podrán acceder admin vía API)"""
+    queryset = FormaTerreno.objects.all()
+    serializer_class = FormaTerrenoSerializer
+    permission_classes = [IsAdminUser]
+    pagination_class = None
 
 
 class DisenoViewSet(viewsets.ModelViewSet):
