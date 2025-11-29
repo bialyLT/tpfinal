@@ -1,5 +1,5 @@
 ﻿from rest_framework import serializers
-from .models import Servicio, Reserva, Diseno, DisenoProducto, ImagenDiseno, ImagenReserva, ReservaEmpleado
+from .models import Servicio, Reserva, Diseno, DisenoProducto, ImagenDiseno, ImagenReserva, ReservaEmpleado, FormaTerreno, Jardin, ZonaJardin
 from .utils import ordenar_empleados_por_puntuacion
 from apps.users.models import Cliente
 
@@ -78,6 +78,7 @@ class ReservaSerializer(serializers.ModelSerializer):
     estado_display = serializers.CharField(source='get_estado_display', read_only=True)
     empleados_asignados = serializers.SerializerMethodField()
     imagenes = ImagenReservaSerializer(many=True, read_only=True)
+    jardin = JardinSerializer(read_only=True)
     # Incluir diseños relacionados con información básica
     disenos = serializers.SerializerMethodField()
     encuesta_cliente_completada = serializers.SerializerMethodField()
@@ -185,6 +186,52 @@ class DisenoProductoSerializer(serializers.ModelSerializer):
             'cantidad', 'precio_unitario', 'subtotal', 'notas'
         ]
         read_only_fields = ['id_diseno_producto', 'subtotal']
+
+
+class ZonaJardinSerializer(serializers.ModelSerializer):
+    forma_nombre = serializers.CharField(source='forma.nombre', read_only=True)
+
+    class Meta:
+        model = ZonaJardin
+        fields = ['id_zona', 'jardin', 'nombre', 'ancho', 'largo', 'forma', 'forma_nombre', 'notas']
+        read_only_fields = ['id_zona']
+
+
+class JardinSerializer(serializers.ModelSerializer):
+    zonas = ZonaJardinSerializer(many=True, required=False)
+    forma_nombre = serializers.CharField(source='forma.nombre', read_only=True)
+    reserva_id = serializers.IntegerField(source='reserva.id_reserva', read_only=True)
+
+    class Meta:
+        model = Jardin
+        fields = ['id_jardin', 'reserva', 'reserva_id', 'ancho', 'largo', 'forma', 'forma_nombre', 'descripcion', 'zonas']
+        read_only_fields = ['id_jardin', 'reserva_id']
+
+    def create(self, validated_data):
+        zonas_data = validated_data.pop('zonas', [])
+        jardin = Jardin.objects.create(**validated_data)
+        for z in zonas_data:
+            ZonaJardin.objects.create(jardin=jardin, **z)
+        return jardin
+
+    def update(self, instance, validated_data):
+        zonas_data = validated_data.pop('zonas', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        if zonas_data is not None:
+            # Simplistic sync: remove existing zones and recreate
+            instance.zonas.all().delete()
+            for z in zonas_data:
+                ZonaJardin.objects.create(jardin=instance, **z)
+        return instance
+
+
+class FormaTerrenoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FormaTerreno
+        fields = ['id_forma', 'nombre']
+        read_only_fields = ['id_forma']
 
 
 class DisenoSerializer(serializers.ModelSerializer):

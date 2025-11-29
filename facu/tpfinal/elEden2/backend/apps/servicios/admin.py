@@ -2,6 +2,7 @@
 from .models import (
     Servicio, Reserva, Diseno, DisenoProducto, ImagenDiseno, 
     ImagenReserva, ReservaEmpleado, ConfiguracionPago
+    , FormaTerreno, Jardin, ZonaJardin
 )
 
 
@@ -181,3 +182,25 @@ class ImagenDisenoAdmin(admin.ModelAdmin):
     list_filter = ('fecha_subida',)
     search_fields = ('diseno__titulo', 'descripcion')
     ordering = ('diseno', 'orden')
+
+
+@admin.register(FormaTerreno)
+class FormaTerrenoAdmin(admin.ModelAdmin):
+    list_display = ('id_forma', 'nombre')
+    search_fields = ('nombre',)
+    ordering = ('nombre',)
+
+
+class ZonaJardinInline(admin.TabularInline):
+    model = ZonaJardin
+    extra = 1
+    fields = ('nombre', 'ancho', 'largo', 'forma', 'notas')
+    raw_id_fields = ['forma']
+
+
+@admin.register(Jardin)
+class JardinAdmin(admin.ModelAdmin):
+    list_display = ('id_jardin', 'reserva', 'ancho', 'largo', 'forma', 'fecha_creacion')
+    list_filter = ('forma',)
+    search_fields = ('reserva__cliente__persona__nombre', 'reserva__cliente__persona__apellido')
+    inlines = [ZonaJardinInline]

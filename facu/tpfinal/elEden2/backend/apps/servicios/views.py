@@ -11,12 +11,13 @@ from datetime import datetime
 from decimal import Decimal
 import logging
 
-from .models import Servicio, Reserva, Diseno, DisenoProducto, ImagenDiseno, ImagenReserva, ReservaEmpleado, ConfiguracionPago
+from .models import Servicio, Reserva, Diseno, DisenoProducto, ImagenDiseno, ImagenReserva, ReservaEmpleado, ConfiguracionPago, Jardin, FormaTerreno, ZonaJardin
 from .utils import ordenar_empleados_por_puntuacion
 from .serializers import (
     ServicioSerializer, ReservaSerializer,
     DisenoSerializer, DisenoDetalleSerializer, CrearDisenoSerializer,
     DisenoProductoSerializer, ImagenDisenoSerializer
+    , JardinSerializer, ZonaJardinSerializer, FormaTerrenoSerializer
 )
 from .pagination import StandardResultsSetPagination, LargeResultsSetPagination, SmallResultsSetPagination
 from apps.users.models import Cliente, Empleado
@@ -206,6 +207,47 @@ class ReservaViewSet(viewsets.ModelViewSet):
         
         headers = self.get_success_headers(response_data)
         return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
+
+    @action(detail=True, methods=['get', 'post', 'put'], url_path='jardin', permission_classes=[IsAuthenticated])
+    def jardin(self, request, pk=None):
+        """
+        Endpoint para obtener/crear/actualizar la información del jardín asociado a una reserva
+        GET /api/v1/servicios/reservas/{id}/jardin/
+        POST/PUT para crear/actualizar
+        """
+        reserva = self.get_object()
+        try:
+            jardin = reserva.jardin
+        except Jardin.DoesNotExist:
+            jardin = None
+
+        if request.method == 'GET':
+            if jardin is None:
+                return Response({'message': 'No existe información del jardín'}, status=status.HTTP_404_NOT_FOUND)
+            serializer = JardinSerializer(jardin, context={'request': request})
+            return Response(serializer.data)
+
+        # Crear o actualizar
+        data = request.data.copy()
+        data['reserva'] = reserva.id_reserva
+        try:
+            if jardin is None:
+                serializer = JardinSerializer(data=data, context={'request': request})
+            else:
+                serializer = JardinSerializer(jardin, data=data, context={'request': request})
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+    class FormaTerrenoViewSet(viewsets.ModelViewSet):
+        """ViewSet para CRUD de formas de terreno (podrán acceder admin vía API)"""
+        queryset = FormaTerreno.objects.all()
+        serializer_class = FormaTerrenoSerializer
+        permission_classes = [IsAdminUser]
+        pagination_class = None
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['post'], url_path='confirmar-pago-sena')
     def confirmar_pago_sena(self, request, pk=None):
@@ -976,6 +1018,9 @@ class DisenoViewSet(viewsets.ModelViewSet):
         
         # Si hay reserva asociada, cambiar su estado a 'confirmada'
         if diseno.reserva:
+            # Validar que la reserva tenga un jardín asociado antes de crear el diseño
+            if not hasattr(diseno.reserva, 'jardin'):
+                return Response({'error': 'No existe información del jardín para esta reserva. Cargue información del jardín primero.'}, status=status.HTTP_400_BAD_REQUEST)
             diseno.reserva.estado = 'confirmada'
             diseno.reserva.save()
         

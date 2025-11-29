@@ -418,6 +418,61 @@ class ReservaEmpleado(models.Model):
         return f"{self.empleado.persona.nombre_completo} - {self.reserva.servicio.nombre} ({self.rol})"
 
 
+class FormaTerreno(models.Model):
+    """Formas de terreno configurables en admin"""
+    id_forma = models.AutoField(primary_key=True)
+    nombre = models.CharField(max_length=100, unique=True)
+
+    class Meta:
+        verbose_name = 'Forma de Terreno'
+        verbose_name_plural = 'Formas de Terreno'
+        db_table = 'forma_terreno'
+
+    def __str__(self):
+        return self.nombre
+
+
+class Jardin(models.Model):
+    """Jardín asociado a una reserva"""
+    id_jardin = models.AutoField(primary_key=True)
+    reserva = models.OneToOneField(Reserva, on_delete=models.CASCADE, related_name='jardin')
+    ancho = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    largo = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    forma = models.ForeignKey(FormaTerreno, on_delete=models.SET_NULL, null=True, blank=True, related_name='jardines')
+    descripcion = models.TextField(blank=True, null=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Jardín'
+        verbose_name_plural = 'Jardines'
+        db_table = 'jardin'
+        indexes = [models.Index(fields=['reserva'])]
+
+    def __str__(self):
+        return f"Jardín Reserva #{self.reserva.id_reserva}"
+
+
+class ZonaJardin(models.Model):
+    """Zonas dentro de un jardín e.g., 'Cantero', 'Verde', 'Huerta'"""
+    id_zona = models.AutoField(primary_key=True)
+    jardin = models.ForeignKey(Jardin, on_delete=models.CASCADE, related_name='zonas')
+    nombre = models.CharField(max_length=120, blank=True, null=True)
+    ancho = models.DecimalField(max_digits=8, decimal_places=2)
+    largo = models.DecimalField(max_digits=8, decimal_places=2)
+    forma = models.ForeignKey(FormaTerreno, on_delete=models.SET_NULL, null=True, blank=True, related_name='zonas')
+    notas = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = 'Zona de Jardín'
+        verbose_name_plural = 'Zonas de Jardín'
+        db_table = 'zona_jardin'
+        indexes = [models.Index(fields=['jardin']), models.Index(fields=['nombre'])]
+
+    def __str__(self):
+        return self.nombre or f"Zona #{self.id_zona} - Jardín {self.jardin.id_jardin}"
+
+
 class Diseno(models.Model):
     """Modelo para diseños/propuestas de jardines"""
     ESTADO_CHOICES = [
