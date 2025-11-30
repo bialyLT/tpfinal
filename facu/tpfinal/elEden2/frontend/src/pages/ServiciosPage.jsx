@@ -500,10 +500,10 @@ const ServiciosPage = () => {
                                     <button
                                       onClick={() => handleCargarJardin(item)}
                                       className="inline-flex items-center px-2 py-1 text-xs font-medium rounded text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-                                      title="Cargar información del jardín"
+                                      title={item && item.jardin ? 'Actualizar información del jardín' : 'Cargar información del jardín'}
                                     >
                                       <Palette className="w-3 h-3 mr-1" />
-                                      Cargar información del jardín
+                                      {item && item.jardin ? 'Actualizar información del jardín' : 'Cargar información del jardín'}
                                     </button>
                                   )}
 

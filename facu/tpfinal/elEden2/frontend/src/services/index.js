@@ -141,6 +141,33 @@ export const serviciosService = {
   },
 
   upsertJardin: async (reservaId, data) => {
+    // If there are per-zone images attached, construct a FormData
+    if (data && data.zonas && data.zonas.some(z => z.imagenes && z.imagenes.length > 0)) {
+      const formData = new FormData();
+      // Non-file fields
+      Object.keys(data).forEach((key) => {
+        if (key !== 'zonas') {
+          formData.append(key, data[key]);
+        }
+      });
+      // Append zones content as JSON string
+      formData.append('zonas', JSON.stringify(data.zonas.map(z => ({ nombre: z.nombre, ancho: z.ancho, largo: z.largo, forma: z.forma, notas: z.notas }))));
+      // Append per-zone files and descriptions
+      data.zonas.forEach((z, idx) => {
+        if (z.imagenes && z.imagenes.length > 0) {
+          z.imagenes.forEach(imgObj => {
+            formData.append(`imagenes_zona_${idx}`, imgObj.file);
+          });
+          // Descriptions for the zone images (optional)
+          const descripciones = z.imagenes.map(imgObj => imgObj.descripcion || '');
+          formData.append(`descripciones_zona_${idx}`, JSON.stringify(descripciones));
+        }
+      });
+      const response = await api.post(`/servicios/reservas/${reservaId}/jardin/`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return response.data;
+    }
     const response = await api.post(`/servicios/reservas/${reservaId}/jardin/`, data);
     return response.data;
   },

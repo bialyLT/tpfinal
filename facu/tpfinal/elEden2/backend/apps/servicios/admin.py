@@ -4,6 +4,7 @@ from .models import (
     ImagenReserva, ReservaEmpleado, ConfiguracionPago
     , FormaTerreno, Jardin, ZonaJardin
 )
+from .models import ImagenZona
 
 
 @admin.register(ConfiguracionPago)
@@ -189,6 +190,14 @@ class FormaTerrenoAdmin(admin.ModelAdmin):
     list_display = ('id_forma', 'nombre')
     search_fields = ('nombre',)
     ordering = ('nombre',)
+
+
+@admin.register(ImagenZona)
+class ImagenZonaAdmin(admin.ModelAdmin):
+    list_display = ('id_imagen_zona', 'zona', 'descripcion', 'orden', 'fecha_subida')
+    list_filter = ('fecha_subida',)
+    search_fields = ('zona__nombre', 'descripcion')
+    ordering = ('zona', 'orden')
 
 
 class ZonaJardinInline(admin.TabularInline):

@@ -470,6 +470,25 @@ class ZonaJardin(models.Model):
         return self.nombre or f"Zona #{self.id_zona} - Jardín {self.jardin.id_jardin}"
 
 
+class ImagenZona(models.Model):
+    """Imágenes asociadas a una zona específica del jardín"""
+    id_imagen_zona = models.AutoField(primary_key=True)
+    zona = models.ForeignKey(ZonaJardin, on_delete=models.CASCADE, related_name='imagenes')
+    imagen = models.ImageField(upload_to='zonas/%Y/%m/', help_text='Imagen de la zona')
+    descripcion = models.CharField(max_length=200, blank=True, null=True, help_text='Descripción de la imagen')
+    orden = models.IntegerField(default=0, help_text='Orden de visualización de la imagen')
+    fecha_subida = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Imagen de Zona'
+        verbose_name_plural = 'Imágenes de Zona'
+        db_table = 'imagen_zona'
+        indexes = [models.Index(fields=['zona']), models.Index(fields=['orden'])]
+
+    def __str__(self):
+        return f"Imagen {self.orden} - Zona {self.zona.id_zona}"
+
+
 class Diseno(models.Model):
     """Modelo para diseños/propuestas de jardines"""
     ESTADO_CHOICES = [

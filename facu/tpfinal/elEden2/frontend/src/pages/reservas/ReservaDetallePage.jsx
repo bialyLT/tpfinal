@@ -537,6 +537,64 @@ const ReservaDetallePage = () => {
               </div>
             </section>
 
+            {reserva.jardin && (
+              <section className="bg-gray-900 rounded-xl border border-gray-700 p-6">
+                <div className="flex items-center mb-4">
+                  <Palette className="w-6 h-6 text-emerald-400 mr-2" />
+                  <h2 className="text-xl font-semibold text-white">Información del Jardín</h2>
+                </div>
+                {reserva.jardin.descripcion && (
+                  <div className="mb-4">
+                    <p className="text-gray-300 whitespace-pre-wrap">{reserva.jardin.descripcion}</p>
+                  </div>
+                )}
+
+                {reserva.jardin.zonas && reserva.jardin.zonas.length > 0 ? (
+                  <div className="space-y-4">
+                    {reserva.jardin.zonas.map((zona) => (
+                      <div key={zona.id_zona} className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-lg font-medium text-white">{zona.nombre || `Zona ${zona.id_zona}`}</h3>
+                          <div className="text-sm text-gray-300">{zona.ancho}m x {zona.largo}m</div>
+                        </div>
+                        <div className="flex flex-col md:flex-row gap-4">
+                          <div className="flex-1 text-sm text-gray-300">
+                            {zona.notas && <p className="mb-2">{zona.notas}</p>}
+                            {zona.forma && <p className="text-xs text-gray-400">Forma: {zona.forma}</p>}
+                          </div>
+                          <div className="flex-1">
+                            {zona.imagenes && zona.imagenes.length > 0 ? (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {zona.imagenes.map((img) => (
+                                  <div key={img.id_imagen_zona} className="bg-gray-800 rounded-lg overflow-hidden">
+                                    <img
+                                      src={img.imagen_url || img.imagen}
+                                      alt={img.descripcion || `Imagen Zona ${zona.nombre || zona.id_zona}`}
+                                      className="w-full h-48 object-cover"
+                                      onError={(e) => { e.target.src = placeholderImage; }}
+                                    />
+                                    {img.descripcion && (
+                                      <div className="p-3 border-t border-gray-700">
+                                        <p className="text-sm text-gray-300">{img.descripcion}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-gray-400 italic text-sm">Sin imágenes para esta zona.</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-gray-400 italic">No hay zonas registradas en el jardín.</div>
+                )}
+              </section>
+            )}
+
             <section className="bg-gray-900 rounded-xl border border-gray-700 p-6">
               <div className="flex items-center mb-4">
                 <CreditCard className="w-6 h-6 text-emerald-400 mr-2" />

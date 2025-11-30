@@ -23,8 +23,19 @@ const InformacionJardinModal = ({ reserva, isOpen, onClose, onJardinSaved }) => 
     // Load existing jardin
     if (reserva && reserva.id_reserva) {
       serviciosService.getJardinByReserva(reserva.id_reserva).then((data) => {
-        if (data && data.id_jardin) {
-          setZonas(data.zonas || [{ nombre: '', ancho: '', largo: '', forma: '' }]);
+          if (data && data.id_jardin) {
+          // Map existing zone images into frontend-friendly objects
+          const zns = (data.zonas || [{ nombre: '', ancho: '', largo: '', forma: '' }]).map(z => ({
+            id_zona: z.id_zona,
+            nombre: z.nombre || '',
+            ancho: z.ancho || '',
+            largo: z.largo || '',
+            forma: z.forma || '',
+            notas: z.notas || '',
+            // imagenes existing preview-only: {preview, id}
+            imagenes: (z.imagenes || []).map(img => ({ id: img.id_imagen_reserva || img.id_imagen_zona || null, preview: img.imagen_url, descripcion: img.descripcion || '' }))
+          }));
+          setZonas(zns);
           setDescripcion(data.descripcion || '');
         } else {
           setZonas([{ nombre: '', ancho: '', largo: '', forma: '' }]);
@@ -36,15 +47,34 @@ const InformacionJardinModal = ({ reserva, isOpen, onClose, onJardinSaved }) => 
         setDescripcion('');
       });
     } else {
-      setZonas([{ nombre: '', ancho: '', largo: '', forma: '' }]);
+      setZonas([{ nombre: '', ancho: '', largo: '', forma: '', imagenes: [] }]);
       setDescripcion('');
     }
   }, [isOpen, reserva]);
 
   if (!isOpen) return null;
 
-  const handleAdd = () => setZonas(prev => [...prev, { nombre: '', ancho: '', largo: '', forma: '' }]);
+  const handleAdd = () => setZonas(prev => [...prev, { nombre: '', ancho: '', largo: '', forma: '', imagenes: [] }]);
   const handleRemove = (i) => setZonas(prev => prev.filter((_, idx) => idx !== i));
+
+  const handleAddImagen = (zi, file) => {
+    setZonas(prev => {
+      const next = [...prev];
+      const zone = next[zi];
+      if (!zone.imagenes) zone.imagenes = [];
+      if (zone.imagenes.length >= 3) return next; // limit
+      zone.imagenes = [...zone.imagenes, { file, preview: URL.createObjectURL(file), descripcion: '' }];
+      return next;
+    });
+  };
+
+  const handleRemoveImagen = (zi, idx) => {
+    setZonas(prev => {
+      const next = [...prev];
+      next[zi].imagenes = next[zi].imagenes.filter((_, i) => i !== idx);
+      return next;
+    });
+  };
 
   const handleSave = async () => {
     if (!reserva || !reserva.id_reserva) {
@@ -65,7 +95,7 @@ const InformacionJardinModal = ({ reserva, isOpen, onClose, onJardinSaved }) => 
     }
     const payload = {
       descripcion: descripcion || '',
-      zonas: zonas
+      zonas: zonas.map(z => ({ nombre: z.nombre, ancho: z.ancho, largo: z.largo, forma: z.forma, notas: z.notas, imagenes: z.imagenes }))
     };
 
     setLoading(true);
@@ -87,8 +117,8 @@ const InformacionJardinModal = ({ reserva, isOpen, onClose, onJardinSaved }) => 
       <div className="bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
           <div className="flex items-center space-x-3">
-            <h2 className="text-xl font-bold text-white">Cargar información del jardín</h2>
-          </div>
+              <h2 className="text-xl font-bold text-white">{reserva && reserva.jardin ? 'Actualizar información del jardín' : 'Cargar información del jardín'}</h2>
+            </div>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg"><X className="w-5 h-5" /></button>
         </div>
         <div className="p-6">
@@ -119,8 +149,31 @@ const InformacionJardinModal = ({ reserva, isOpen, onClose, onJardinSaved }) => 
                       {formas.map(f => <option key={f.id_forma} value={f.id_forma}>{f.nombre}</option>)}
                     </select>
                   </div>
-                  <div className="flex items-center gap-2 md:col-span-1">
-                    <button type="button" onClick={() => handleRemove(zi)} className="px-3 py-1 bg-red-600 rounded">Eliminar</button>
+                  <div className="md:col-span-1">
+                    <div className="mb-2">
+                      <label className="block text-xs text-gray-400 mb-1">Imágenes (máx 3)</label>
+                      <div className="flex flex-wrap gap-2">
+                        {(zona.imagenes || []).map((img, imgIdx) => (
+                          <div key={imgIdx} className="relative w-20 h-20 bg-gray-600 rounded overflow-hidden">
+                            <img src={img.preview} alt={`img-${imgIdx}`} className="w-full h-full object-cover" />
+                            <button type="button" onClick={() => handleRemoveImagen(zi, imgIdx)} className="absolute top-0 right-0 bg-red-600 text-white rounded-full w-5 h-5 text-xs">×</button>
+                          </div>
+                        ))}
+                        {(zona.imagenes || []).length < 3 && (
+                          <label className="inline-flex items-center justify-center w-20 h-20 bg-gray-600 rounded border border-gray-500 cursor-pointer">
+                            <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                              const file = e.target.files[0];
+                              if (!file) return;
+                              handleAddImagen(zi, file);
+                            }} />
+                            <span className="text-xs text-gray-300">+ Foto</span>
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => handleRemove(zi)} className="px-3 py-1 bg-red-600 rounded">Eliminar</button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -132,7 +185,7 @@ const InformacionJardinModal = ({ reserva, isOpen, onClose, onJardinSaved }) => 
           </div>
           <div className="flex justify-end space-x-4 pt-4 border-t border-gray-700 mt-4">
             <button onClick={onClose} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700">Cancelar</button>
-            <button onClick={handleSave} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">{loading ? 'Guardando...' : 'Guardar Jardín'}</button>
+            <button onClick={handleSave} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">{loading ? 'Guardando...' : (reserva && reserva.jardin ? 'Actualizar Jardín' : 'Guardar Jardín')}</button>
           </div>
         </div>
       </div>

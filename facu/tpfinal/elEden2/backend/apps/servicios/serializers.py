@@ -1,5 +1,5 @@
 ﻿from rest_framework import serializers
-from .models import Servicio, Reserva, Diseno, DisenoProducto, ImagenDiseno, ImagenReserva, ReservaEmpleado, FormaTerreno, Jardin, ZonaJardin
+from .models import Servicio, Reserva, Diseno, DisenoProducto, ImagenDiseno, ImagenReserva, ReservaEmpleado, FormaTerreno, Jardin, ZonaJardin, ImagenZona
 from .utils import ordenar_empleados_por_puntuacion
 from apps.users.models import Cliente
 
@@ -72,11 +72,17 @@ class EmpleadoAsignadoSerializer(serializers.ModelSerializer):
 
 
 class ZonaJardinSerializer(serializers.ModelSerializer):
+    imagenes = serializers.SerializerMethodField()
 
     class Meta:
         model = ZonaJardin
-        fields = ['id_zona', 'jardin', 'nombre', 'ancho', 'largo', 'forma', 'notas']
+        fields = ['id_zona', 'jardin', 'nombre', 'ancho', 'largo', 'forma', 'notas', 'imagenes']
         read_only_fields = ['id_zona', 'jardin']
+
+    def get_imagenes(self, obj):
+        request = self.context.get('request')
+        serializer = ImagenZonaSerializer(obj.imagenes.all(), many=True, context={'request': request})
+        return serializer.data
 
 
 class JardinSerializer(serializers.ModelSerializer):
@@ -203,9 +209,6 @@ class ReservaSerializer(serializers.ModelSerializer):
         return resultado
 
 
-
-
-
 class ImagenDisenoSerializer(serializers.ModelSerializer):
     """Serializer para las imágenes de un diseño"""
     imagen_url = serializers.SerializerMethodField()
@@ -222,6 +225,45 @@ class ImagenDisenoSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.imagen.url)
             return obj.imagen.url
         return None
+
+
+class ImagenZonaSerializer(serializers.ModelSerializer):
+    imagen_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ImagenZona
+        fields = ['id_imagen_zona', 'imagen', 'imagen_url', 'descripcion', 'orden', 'fecha_subida']
+        read_only_fields = ['id_imagen_zona', 'fecha_subida']
+
+    def get_imagen_url(self, obj):
+        if obj.imagen:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.imagen.url)
+            return obj.imagen.url
+        return None
+
+
+class ZonaJardinSerializer(serializers.ModelSerializer):
+    imagenes = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ZonaJardin
+        fields = ['id_zona', 'jardin', 'nombre', 'ancho', 'largo', 'forma', 'notas', 'imagenes']
+        read_only_fields = ['id_zona', 'jardin']
+
+    def get_imagenes(self, obj):
+        request = self.context.get('request')
+        serializer = ImagenZonaSerializer(obj.imagenes.all(), many=True, context={'request': request})
+        return serializer.data
+
+
+
+
+
+ 
+
+
 
 
 class DisenoProductoSerializer(serializers.ModelSerializer):

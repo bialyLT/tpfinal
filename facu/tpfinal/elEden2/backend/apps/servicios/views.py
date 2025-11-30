@@ -11,7 +11,7 @@ from datetime import datetime
 from decimal import Decimal
 import logging
 
-from .models import Servicio, Reserva, Diseno, DisenoProducto, ImagenDiseno, ImagenReserva, ReservaEmpleado, ConfiguracionPago, Jardin, FormaTerreno, ZonaJardin
+from .models import Servicio, Reserva, Diseno, DisenoProducto, ImagenDiseno, ImagenReserva, ReservaEmpleado, ConfiguracionPago, Jardin, FormaTerreno, ZonaJardin, ImagenZona
 from .utils import ordenar_empleados_por_puntuacion
 from .serializers import (
     ServicioSerializer, ReservaSerializer,
@@ -230,6 +230,27 @@ class ReservaViewSet(viewsets.ModelViewSet):
         # Crear o actualizar
         data = request.data.copy()
         data['reserva'] = reserva.id_reserva
+        # Extract zone images payloads from request.FILES (if present)
+        # Expect files grouped by key like 'imagenes_zona_0', 'imagenes_zona_1', etc.
+        imagenes_por_zona = {}
+        descripciones_por_zona = {}
+        for key in request.FILES:
+            if key.startswith('imagenes_zona_'):
+                try:
+                    idx = int(key.replace('imagenes_zona_', ''))
+                    imagenes_por_zona[idx] = request.FILES.getlist(key)
+                except ValueError:
+                    continue
+        # Descripciones pueden venir como JSON arrays por zona con clave 'descripciones_zona_{i}'
+        import json
+        for k, v in request.data.items():
+            if k.startswith('descripciones_zona_'):
+                try:
+                    idx = int(k.replace('descripciones_zona_', ''))
+                    descripciones_por_zona[idx] = json.loads(v) if isinstance(v, str) else v
+                except (ValueError, json.JSONDecodeError):
+                    descripciones_por_zona[idx] = []
+
         try:
             if jardin is None:
                 serializer = JardinSerializer(data=data, context={'request': request})
@@ -237,6 +258,28 @@ class ReservaViewSet(viewsets.ModelViewSet):
                 serializer = JardinSerializer(jardin, data=data, context={'request': request})
             serializer.is_valid(raise_exception=True)
             serializer.save()
+            # After saving garden and zones, handle zone images
+            try:
+                zonas_input = request.data.get('zonas')
+                if isinstance(zonas_input, str):
+                    zonas_input = json.loads(zonas_input)
+            except Exception:
+                zonas_input = None
+            saved_zonas = list(serializer.instance.zonas.order_by('id_zona'))
+            # Map by index: zones in saved_zonas assumed to be in the input order
+            for idx, zona_obj in enumerate(saved_zonas):
+                files = imagenes_por_zona.get(idx, [])
+                if not files:
+                    continue
+                # Limit to 3 files per requirements
+                files = files[:3]
+                descripciones = descripciones_por_zona.get(idx, [])
+                from .models import ImagenZona
+                # Remove existing zone images if any (we'll re-create to replace)
+                zona_obj.imagenes.all().delete()
+                for file_idx, file in enumerate(files):
+                    descripcion = descripciones[file_idx] if file_idx < len(descripciones) else ''
+                    ImagenZona.objects.create(zona=zona_obj, imagen=file, descripcion=descripcion, orden=file_idx)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
             logger.error(f"Error al crear/actualizar jardín: {str(e)}")
