@@ -560,7 +560,7 @@ const ReservaDetallePage = () => {
                         <div className="flex flex-col md:flex-row gap-4">
                           <div className="flex-1 text-sm text-gray-300">
                             {zona.notas && <p className="mb-2">{zona.notas}</p>}
-                            {zona.forma && <p className="text-xs text-gray-400">Forma: {zona.forma}</p>}
+                            { (zona.forma_nombre || zona.forma) && <p className="text-xs text-gray-400">Forma: {zona.forma_nombre || zona.forma}</p> }
                           </div>
                           <div className="flex-1">
                             {zona.imagenes && zona.imagenes.length > 0 ? (

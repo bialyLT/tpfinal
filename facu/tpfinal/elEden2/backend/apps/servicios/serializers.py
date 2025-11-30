@@ -72,11 +72,12 @@ class EmpleadoAsignadoSerializer(serializers.ModelSerializer):
 
 
 class ZonaJardinSerializer(serializers.ModelSerializer):
+    forma_nombre = serializers.CharField(source='forma.nombre', read_only=True)
     imagenes = serializers.SerializerMethodField()
 
     class Meta:
         model = ZonaJardin
-        fields = ['id_zona', 'jardin', 'nombre', 'ancho', 'largo', 'forma', 'notas', 'imagenes']
+        fields = ['id_zona', 'jardin', 'nombre', 'ancho', 'largo', 'forma', 'forma_nombre', 'notas', 'imagenes']
         read_only_fields = ['id_zona', 'jardin']
 
     def get_imagenes(self, obj):
