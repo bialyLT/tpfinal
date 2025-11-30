@@ -152,4 +152,3 @@ class EmpleadoPrioridadTests(APITestCase):
             [mejor.persona.email, segundo.persona.email],
         )
         self.assertEqual([empleado.get("prioridad") for empleado in respuesta_empleados], [1, 2])
-*** End Patch

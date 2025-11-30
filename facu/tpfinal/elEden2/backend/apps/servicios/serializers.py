@@ -72,26 +72,26 @@ class EmpleadoAsignadoSerializer(serializers.ModelSerializer):
 
 
 class ZonaJardinSerializer(serializers.ModelSerializer):
-    forma_nombre = serializers.CharField(source='forma.nombre', read_only=True)
 
     class Meta:
         model = ZonaJardin
-        fields = ['id_zona', 'jardin', 'nombre', 'ancho', 'largo', 'forma', 'forma_nombre', 'notas']
-        read_only_fields = ['id_zona']
+        fields = ['id_zona', 'jardin', 'nombre', 'ancho', 'largo', 'forma', 'notas']
+        read_only_fields = ['id_zona', 'jardin']
 
 
 class JardinSerializer(serializers.ModelSerializer):
     zonas = ZonaJardinSerializer(many=True, required=False)
-    forma_nombre = serializers.CharField(source='forma.nombre', read_only=True)
     reserva_id = serializers.IntegerField(source='reserva.id_reserva', read_only=True)
 
     class Meta:
         model = Jardin
-        fields = ['id_jardin', 'reserva', 'reserva_id', 'ancho', 'largo', 'forma', 'forma_nombre', 'descripcion', 'zonas']
+        fields = ['id_jardin', 'reserva', 'reserva_id', 'descripcion', 'zonas']
         read_only_fields = ['id_jardin', 'reserva_id']
 
     def create(self, validated_data):
         zonas_data = validated_data.pop('zonas', [])
+        if not zonas_data or len(zonas_data) == 0:
+            raise serializers.ValidationError({'zonas': 'El jardín debe contener al menos una zona'})
         jardin = Jardin.objects.create(**validated_data)
         for z in zonas_data:
             ZonaJardin.objects.create(jardin=jardin, **z)
@@ -99,6 +99,8 @@ class JardinSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         zonas_data = validated_data.pop('zonas', None)
+        if zonas_data is not None and len(zonas_data) == 0:
+            raise serializers.ValidationError({'zonas': 'El jardín debe contener al menos una zona'})
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
@@ -108,6 +110,13 @@ class JardinSerializer(serializers.ModelSerializer):
             for z in zonas_data:
                 ZonaJardin.objects.create(jardin=instance, **z)
         return instance
+
+    def validate(self, attrs):
+        # Validate that at least one zone is provided in the initial data
+        zonas = attrs.get('zonas') if 'zonas' in attrs else self.initial_data.get('zonas')
+        if not zonas or len(zonas) == 0:
+            raise serializers.ValidationError({'zonas': 'El jardín debe contener al menos una zona'})
+        return attrs
 
 
 class ReservaSerializer(serializers.ModelSerializer):

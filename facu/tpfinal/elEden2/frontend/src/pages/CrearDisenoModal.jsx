@@ -33,13 +33,10 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
   const [formData, setFormData] = useState({
     descripcion_tecnica: '',
     presupuesto: '',
-    presupuesto_final: '',
-    fecha_estimada_realizacion: ''
+    presupuesto_final: ''
   });
-  // Garden-related states (to support 'jardin' mode)
+  // Formas Terreno may still be used in other contexts
   const [formasTerreno, setFormasTerreno] = useState([]);
-  const [jardinData, setJardinData] = useState({ ancho: '', largo: '', forma: null, descripcion: '' });
-  const [zonasJardin, setZonasJardin] = useState([]);
   
   const [imagenesDiseno, setImagenesDiseno] = useState([]);
   const [imagenesExistentes, setImagenesExistentes] = useState([]); // Imágenes ya guardadas del diseño
@@ -63,11 +60,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       setDisenoCompleto(disenoData);
       
       // Formatear fecha si existe
-      let fechaFormateada = '';
-      if (disenoData.fecha_propuesta) {
-        const fecha = new Date(disenoData.fecha_propuesta);
-        fechaFormateada = fecha.toISOString().split('T')[0];
-      }
+      // fecha_propuesta is intentionally not moved to state anymore (we removed fecha_estimada_realizacion)
       
       // Cargar productos seleccionados y calcular costo de mano de obra
       let costoManoObraCalculado = parseFloat(disenoData.presupuesto) || 0;
@@ -104,8 +97,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       setFormData({
         descripcion_tecnica: disenoData.descripcion || '',
         presupuesto: costoManoObraCalculado.toFixed(2),  // Usar el costo de mano de obra calculado
-        presupuesto_final: disenoData.presupuesto || '',
-        fecha_estimada_realizacion: fechaFormateada
+        presupuesto_final: disenoData.presupuesto || ''
       });
       
       // Cargar imágenes existentes del diseño
@@ -130,31 +122,24 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       } else {
         resetForm();
       }
-      if (reservaId) {
-        // Try to load existing garden data if any
-        serviciosService.getJardinByReserva(reservaId).then((data) => {
-          if (data && data.id_jardin) {
-            setJardinData({ ancho: data.ancho || '', largo: data.largo || '', forma: data.forma || null, descripcion: data.descripcion || '' });
-            setZonasJardin(data.zonas || []);
-          }
-        }).catch((err) => {
-          // It's ok if there's none
-          console.debug('No garden found or error fetching garden', err?.response?.data || err.message);
-        });
-      }
+      
       // If no reservation (reserva prop) and we're in diseno mode, fetch reservas with garden
       if (!reserva && mode === 'diseno') {
-        try {
-          const data = await serviciosService.getReservas({ page: 1, page_size: 100 });
-          const allReservas = data.results || data;
-          const withJardin = allReservas.filter(r => !!r.jardin);
-          setReservasConJardin(withJardin);
-        } catch (err) {
-          console.error('Error fetching reservas with jardn', err);
-        }
+        (async () => {
+          try {
+            const data = await serviciosService.getReservas({ page: 1, page_size: 100 });
+            const allReservas = data.results || data;
+            const withJardin = allReservas.filter(r => !!r.jardin);
+            setReservasConJardin(withJardin);
+          } catch (err) {
+            console.error('Error fetching reservas with jardn', err);
+          }
+        })();
       }
     }
   }, [isOpen, modoEdicion, diseno, cargarDisenoParaEditar]);
+
+  
 
   const fetchProductos = async () => {
     try {
@@ -204,7 +189,6 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       descripcion_tecnica: '',
       presupuesto: '',
       presupuesto_final: '',
-      fecha_estimada_realizacion: ''
     });
     setImagenesDiseno([]);
     setImagenesExistentes([]);
@@ -360,9 +344,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       formDataToSend.append('presupuesto', calcularPresupuestoFinal());
       
       // Agregar fecha propuesta si existe
-      if (formData.fecha_estimada_realizacion) {
-        formDataToSend.append('fecha_propuesta', formData.fecha_estimada_realizacion);
-      }
+      // Fecha estimada de realización removed (no longer appended)
       
       // Agregar imágenes
       imagenesDiseno.forEach((imagen) => {
@@ -378,27 +360,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       }
 
       let response;
-      if (mode === 'jardin') {
-        // Validate garden payload
-        if (!jardinData.ancho || !jardinData.largo) {
-          showError('Debe completar ancho y largo del jardín');
-          return;
-        }
-        const payload = {
-          ancho: jardinData.ancho,
-          largo: jardinData.largo,
-          forma: jardinData.forma,
-          descripcion: jardinData.descripcion,
-          zonas: zonasJardin
-        };
-        const result = await serviciosService.upsertJardin(reservaId, payload);
-        success('Jardín guardado correctamente');
-        if (onDisenoCreado && typeof onDisenoCreado === 'function') {
-          onDisenoCreado(result);
-        }
-        onClose();
-        return;
-      }
+      
       if (modoEdicion) {
         // Actualizar diseño existente
         response = await serviciosService.updateDiseno(diseno.id_diseno, formDataToSend);
@@ -475,85 +437,11 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                 </select>
               </div>
             )}
-            {/* Garden info step if mode is jardin */}
-            {mode === 'jardin' && (
-              <div className="bg-gray-700 rounded-lg p-4">
-                <h3 className="text-white font-semibold mb-2">Información del Jardín</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1">Ancho (m)</label>
-                    <input type="number" value={jardinData.ancho}
-                      onChange={(e) => setJardinData(prev => ({ ...prev, ancho: e.target.value }))} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1">Largo (m)</label>
-                    <input type="number" value={jardinData.largo}
-                      onChange={(e) => setJardinData(prev => ({ ...prev, largo: e.target.value }))} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1">Forma</label>
-                    <select value={jardinData.forma || ''} onChange={(e) => setJardinData(prev => ({ ...prev, forma: e.target.value }))} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm">
-                      <option value="">Seleccionar...</option>
-                      {formasTerreno.map(f => (
-                        <option key={f.id_forma} value={f.id_forma}>{f.nombre}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium text-white">Zonas del Jardín</h4>
-                    <button type="button" onClick={() => setZonasJardin(prev => [...prev, { nombre: '', ancho: '', largo: '', forma: '' }])} className="px-3 py-1 bg-green-600 rounded">Agregar Zona</button>
-                  </div>
-                  {zonasJardin.map((zona, zi) => (
-                    <div key={zi} className="grid grid-cols-1 md:grid-cols-6 gap-3 mb-2 items-end">
-                      <div className="md:col-span-2">
-                        <label className="block text-xs text-gray-400 mb-1">Nombre</label>
-                        <input type="text" value={zona.nombre} onChange={(e) => setZonasJardin(prev => { const next = [...prev]; next[zi].nombre = e.target.value; return next; })} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm" />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-400 mb-1">Ancho (m)</label>
-                        <input type="number" value={zona.ancho} onChange={(e) => setZonasJardin(prev => { const next = [...prev]; next[zi].ancho = e.target.value; return next; })} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm" />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-400 mb-1">Largo (m)</label>
-                        <input type="number" value={zona.largo} onChange={(e) => setZonasJardin(prev => { const next = [...prev]; next[zi].largo = e.target.value; return next; })} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm" />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-400 mb-1">Forma</label>
-                        <select value={zona.forma || ''} onChange={(e) => setZonasJardin(prev => { const next = [...prev]; next[zi].forma = e.target.value; return next; })} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm">
-                          <option value="">Seleccionar...</option>
-                          {formasTerreno.map(f => (
-                            <option key={f.id_forma} value={f.id_forma}>{f.nombre}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="flex items-center gap-2 md:col-span-1">
-                        <button type="button" onClick={() => setZonasJardin(prev => prev.filter((_, i) => i !== zi))} className="px-3 py-1 bg-red-600 rounded">Eliminar</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            
             
             {/* Descripción Técnica (opcional, se puede agregar al final) */}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Fecha Estimada de Realización
-              </label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="datetime-local"
-                  name="fecha_estimada_realizacion"
-                  value={formData.fecha_estimada_realizacion}
-                  onChange={handleInputChange}
-                  className="w-full pl-10 pr-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-              </div>
-            </div>
+            {/* Fecha estimada removed by request */}
 
             {/* Imágenes del Diseño (solo en modo diseño) */}
             {mode !== 'jardin' && (

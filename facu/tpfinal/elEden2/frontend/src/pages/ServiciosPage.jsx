@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { success, handleApiError } from '../utils/notifications';
 import { Calendar, Clock, CheckCircle, XCircle, Users, Filter, Search, Eye, Palette, MapPin } from 'lucide-react';
 import CrearDisenoModal from './CrearDisenoModal';
+import InformacionJardinModal from './InformacionJardinModal';
 import DisenoClienteModal from './DisenoClienteModal';
 import Pagination from '../components/Pagination';
 
@@ -21,6 +22,8 @@ const ServiciosPage = () => {
   const [paymentFilter, setPaymentFilter] = useState('');
   const [isDisenoModalOpen, setIsDisenoModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('diseno');
+  const [isJardinModalOpen, setIsJardinModalOpen] = useState(false);
+  const [servicioParaJardin, setServicioParaJardin] = useState(null);
   const [isDisenoClienteModalOpen, setIsDisenoClienteModalOpen] = useState(false);
   const [servicioParaDiseno, setServicioParaDiseno] = useState(null);
   const [reservaSeleccionada, setReservaSeleccionada] = useState(null);
@@ -167,14 +170,24 @@ const ServiciosPage = () => {
   };
 
   const handleCargarJardin = (reserva) => {
-    setServicioParaDiseno(reserva);
-    setModalMode('jardin');
-    setIsDisenoModalOpen(true);
+    setServicioParaJardin(reserva);
+    setIsJardinModalOpen(true);
   };
 
   const handleCloseDisenoModal = () => {
     setIsDisenoModalOpen(false);
     setServicioParaDiseno(null);
+  };
+
+  const handleCloseJardinModal = () => {
+    setIsJardinModalOpen(false);
+    setServicioParaJardin(null);
+  };
+
+  const handleJardinSaved = () => {
+    // Refresh data on save
+    fetchData();
+    handleCloseJardinModal();
   };
 
   const handleDisenoCreado = () => {
@@ -557,6 +570,13 @@ const ServiciosPage = () => {
         onClose={handleCloseDisenoModal}
         onDisenoCreado={handleDisenoCreado}
         mode={modalMode}
+      />
+
+      <InformacionJardinModal
+        reserva={servicioParaJardin}
+        isOpen={isJardinModalOpen}
+        onClose={handleCloseJardinModal}
+        onJardinSaved={handleJardinSaved}
       />
 
       {/* Modal de Diseño para Clientes */}

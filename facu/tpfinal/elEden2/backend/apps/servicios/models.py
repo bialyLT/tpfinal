@@ -436,9 +436,6 @@ class Jardin(models.Model):
     """Jardín asociado a una reserva"""
     id_jardin = models.AutoField(primary_key=True)
     reserva = models.OneToOneField(Reserva, on_delete=models.CASCADE, related_name='jardin')
-    ancho = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
-    largo = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
-    forma = models.ForeignKey(FormaTerreno, on_delete=models.SET_NULL, null=True, blank=True, related_name='jardines')
     descripcion = models.TextField(blank=True, null=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)

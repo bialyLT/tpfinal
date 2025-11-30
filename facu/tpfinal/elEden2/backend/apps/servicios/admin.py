@@ -200,7 +200,7 @@ class ZonaJardinInline(admin.TabularInline):
 
 @admin.register(Jardin)
 class JardinAdmin(admin.ModelAdmin):
-    list_display = ('id_jardin', 'reserva', 'ancho', 'largo', 'forma', 'fecha_creacion')
-    list_filter = ('forma',)
+    list_display = ('id_jardin', 'reserva', 'fecha_creacion')
+    list_filter = ()
     search_fields = ('reserva__cliente__persona__nombre', 'reserva__cliente__persona__apellido')
     inlines = [ZonaJardinInline]

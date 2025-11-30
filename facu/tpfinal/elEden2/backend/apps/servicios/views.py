@@ -3,7 +3,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.response import Response
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
-from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser, SAFE_METHODS
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction
 from django.utils import timezone
@@ -874,7 +874,13 @@ class FormaTerrenoViewSet(viewsets.ModelViewSet):
     """ViewSet para CRUD de formas de terreno (podrán acceder admin vía API)"""
     queryset = FormaTerreno.objects.all()
     serializer_class = FormaTerrenoSerializer
-    permission_classes = [IsAdminUser]
+    # Allow safe methods (GET/HEAD/OPTIONS) to be public/read-only, while keeping admin-only for write operations
+    permission_classes = [AllowAny]
+
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [AllowAny()]
+        return [IsAdminUser()]
     pagination_class = None
 
 
