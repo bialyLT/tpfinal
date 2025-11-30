@@ -1,1 +1,87 @@
 @import "tailwindcss";
+
+/* flatpickr will be styled via tailwind classes below */
+@layer components {
+	.flatpickr-calendar {
+		@apply bg-gray-800 text-white border border-gray-700 rounded-lg shadow-lg p-3;
+		max-width: 20rem;
+		min-width: 16rem;
+	}
+	/* Arrow Popper */
+	.flatpickr-calendar::after, .flatpickr-calendar::before { display:none; }
+	.flatpickr-months {
+		@apply bg-gray-900 border-b border-gray-700 rounded-t-lg text-center pt-3 pb-2;
+	}
+	.flatpickr-current-month {
+		@apply text-white font-semibold;
+	}
+	.flatpickr-months .flatpickr-prev-month, .flatpickr-months .flatpickr-next-month {
+		@apply text-gray-300 hover:text-white p-2 rounded-md hover:bg-gray-700;
+	}
+	.flatpickr-months .flatpickr-prev-month, .flatpickr-months .flatpickr-next-month {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.flatpickr-months .flatpickr-prev-month svg, .flatpickr-months .flatpickr-next-month svg {
+		@apply w-4 h-4;
+	}
+	.flatpickr-day {
+		@apply text-gray-300 hover:bg-gray-700 hover:text-white rounded-md;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		line-height: 2rem;
+		font-size: 0.875rem;
+	}
+	.flatpickr-weekdaycontainer { @apply border-b border-gray-700; }
+	.flatpickr-weekday { @apply text-gray-400; }
+	.flatpickr-day.prevMonthDay, .flatpickr-day.nextMonthDay { opacity: .5; }
+	.flatpickr-day.today { outline: 2px solid rgba(16,185,129,0.12); outline-offset: 2px; }
+	.flatpickr-day.today {
+		@apply bg-gray-700 text-white rounded-full;
+	}
+	.flatpickr-day.selected {
+		@apply bg-green-600 text-white rounded-full;
+	}
+	.flatpickr-day.disabled {
+		@apply text-gray-500 opacity-60 cursor-not-allowed;
+	}
+	.flatpickr-day.blocked {
+		@apply bg-red-600 text-white;
+	}
+	/* Week day headings */
+	.flatpickr-weekdays .flatpickr-weekday {
+		@apply text-gray-400 text-sm;
+	}
+	/* Time box and list styling */
+	.flatpickr-time {
+		@apply bg-gray-700 border border-gray-600 text-gray-200 rounded-b-lg;
+	}
+	.flatpickr-time .flatpickr-time-separator {
+		@apply text-gray-300;
+	}
+	.flatpickr-time input {
+		@apply bg-gray-800 text-white border-none px-1 py-1 rounded-md;
+	}
+	.flatpickr-time .flatpickr-time-icon {
+		display:none;
+	}
+	.flatpickr-input {
+		@apply w-full bg-gray-700 border border-gray-600 text-white rounded-md px-3 py-2 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500;
+	}
+	/* Small pill on the selected day highlight, ensure hover doesn't remove it */
+	.flatpickr-day.selected:hover {
+		@apply bg-green-700 text-white;
+	}
+	/* Blocked day hover prevention */
+	.flatpickr-day.blocked:hover {
+		@apply bg-red-600 text-white;
+	}
+	/* Smooth transitions */
+	.flatpickr-day, .flatpickr-prev-month, .flatpickr-next-month {
+		transition: background-color .12s ease, color .12s ease;
+	}
+}

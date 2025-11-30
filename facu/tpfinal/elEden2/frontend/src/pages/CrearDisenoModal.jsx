@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import flatpickr from 'flatpickr';
+// No localization imports for now
 import { X, Upload, Plus, Trash2, Palette, DollarSign, Calendar, Image as ImageIcon, Package, Search } from 'lucide-react';
 import { serviciosService, productosService } from '../services';
 import { useAuth } from '../context/AuthContext';
@@ -9,7 +11,17 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
   const [loading, setLoading] = useState(false);
   const [productos, setProductos] = useState([]);
   const [disenoCompleto, setDisenoCompleto] = useState(null);
-  const [fechaPropuesta, setFechaPropuesta] = useState('');
+  const [fechaPropuesta, setFechaPropuesta] = useState(null);
+  const [fechaPropuestaDatePart, setFechaPropuestaDatePart] = useState(null); // selected date (day)
+  const [fechaPropuestaTimePart, setFechaPropuestaTimePart] = useState(''); // 'HH:MM'
+  const fpRef = React.useRef(null);
+  const fpInstanceRef = React.useRef(null);
+  const fpTimeRef = React.useRef(null);
+  const fpTimeInstanceRef = React.useRef(null);
+  const [originalFechaPropuesta, setOriginalFechaPropuesta] = useState(null);
+  const [fechasBloqueadas, setFechasBloqueadas] = useState([]);
+  const [minFechaLocal, setMinFechaLocal] = useState(null);
+  const [fechaError, setFechaError] = useState('');
   
   // Determinar si estamos en modo edición
   const modoEdicion = !!diseno;
@@ -35,14 +47,12 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
   const reservaId = disenoCompleto?.reserva_id || diseno?.reserva_id || reserva?.id_reserva;
 
   // Convertir datetime-local -> ISO (UTC) para enviar al backend
-  const convertLocalToISO = (localDateTime) => {
-    if (!localDateTime) return null;
+  const convertLocalToISO = (dateObj) => {
+    if (!dateObj) return null;
     try {
-      // localDateTime expected in format YYYY-MM-DDTHH:MM
-      const d = new Date(localDateTime);
-      return d.toISOString();
+      return dateObj.toISOString();
     } catch (err) {
-      return localDateTime;
+      return null;
     }
   };
   
@@ -84,17 +94,16 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       const reservaIdFromDiseno = disenoData.reserva_id || disenoData.reserva?.id_reserva || disenoData.reserva?.id;
       if (reservaIdFromDiseno) setReservaSeleccionadaId(String(reservaIdFromDiseno));
 
-      // Inicializar fecha propuesta (convertir ISO a datetime-local)
+      // Inicializar fecha propuesta (convertir ISO a Date object)
       if (disenoData.fecha_propuesta) {
         try {
           const d = new Date(disenoData.fecha_propuesta);
-          // Build string in 2025-11-30T10:30 format (no seconds)
-          const isoLocal = d.toISOString();
-          // Convert to local=datetime-local by creating components
-          const tzOffset = d.getTimezoneOffset() * 60000; // ms
-          const localDate = new Date(d.getTime() - tzOffset);
-          const localStr = localDate.toISOString().slice(0,16);
-          setFechaPropuesta(localStr);
+          if (!Number.isNaN(d.getTime())) setFechaPropuesta(d);
+          if (!Number.isNaN(d.getTime())) setOriginalFechaPropuesta(d);
+          if (!Number.isNaN(d.getTime())) {
+            setFechaPropuestaDatePart(new Date(d.getFullYear(), d.getMonth(), d.getDate()));
+            setFechaPropuestaTimePart(`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`);
+          }
         } catch (err) {
           console.warn('Error parsing fecha_propuesta', err);
         }
@@ -177,12 +186,132 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
           }
         })();
       }
+      // Set min date (now) for datetime-local
+      const now = new Date();
+      const tzOffset = now.getTimezoneOffset() * 60000;
+      const localNow = new Date(now.getTime() - tzOffset);
+      setMinFechaLocal(new Date());
+
+      // Fetch blocked dates for the next 60 days
+      (async () => {
+        try {
+          const hoy = new Date().toISOString().split('T')[0];
+          const fechaFinDate = new Date();
+          fechaFinDate.setDate(fechaFinDate.getDate() + 60);
+          const fechaFin = fechaFinDate.toISOString().split('T')[0];
+          const response = await serviciosService.getFechasDisponibles(hoy, fechaFin);
+          setFechasBloqueadas(response.fechas_bloqueadas || []);
+        } catch (err) {
+          console.error('Error al cargar fechas bloqueadas:', err);
+        }
+      })();
       // If a reserva prop is provided (modal opened from a reserva), preselect it
       if (reserva && !modoEdicion) {
         setReservaSeleccionadaId(String(reserva.id_reserva || reserva.id));
+        // preselect date/time if reserva prop has fecha_reserva
+        if (reserva.fecha_reserva) {
+          try {
+            const d = new Date(reserva.fecha_reserva);
+            setFechaPropuesta(d);
+            setFechaPropuestaDatePart(new Date(d.getFullYear(), d.getMonth(), d.getDate()));
+            setFechaPropuestaTimePart(`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`);
+          } catch (_) {}
+        }
       }
     }
   }, [isOpen, modoEdicion, diseno, cargarDisenoParaEditar]);
+
+  // Initialize flatpickr on our input (DATE ONLY)
+  useEffect(() => {
+    if (!fpRef.current) return;
+    if (fpInstanceRef.current) {
+      try { fpInstanceRef.current.destroy(); } catch(e) {}
+      fpInstanceRef.current = null;
+    }
+
+    const originalDayStr = originalFechaPropuesta ? originalFechaPropuesta.toISOString().split('T')[0] : null;
+    const disabledDatesArr = (fechasBloqueadas || []).filter(d => d !== originalDayStr);
+    
+    const options = {
+      enableTime: false,
+      dateFormat: 'Y-m-d',
+      defaultDate: fechaPropuestaDatePart || null,
+      minDate: minFechaLocal || 'today',
+      disable: disabledDatesArr || [],
+      onChange: (selectedDates) => {
+        if (!selectedDates || selectedDates.length === 0) return;
+        const d = selectedDates[0];
+        setFechaPropuestaDatePart(d);
+        
+        // Update combined date if time is already selected
+        if (fechaPropuestaTimePart) {
+          const [hh, mm] = fechaPropuestaTimePart.split(':').map(Number);
+          const newDate = new Date(d);
+          newDate.setHours(hh, mm);
+          setFechaPropuesta(newDate);
+        } else {
+          setFechaPropuesta(d);
+        }
+        setFechaError('');
+      }
+    };
+    
+    options.onDayCreate = (dObj, dStr, fp, dayElem) => {
+      try {
+        const dayISO = dayElem.dateObj.toISOString().split('T')[0];
+        if (disabledDatesArr && disabledDatesArr.includes(dayISO)) {
+          dayElem.classList.add('blocked');
+        }
+      } catch (err) {}
+    };
+
+    fpInstanceRef.current = flatpickr(fpRef.current, options);
+    return () => {
+      if (fpInstanceRef.current) {
+        try { fpInstanceRef.current.destroy(); } catch(e) {}
+        fpInstanceRef.current = null;
+      }
+    };
+  }, [fpRef, minFechaLocal, fechasBloqueadas, fechaPropuestaDatePart]);
+
+  // Initialize flatpickr for TIME ONLY
+  useEffect(() => {
+    if (!fpTimeRef.current) return;
+    if (fpTimeInstanceRef.current) {
+      try { fpTimeInstanceRef.current.destroy(); } catch(e) {}
+      fpTimeInstanceRef.current = null;
+    }
+
+    const options = {
+      enableTime: true,
+      noCalendar: true,
+      dateFormat: "H:i",
+      time_24hr: true,
+      minuteIncrement: 15,
+      defaultDate: fechaPropuestaTimePart || null,
+      minTime: "08:00",
+      maxTime: "20:00",
+      onChange: (selectedDates, dateStr) => {
+        setFechaPropuestaTimePart(dateStr);
+        
+        if (fechaPropuestaDatePart) {
+          const [hh, mm] = dateStr.split(':').map(Number);
+          const newDate = new Date(fechaPropuestaDatePart);
+          newDate.setHours(hh, mm);
+          setFechaPropuesta(newDate);
+        }
+        setFechaError('');
+      }
+    };
+
+    fpTimeInstanceRef.current = flatpickr(fpTimeRef.current, options);
+    return () => {
+      if (fpTimeInstanceRef.current) {
+        try { fpTimeInstanceRef.current.destroy(); } catch(e) {}
+        fpTimeInstanceRef.current = null;
+      }
+    };
+  }, [fpTimeRef, fechaPropuestaTimePart, fechaPropuestaDatePart]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -192,6 +321,71 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       setReservaBuscada(null);
     }
   }, [isOpen]);
+
+  // Watch fechaPropuesta and fechasBloqueadas to show validation state if necessary
+  useEffect(() => {
+    if (!fechaPropuesta) {
+      setFechaError('');
+      return;
+    }
+    const selectedDate = new Date(fechaPropuesta);
+    const now = new Date();
+    if (selectedDate.getTime() < now.getTime()) {
+      setFechaError('No se puede seleccionar una fecha pasada.');
+      return;
+    }
+    const selDay = selectedDate.toISOString().split('T')[0];
+    if (fechasBloqueadas.includes(selDay)) {
+      setFechaError('La fecha seleccionada no está disponible: todos los empleados están ocupados ese día.');
+      return;
+    }
+    setFechaError('');
+  }, [fechaPropuesta, fechasBloqueadas]);
+
+  // Build blocked dates as Date objects for DatePicker
+  const disabledDateObjects = useMemo(() => {
+    try {
+      const bs = (fechasBloqueadas || []).map(dstr => {
+        const parts = dstr.split('-').map(Number);
+        if (parts.length !== 3) return null;
+        const [y, m, d] = parts;
+        return new Date(y, m - 1, d);
+      }).filter(Boolean);
+      // If editing, and the original fechaPropuesta exists, allow keeping that exact day
+      if (originalFechaPropuesta) {
+        const originalDay = new Date(originalFechaPropuesta.getFullYear(), originalFechaPropuesta.getMonth(), originalFechaPropuesta.getDate());
+        return bs.filter(bd => !isSameDay(bd, originalDay));
+      }
+      return bs;
+      } catch (err) {
+        return [];
+      }
+  }, [fechasBloqueadas, originalFechaPropuesta]);
+
+  const isSameDay = (d1, d2) => (
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate()
+  );
+
+  const isSameDateTime = (a, b) => a && b && a.getTime() === b.getTime();
+
+  const getMinTimeForDate = (date) => {
+    if (!date) return new Date();
+    const now = new Date();
+    if (isSameDay(date, now)) return roundUpToInterval(now, 15);
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 8, 0);
+  };
+
+  const roundUpToInterval = (date, interval = 15) => {
+    const ms = 1000 * 60 * interval;
+    return new Date(Math.ceil(date.getTime() / ms) * ms);
+  };
+
+  const getMaxTimeForDate = (date) => {
+    if (!date) return new Date();
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 20, 0);
+  };
 
   
 
@@ -249,7 +443,10 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
     setProductosSeleccionados([]);
     setPreviewImages([]);
     setDisenoCompleto(null);
-    setFechaPropuesta('');
+    setFechaPropuesta(null);
+    setFechaPropuestaDatePart(null);
+    setFechaPropuestaTimePart('');
+    setOriginalFechaPropuesta(null);
   };
 
   const handleInputChange = (e) => {
@@ -422,6 +619,22 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       formDataToSend.append('descripcion', formData.descripcion_tecnica);
       formDataToSend.append('presupuesto', calcularPresupuestoFinal());
       
+      // Validar fecha propuesta: no puede ser pasada ni estar en fechas bloqueadas
+      if (fechaPropuesta) {
+        const selectedDate = new Date(fechaPropuesta);
+        const now = new Date();
+        if (selectedDate.getTime() < now.getTime()) {
+          showError('No se puede seleccionar una fecha pasada');
+          return;
+        }
+        // Check blocked dates by day
+        const selectedDay = selectedDate.toISOString().split('T')[0];
+        if (fechasBloqueadas.includes(selectedDay) && !isSameDateTime(selectedDate, originalFechaPropuesta)) {
+          showError('La fecha seleccionada no está disponible: todos los empleados están ocupados ese día.');
+          return;
+        }
+      }
+
       // Agregar fecha propuesta si existe
       if (fechaPropuesta) {
         const isoFecha = convertLocalToISO(fechaPropuesta);
@@ -805,7 +1018,8 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
             
             {/* Presupuestos y Fecha (solo en modo diseño) */}
             {mode !== 'jardin' && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Costo Mano de Obra
@@ -854,19 +1068,48 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                   />
                 </div>
               </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Fecha propuesta
                 </label>
-                <input
-                  type="datetime-local"
-                  name="fecha_propuesta"
-                  value={fechaPropuesta}
-                  onChange={(e) => setFechaPropuesta(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
+                <div className="bg-gray-900 p-2 rounded-md border border-gray-700">
+                  <div className="relative">
+                    <input
+                      ref={fpRef}
+                      type="text"
+                      readOnly
+                      placeholder="Seleccionar fecha"
+                      className={`w-full px-3 py-2 bg-gray-700 border rounded-md text-white focus:outline-none focus:ring-2 ${fechaError ? 'border-red-500 focus:ring-red-500' : 'border-gray-600 focus:ring-green-500'}`}
+                    />
+                  </div>
+                </div>
+                {fechaError && <p className="text-xs text-red-400 mt-1">{fechaError}</p>}
+                {fechasBloqueadas && fechasBloqueadas.length > 0 && (
+                  <p className="text-xs text-gray-400 mt-1">Fechas no disponibles: {fechasBloqueadas.slice(0,5).join(', ')}{fechasBloqueadas.length > 5 ? '...' : ''}</p>
+                )}
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Hora
+                </label>
+                <div className="bg-gray-900 p-2 rounded-md border border-gray-700">
+                  <div className="relative">
+                    <input
+                      ref={fpTimeRef}
+                      type="text"
+                      readOnly
+                      placeholder="Seleccionar hora"
+                      className={`w-full px-3 py-2 bg-gray-700 border rounded-md text-white focus:outline-none focus:ring-2 ${fechaError ? 'border-red-500 focus:ring-red-500' : 'border-gray-600 focus:ring-green-500'}`}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
+            </>
             )}
 
             {/* Descripción Técnica (opcional) */}

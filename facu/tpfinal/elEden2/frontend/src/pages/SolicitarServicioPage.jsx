@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import flatpickr from 'flatpickr';
 import { serviciosService } from '../services';
 import { success, error, handleApiError } from '../utils/notifications';
 import { useAuth } from '../context/AuthContext';
@@ -28,6 +29,11 @@ import {
 
 const SolicitarServicioPage = () => {
   const { user } = useAuth();
+  const fpRef = useRef(null);
+  const fpInstanceRef = useRef(null);
+  const fpTimeRef = useRef(null);
+  const fpTimeInstanceRef = useRef(null);
+  
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
@@ -37,6 +43,7 @@ const SolicitarServicioPage = () => {
     servicio: '', // ID del servicio del catálogo
     descripcion: '',
     fecha_preferida: '',
+    hora_preferida: '',
     direccion_servicio: '',
     notas_adicionales: '',
     imagenes_jardin: [],
@@ -120,6 +127,77 @@ const SolicitarServicioPage = () => {
 
     fetchFechasBloqueadas();
   }, []);
+
+  // Initialize flatpickr
+  useEffect(() => {
+    // Only initialize if we are on step 3 (Cita de Revisión)
+    if (currentStep !== 3) return;
+
+    // Date Picker
+    if (fpRef.current) {
+      if (fpInstanceRef.current) {
+        try { fpInstanceRef.current.destroy(); } catch(e) {}
+        fpInstanceRef.current = null;
+      }
+
+      const options = {
+        enableTime: false,
+        dateFormat: 'Y-m-d',
+        minDate: 'today',
+        disable: fechasBloqueadas || [],
+        defaultDate: formData.fecha_preferida || null,
+        onChange: (selectedDates, dateStr) => {
+          setFormData(prev => ({ ...prev, fecha_preferida: dateStr }));
+        }
+      };
+      
+      options.onDayCreate = (dObj, dStr, fp, dayElem) => {
+        try {
+          const dayISO = dayElem.dateObj.toISOString().split('T')[0];
+          if (fechasBloqueadas && fechasBloqueadas.includes(dayISO)) {
+            dayElem.classList.add('blocked');
+          }
+        } catch (err) {}
+      };
+
+      fpInstanceRef.current = flatpickr(fpRef.current, options);
+    }
+
+    // Time Picker
+    if (fpTimeRef.current) {
+      if (fpTimeInstanceRef.current) {
+        try { fpTimeInstanceRef.current.destroy(); } catch(e) {}
+        fpTimeInstanceRef.current = null;
+      }
+
+      const optionsTime = {
+        enableTime: true,
+        noCalendar: true,
+        dateFormat: "H:i",
+        time_24hr: true,
+        minuteIncrement: 15,
+        defaultDate: formData.hora_preferida || null,
+        minTime: "08:00",
+        maxTime: "20:00",
+        onChange: (selectedDates, dateStr) => {
+          setFormData(prev => ({ ...prev, hora_preferida: dateStr }));
+        }
+      };
+
+      fpTimeInstanceRef.current = flatpickr(fpTimeRef.current, optionsTime);
+    }
+
+    return () => {
+      if (fpInstanceRef.current) {
+        try { fpInstanceRef.current.destroy(); } catch(e) {}
+        fpInstanceRef.current = null;
+      }
+      if (fpTimeInstanceRef.current) {
+        try { fpTimeInstanceRef.current.destroy(); } catch(e) {}
+        fpTimeInstanceRef.current = null;
+      }
+    };
+  }, [currentStep, fechasBloqueadas, formData.fecha_preferida, formData.hora_preferida]);
 
   // Cleanup function para liberar URLs al desmontar el componente
   useEffect(() => {
@@ -349,7 +427,14 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
       }
 
       formDataToSend.append('observaciones', observacionesCompletas);
-      formDataToSend.append('fecha_reserva', formData.fecha_preferida);
+      
+      // Combinar fecha y hora si existe hora preferida
+      let fechaReserva = formData.fecha_preferida;
+      if (formData.hora_preferida) {
+        fechaReserva = `${formData.fecha_preferida}T${formData.hora_preferida}:00`;
+      }
+      formDataToSend.append('fecha_reserva', fechaReserva);
+      
       formDataToSend.append('direccion', formData.direccion_servicio);
 
       // Agregar imágenes del jardín
@@ -816,29 +901,50 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
             <div>
               <h2 className="text-xl font-semibold text-white mb-4">Programación</h2>
               <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    <Calendar className="w-4 h-4 inline mr-2" />
-                    {isDisenoCompleto() ? 'Fecha preferida para Cita de Revisión' : 'Fecha preferida del servicio'}
-                  </label>
-                  <input
-                    type="date"
-                    name="fecha_preferida"
-                    value={formData.fecha_preferida}
-                    onChange={handleChange}
-                    min={new Date().toISOString().split('T')[0]}
-                    className={`w-full px-3 py-2 bg-gray-700 border rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500 ${formData.fecha_preferida && fechasBloqueadas.includes(formData.fecha_preferida)
-                      ? 'border-red-500 focus:ring-red-500'
-                      : 'border-gray-600'
-                      }`}
-                  />
-                  <p className="text-sm text-gray-400 mt-2">
-                    <Clock className="w-4 h-4 inline mr-1" />
-                    {isDisenoCompleto()
-                      ? 'Esta fecha es para la visita técnica inicial. El trabajo comenzará una vez aprobado el diseño.'
-                      : 'Sujeto a disponibilidad de los empleados.'}
-                  </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      <Calendar className="w-4 h-4 inline mr-2" />
+                      {isDisenoCompleto() ? 'Fecha preferida para Cita de Revisión' : 'Fecha preferida del servicio'}
+                    </label>
+                    <div className="bg-gray-900 p-2 rounded-md border border-gray-700">
+                      <div className="relative">
+                        <input
+                          ref={fpRef}
+                          type="text"
+                          readOnly
+                          placeholder="Seleccionar fecha"
+                          className={`w-full px-3 py-2 bg-gray-700 border rounded-md text-white focus:outline-none focus:ring-2 ${formData.fecha_preferida && fechasBloqueadas.includes(formData.fecha_preferida) ? 'border-red-500 focus:ring-red-500' : 'border-gray-600 focus:ring-green-500'}`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      <Clock className="w-4 h-4 inline mr-2" />
+                      Hora preferida
+                    </label>
+                    <div className="bg-gray-900 p-2 rounded-md border border-gray-700">
+                      <div className="relative">
+                        <input
+                          ref={fpTimeRef}
+                          type="text"
+                          readOnly
+                          placeholder="Seleccionar hora"
+                          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
+                
+                <p className="text-sm text-gray-400 mt-2">
+                  <Info className="w-4 h-4 inline mr-1" />
+                  {isDisenoCompleto()
+                    ? 'Esta fecha es para la visita técnica inicial. El trabajo comenzará una vez aprobado el diseño.'
+                    : 'Sujeto a disponibilidad de los empleados.'}
+                </p>
               </div>
             </div>
           )}
