@@ -1,33 +1,50 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, Upload, Plus, Trash2, Palette, DollarSign, Calendar, Image as ImageIcon, Package, Search } from 'lucide-react';
 import { serviciosService, productosService } from '../services';
+import { useAuth } from '../context/AuthContext';
 import ProductSelector from '../components/ProductSelector';
 import { success, error as showError } from '../utils/notifications';
 
-const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDisenoCreado, mode = 'diseno' }) => {
+const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDisenoCreado, mode = 'diseno', onCargarJardin }) => {
   const [loading, setLoading] = useState(false);
   const [productos, setProductos] = useState([]);
   const [disenoCompleto, setDisenoCompleto] = useState(null);
+  const [fechaPropuesta, setFechaPropuesta] = useState('');
   
   // Determinar si estamos en modo edición
   const modoEdicion = !!diseno;
   
+  // Helper para resolver id numérico de servicio de una reserva / objeto con posible nesting
+  const resolveServiceId = (obj) => {
+    if (!obj) return null;
+    const svc = obj.servicio ?? obj.servicio_id ?? obj.id_servicio ?? obj.servicio_id;
+    if (!svc) return null;
+    // If svc is object, try nested ids
+    if (typeof svc === 'object') {
+      return svc.id_servicio || svc.id || svc.id_servicio || svc.id;
+    }
+    const numeric = Number(svc);
+    if (!Number.isNaN(numeric)) return numeric;
+    return null;
+  };
+
   // Extraer el ID de servicio de la reserva o del diseño
-  const servicioId = disenoCompleto?.servicio || diseno?.servicio || reserva?.servicio || reserva?.id_servicio;
+  const servicioId = resolveServiceId(disenoCompleto) || resolveServiceId(diseno) || resolveServiceId(reserva);
+
   // Extraer el ID de la reserva
   const reservaId = disenoCompleto?.reserva_id || diseno?.reserva_id || reserva?.id_reserva;
-  
-  // Debug: verificar que tenemos la reserva correctamente
-  useEffect(() => {
-    if (isOpen) {
-      console.log('📋 Modo:', modoEdicion ? 'Edición' : 'Creación');
-      console.log('📋 Diseño recibido:', diseno);
-      console.log('📋 Reserva recibida:', reserva);
-      console.log('📋 Diseño completo cargado:', disenoCompleto);
-      console.log('🔑 Servicio ID:', servicioId);
-      console.log('🔑 Reserva ID:', reservaId);
+
+  // Convertir datetime-local -> ISO (UTC) para enviar al backend
+  const convertLocalToISO = (localDateTime) => {
+    if (!localDateTime) return null;
+    try {
+      // localDateTime expected in format YYYY-MM-DDTHH:MM
+      const d = new Date(localDateTime);
+      return d.toISOString();
+    } catch (err) {
+      return localDateTime;
     }
-  }, [isOpen, reserva, diseno, disenoCompleto, servicioId, reservaId, modoEdicion]);
+  };
   
   // Estados del formulario
   const [formData, setFormData] = useState({
@@ -44,6 +61,10 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
   const [previewImages, setPreviewImages] = useState([]);
   const [reservasConJardin, setReservasConJardin] = useState([]);
   const [reservaSeleccionadaId, setReservaSeleccionadaId] = useState(null);
+  const [searchReservaInput, setSearchReservaInput] = useState('');
+  const [searchReservaLoading, setSearchReservaLoading] = useState(false);
+  const [searchReservaError, setSearchReservaError] = useState('');
+  const [reservaBuscada, setReservaBuscada] = useState(null);
 
   const cargarDisenoParaEditar = useCallback(async () => {
     if (!diseno?.id_diseno) return;
@@ -58,6 +79,26 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       
       // Guardar el diseño completo en el estado
       setDisenoCompleto(disenoData);
+
+      // Inicializar reserva seleccionada para edicion
+      const reservaIdFromDiseno = disenoData.reserva_id || disenoData.reserva?.id_reserva || disenoData.reserva?.id;
+      if (reservaIdFromDiseno) setReservaSeleccionadaId(String(reservaIdFromDiseno));
+
+      // Inicializar fecha propuesta (convertir ISO a datetime-local)
+      if (disenoData.fecha_propuesta) {
+        try {
+          const d = new Date(disenoData.fecha_propuesta);
+          // Build string in 2025-11-30T10:30 format (no seconds)
+          const isoLocal = d.toISOString();
+          // Convert to local=datetime-local by creating components
+          const tzOffset = d.getTimezoneOffset() * 60000; // ms
+          const localDate = new Date(d.getTime() - tzOffset);
+          const localStr = localDate.toISOString().slice(0,16);
+          setFechaPropuesta(localStr);
+        } catch (err) {
+          console.warn('Error parsing fecha_propuesta', err);
+        }
+      }
       
       // Formatear fecha si existe
       // fecha_propuesta is intentionally not moved to state anymore (we removed fecha_estimada_realizacion)
@@ -136,8 +177,21 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
           }
         })();
       }
+      // If a reserva prop is provided (modal opened from a reserva), preselect it
+      if (reserva && !modoEdicion) {
+        setReservaSeleccionadaId(String(reserva.id_reserva || reserva.id));
+      }
     }
   }, [isOpen, modoEdicion, diseno, cargarDisenoParaEditar]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchReservaInput('');
+      setSearchReservaError('');
+      setSearchReservaLoading(false);
+      setReservaBuscada(null);
+    }
+  }, [isOpen]);
 
   
 
@@ -195,6 +249,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
     setProductosSeleccionados([]);
     setPreviewImages([]);
     setDisenoCompleto(null);
+    setFechaPropuesta('');
   };
 
   const handleInputChange = (e) => {
@@ -215,6 +270,35 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       url: URL.createObjectURL(file)
     }));
     setPreviewImages(previews);
+  };
+
+  const { user } = useAuth();
+  const isEmpleadoOrAdmin = user && (user.is_staff || user.groups?.includes('Empleados') || user.groups?.includes('Administradores'));
+
+  const handleSearchReserva = async () => {
+    setSearchReservaError('');
+    if (!searchReservaInput) {
+      setSearchReservaError('Ingrese un ID de reserva');
+      return;
+    }
+    const numeric = Number(searchReservaInput);
+    if (Number.isNaN(numeric) || numeric <= 0) {
+      setSearchReservaError('Ingrese un ID numérico válido');
+      return;
+    }
+    setSearchReservaLoading(true);
+    setReservaBuscada(null);
+    try {
+      const data = await serviciosService.getReservaById(numeric);
+      setReservaBuscada(data);
+      setReservaSeleccionadaId(data.id_reserva);
+      // If the reservation contains jardin info, prefer that
+    } catch (err) {
+      console.error('Error buscando reserva:', err);
+      setSearchReservaError('Reserva no encontrada');
+    } finally {
+      setSearchReservaLoading(false);
+    }
   };
 
   const removeImage = (index) => {
@@ -320,31 +404,29 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       // Determine servicio_id: use existing servicioId or derive from selected reserva
       let servicioParaEnviarId = servicioId;
       if (!servicioParaEnviarId) {
-        const sel = reserva || reservasConJardin.find(r => `${r.id_reserva}` === `${reservaSeleccionadaId}`);
-        servicioParaEnviarId = sel ? (sel.servicio || sel.servicio_id || sel.id_servicio) : null;
+        const sel = reserva || reservaBuscada || reservasConJardin.find(r => `${r.id_reserva}` === `${reservaSeleccionadaId}`);
+        servicioParaEnviarId = sel ? resolveServiceId(sel) : null;
       }
       if (!servicioParaEnviarId) {
         showError('El servicio asociado a la reserva no está disponible. Seleccione otra reserva.');
         return;
       }
-      formDataToSend.append('servicio_id', servicioParaEnviarId);
+      formDataToSend.append('servicio_id', Number(servicioParaEnviarId));
       // Agregar el ID de la reserva si existe
-      if (reservaId) {
-        formDataToSend.append('reserva_id', reservaId);
+      const selRes = reserva || reservaBuscada || reservasConJardin.find(r => `${r.id_reserva}` === `${reservaSeleccionadaId}`);
+      if (selRes && selRes.id_reserva) {
+        formDataToSend.append('reserva_id', Number(selRes.id_reserva));
       }
-      // Usar valor de descripcion como titulo si existe; si no, usar reserva como fallback
-      let titulo = (formData.descripcion_tecnica || '').trim().substring(0, 100);
-      // Determine createReservaId for fallbacks
-      const createReservaId = reservaId || reservaSeleccionadaId;
-      if (!titulo) {
-        titulo = createReservaId ? `Diseño - Reserva #${createReservaId}` : `Diseño - Servicio #${servicioId || 'N/A'}`;
-      }
-      formDataToSend.append('titulo', titulo);
+      // Usar titulo calculado (computado) para consistencia
+      formDataToSend.append('titulo', computedTitulo.substring(0,100));
       formDataToSend.append('descripcion', formData.descripcion_tecnica);
       formDataToSend.append('presupuesto', calcularPresupuestoFinal());
       
       // Agregar fecha propuesta si existe
-      // Fecha estimada de realización removed (no longer appended)
+      if (fechaPropuesta) {
+        const isoFecha = convertLocalToISO(fechaPropuesta);
+        if (isoFecha) formDataToSend.append('fecha_propuesta', isoFecha);
+      }
       
       // Agregar imágenes
       imagenesDiseno.forEach((imagen) => {
@@ -363,13 +445,35 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       
       if (modoEdicion) {
         // Actualizar diseño existente
+        // Si en edición se cambió la reserva seleccionada, enviar el nuevo reserva_id para que el backend actualice la asociacion
+        const selForUpdate = reserva || reservaBuscada || reservasConJardin.find(r => `${r.id_reserva}` === `${reservaSeleccionadaId}`);
+        if (selForUpdate?.id_reserva && (String(selForUpdate.id_reserva) !== String(disenoCompleto?.reserva_id || diseno?.reserva_id || ''))) {
+          formDataToSend.append('reserva_id', Number(selForUpdate.id_reserva));
+        }
+        // If title should reflect the reservation number when description is empty, recompute
+        let tituloEdicion = (formData.descripcion_tecnica || '').trim().substring(0,100);
+        if (!tituloEdicion) {
+          const possibleReservaId = selForUpdate?.id_reserva || reservaSeleccionadaId || disenoCompleto?.reserva_id || diseno?.reserva_id;
+          tituloEdicion = possibleReservaId ? `Diseño - Reserva #${possibleReservaId}` : `Diseño - Servicio #${servicioId || 'N/A'}`;
+          formDataToSend.set('titulo', tituloEdicion);
+        }
         response = await serviciosService.updateDiseno(diseno.id_diseno, formDataToSend);
         success('Diseño actualizado exitosamente');
       } else {
         // Crear nuevo diseño
-        const createReservaId = reservaId || reservaSeleccionadaId;
+        const createReservaId = reservaId || reservaSeleccionadaId || (reservaBuscada && reservaBuscada.id_reserva);
         if (!createReservaId) {
-          showError('Debe seleccionar una reserva que tenga información del jardín antes de crear el diseño');
+          showError('Debe seleccionar una reserva antes de crear el diseño');
+          return;
+        }
+        // If selected reservation doesn't have a garden, show error and optionally prompt to add jardn
+        const selForCreate = reserva || reservaBuscada || reservasConJardin.find(r => `${r.id_reserva}` === `${createReservaId}`);
+        if (!selForCreate?.jardin) {
+          showError('La reserva seleccionada no tiene información del jardín. Cargue información del jardín antes de crear el diseño.');
+          // Optionally open the garden modal automatically if handler exists
+          if (onCargarJardin && typeof onCargarJardin === 'function') {
+            onCargarJardin(selForCreate);
+          }
           return;
         }
         formDataToSend.append('reserva_id', createReservaId);
@@ -391,6 +495,11 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       setLoading(false);
     }
   };
+
+  // Computed title preview based on description or selected reservation
+  const selectedReservaForTitle = reserva || reservaBuscada || reservasConJardin.find(r => `${r.id_reserva}` === `${reservaSeleccionadaId}`);
+  const computedReservaId = selectedReservaForTitle?.id_reserva || reservaSeleccionadaId || reservaId;
+  const computedTitulo = (formData.descripcion_tecnica || '').trim().substring(0,100) || (computedReservaId ? `Diseño - Reserva #${computedReservaId}` : `Diseño - Servicio #${servicioId || 'N/A'}`);
 
   // Cleanup URLs when component unmounts
   useEffect(() => {
@@ -427,18 +536,69 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
           <div className="p-6 space-y-6">
             {/* If it's diseno mode but no reserva passed, let user choose a reserva (only those with jardin) */}
             {mode === 'diseno' && !reserva && (
+              <>
+                {isEmpleadoOrAdmin && (
+                  <div className="bg-gray-900 rounded-xl border border-gray-700 p-4 mb-3">
+                    <h3 className="text-white font-semibold mb-2">Buscar Reserva por ID</h3>
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Ingrese ID numérico de la reserva"
+                        value={searchReservaInput}
+                        onChange={(e) => setSearchReservaInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { handleSearchReserva(); } }}
+                        className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white w-full" />
+                      <button
+                        type="button"
+                        onClick={handleSearchReserva}
+                        disabled={searchReservaLoading}
+                        className="px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-60"
+                      >
+                        {searchReservaLoading ? 'Buscando...' : 'Buscar'}
+                      </button>
+                    </div>
+                    {searchReservaError && <p className="text-red-400 text-sm mt-2">{searchReservaError}</p>}
+                    {reservaBuscada && (
+                      <div className="mt-3 bg-gray-800 rounded p-3 border border-gray-700">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <div className="text-white font-bold">Reserva #{reservaBuscada.id_reserva}</div>
+                            <div className="text-gray-400 text-sm">Cliente: {reservaBuscada.cliente_nombre} {reservaBuscada.cliente_apellido}</div>
+                            <div className="text-gray-400 text-sm">Servicio: {reservaBuscada.servicio_nombre}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-xs text-gray-300">
+                              {reservaBuscada.jardin ? <span className="text-green-400">Jardín cargado</span> : <span className="text-orange-400">Sin jardín</span>}
+                            </div>
+                            {!reservaBuscada.jardin && onCargarJardin && (
+                              <button type="button" onClick={() => onCargarJardin(reservaBuscada)} className="px-2 py-1 bg-purple-600 rounded text-xs text-white hover:bg-purple-700">Cargar Información del Jardín</button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+            
               <div className="bg-gray-700 rounded-lg p-4">
                 <h3 className="text-white font-semibold mb-2">Seleccionar Reserva (con jardín)</h3>
-                <select value={reservaSeleccionadaId || ''} onChange={(e) => setReservaSeleccionadaId(e.target.value)} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm">
+                <select value={reservaSeleccionadaId || ''} onChange={(e) => { setReservaSeleccionadaId(e.target.value); setReservaBuscada(null); setSearchReservaInput(''); setSearchReservaError(''); }} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm">
                   <option value="">Seleccionar reserva...</option>
                   {reservasConJardin.map(r => (
                     <option key={r.id_reserva} value={r.id_reserva}>#{r.id_reserva} - {r.cliente_nombre} - {r.servicio_nombre}</option>
                   ))}
                 </select>
               </div>
+              </>
             )}
             
             
+            {/* Preview del Título (según descripción o reserva) */}
+            <div className="mb-2">
+              <p className="text-xs text-gray-400">Título: <span className="text-white font-semibold">{computedTitulo}</span></p>
+            </div>
+
             {/* Descripción Técnica (opcional, se puede agregar al final) */}
 
             {/* Fecha estimada removed by request */}
@@ -645,7 +805,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
             
             {/* Presupuestos y Fecha (solo en modo diseño) */}
             {mode !== 'jardin' && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Costo Mano de Obra
@@ -693,6 +853,18 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                     className="w-full pl-10 pr-3 py-2 bg-gray-700 border border-green-600 rounded-md text-green-400 font-bold cursor-not-allowed"
                   />
                 </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Fecha propuesta
+                </label>
+                <input
+                  type="datetime-local"
+                  name="fecha_propuesta"
+                  value={fechaPropuesta}
+                  onChange={(e) => setFechaPropuesta(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
               </div>
             </div>
             )}

@@ -570,6 +570,7 @@ const ServiciosPage = () => {
         onClose={handleCloseDisenoModal}
         onDisenoCreado={handleDisenoCreado}
         mode={modalMode}
+        onCargarJardin={handleCargarJardin}
       />
 
       <InformacionJardinModal
