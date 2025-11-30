@@ -1521,6 +1521,25 @@ class DisenoViewSet(viewsets.ModelViewSet):
         # Obtener feedback del cliente
         feedback = request.data.get('feedback', '')
         cancelar_servicio = request.data.get('cancelar_servicio', False)
+
+        # Si por alguna razón 'feedback' viene como objeto (por ejemplo {'feedback': 'texto', 'cancelar_servicio': False}),
+        # extraer el texto y/o el flag de cancelación.
+        try:
+            import json
+            if isinstance(feedback, (dict, list)):
+                # Si el feedback contiene la clave 'feedback', usar su valor; si no, convertir el dict a string
+                if isinstance(feedback, dict) and 'feedback' in feedback:
+                    feedback_text = feedback.get('feedback', '')
+                    feedback = feedback_text
+                else:
+                    feedback = json.dumps(feedback, ensure_ascii=False)
+
+            # Si no se recibió cancelar_servicio en el payload, intentar obtenerlo del nested feedback si existe
+            if not cancelar_servicio and isinstance(request.data.get('feedback', None), dict):
+                cancelar_servicio = request.data.get('feedback', {}).get('cancelar_servicio', False)
+        except Exception:
+            # No fallar si algo raro viene en el payload; dejar values por defecto
+            pass
         
         # Guardar feedback en observaciones_cliente
         if feedback:

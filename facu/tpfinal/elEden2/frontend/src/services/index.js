@@ -287,8 +287,10 @@ export const serviciosService = {
     return response.data;
   },
 
-  rechazarDisenoCliente: async (id, feedback) => {
-    const response = await api.post(`/servicios/disenos/${id}/rechazar_cliente/`, { feedback });
+  rechazarDisenoCliente: async (id, feedbackOrData) => {
+    // feedbackOrData may be either a string or an object with { feedback, cancelar_servicio }
+    const payload = typeof feedbackOrData === 'string' ? { feedback: feedbackOrData } : feedbackOrData || {};
+    const response = await api.post(`/servicios/disenos/${id}/rechazar_cliente/`, payload);
     return response.data;
   },
 

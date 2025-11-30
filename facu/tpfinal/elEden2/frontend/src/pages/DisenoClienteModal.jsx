@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Calendar, User, DollarSign, CheckCircle, XCircle, Clock, Package, Image as ImageIcon, AlertCircle } from 'lucide-react';
+import { X, Calendar, User, DollarSign, CheckCircle, XCircle, Clock, Package, Image as ImageIcon, AlertCircle, Palette, Edit3, Info } from 'lucide-react';
 import { serviciosService } from '../services';
 import { handleApiError, success } from '../utils/notifications';
+import { handlePagarFinal } from '../utils/pagoHelpers';
 
 const DisenoClienteModal = ({ isOpen, onClose, reservaId, onDisenoActualizado }) => {
   const [disenos, setDisenos] = useState([]);
@@ -11,9 +12,50 @@ const DisenoClienteModal = ({ isOpen, onClose, reservaId, onDisenoActualizado })
   const [showReagendamientoModal, setShowReagendamientoModal] = useState(false);
   const [reagendamientoData, setReagendamientoData] = useState(null);
   const [feedback, setFeedback] = useState('');
+  const [feedbackCategory, setFeedbackCategory] = useState('');
+  const [feedbackReason, setFeedbackReason] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [procesando, setProcesando] = useState(false);
   const [cancelarServicio, setCancelarServicio] = useState(false);
+
+  const FEEDBACK_OPTIONS = {
+    presupuesto: {
+      label: 'Presupuesto / Costos',
+      icon: DollarSign,
+      reasons: [
+        "El total supera mi presupuesto límite.",
+        "El costo de la mano de obra me parece elevado.",
+        "Los materiales/plantas son muy costosos.",
+        "Prefiero realizarlo en etapas para dividir el costo."
+      ]
+    },
+    diseno: {
+      label: 'Diseño / Estética',
+      icon: Palette,
+      reasons: [
+        "No me gusta el estilo propuesto (ej. muy moderno, muy rústico).",
+        "No me convencen las especies vegetales seleccionadas.",
+        "La distribución del espacio no es funcional para mi uso.",
+        "Falta privacidad / No cubre las vistas deseadas."
+      ]
+    },
+    tiempos: {
+      label: 'Tiempos / Planificación',
+      icon: Calendar,
+      reasons: [
+        "La fecha de inicio es muy tardía.",
+        "La duración de la obra es demasiado larga."
+      ]
+    },
+    mantenimiento: {
+      label: 'Mantenimiento / Funcionalidad',
+      icon: Package,
+      reasons: [
+        "Parece requerir demasiado cuidado/agua.",
+        "Me preocupan las plagas o la seguridad (espinas/alergias)."
+      ]
+    }
+  };
 
   const fetchDisenos = useCallback(async () => {
     try {
@@ -70,7 +112,11 @@ const DisenoClienteModal = ({ isOpen, onClose, reservaId, onDisenoActualizado })
         return;
       }
       
-      success('¡Diseño aceptado! El servicio comenzará pronto.');
+      success('¡Diseño aceptado! Redirigiendo al pago...');
+      
+      // Iniciar proceso de pago final
+      await handlePagarFinal(reservaId, setProcesando);
+      
       if (onDisenoActualizado) onDisenoActualizado();
       onClose();
     } catch (error) {
@@ -99,7 +145,11 @@ const DisenoClienteModal = ({ isOpen, onClose, reservaId, onDisenoActualizado })
         nueva_fecha: reagendamientoData.fecha_propuesta
       });
       
-      success('¡Diseño aceptado! El servicio se realizará en la nueva fecha.');
+      success('¡Diseño aceptado! Redirigiendo al pago...');
+      
+      // Iniciar proceso de pago final
+      await handlePagarFinal(reservaId, setProcesando);
+
       setShowReagendamientoModal(false);
       if (onDisenoActualizado) onDisenoActualizado();
       onClose();
@@ -121,31 +171,54 @@ const DisenoClienteModal = ({ isOpen, onClose, reservaId, onDisenoActualizado })
   };
 
   const handleEnviarRechazo = async () => {
-    if (!disenoActual || !feedback.trim()) {
-      handleApiError({ message: 'Por favor ingresa un motivo para el rechazo' });
-      return;
+    if (!disenoActual) return;
+
+    if (!cancelarServicio) {
+      if (!feedbackCategory || !feedbackReason) {
+        handleApiError({ message: 'Por favor selecciona una categoría y un motivo principal' });
+        return;
+      }
+    } else if (!feedback.trim()) {
+        handleApiError({ message: 'Por favor indica el motivo de la cancelación' });
+        return;
     }
 
     try {
       setProcesando(true);
+      
+      // Construir el mensaje de feedback estructurado
+      let motivoFinal = '';
+      
+      if (cancelarServicio) {
+        motivoFinal = `SERVICIO CANCELADO: ${feedback}`;
+      } else {
+        const categoriaLabel = FEEDBACK_OPTIONS[feedbackCategory]?.label || 'General';
+        motivoFinal = `SOLICITUD DE AJUSTES\n` +
+                     `Categoría: ${categoriaLabel}\n` +
+                     `Motivo: ${feedbackReason}\n` +
+                     `Detalles adicionales: ${feedback}`;
+      }
+
       await serviciosService.rechazarDisenoCliente(disenoActual.id_diseno, {
-        feedback: feedback,
+        feedback: motivoFinal,
         cancelar_servicio: cancelarServicio
       });
       
       if (cancelarServicio) {
         success('Diseño rechazado y servicio cancelado.');
       } else {
-        success('Diseño rechazado. El empleado recibirá tu feedback para crear un nuevo diseño.');
+        success('Solicitud de ajustes enviada. El paisajista revisará tus comentarios.');
       }
       
       setShowFeedbackModal(false);
       setFeedback('');
+      setFeedbackCategory('');
+      setFeedbackReason('');
       setCancelarServicio(false);
       if (onDisenoActualizado) onDisenoActualizado();
       onClose();
     } catch (error) {
-      handleApiError(error, 'Error al rechazar el diseño');
+      handleApiError(error, 'Error al enviar la respuesta');
     } finally {
       setProcesando(false);
     }
@@ -376,15 +449,15 @@ const DisenoClienteModal = ({ isOpen, onClose, reservaId, onDisenoActualizado })
                         className="flex-1 flex items-center justify-center px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
                       >
                         <CheckCircle className="w-5 h-5 mr-2" />
-                        {procesando ? 'Procesando...' : 'Aceptar Diseño'}
+                        {procesando ? 'Procesando...' : 'Aceptar y Pagar'}
                       </button>
                       <button
                         onClick={handleRechazar}
                         disabled={procesando}
-                        className="flex-1 flex items-center justify-center px-6 py-3 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                        className="flex-1 flex items-center justify-center px-6 py-3 bg-yellow-600 text-white font-semibold rounded-lg hover:bg-yellow-700 transition-colors disabled:opacity-50"
                       >
-                        <XCircle className="w-5 h-5 mr-2" />
-                        Rechazar Diseño
+                        <Edit3 className="w-5 h-5 mr-2" />
+                        Solicitar Ajustes
                       </button>
                     </div>
                   )}
@@ -436,58 +509,159 @@ const DisenoClienteModal = ({ isOpen, onClose, reservaId, onDisenoActualizado })
       {/* Modal de Feedback para rechazo */}
       {showFeedbackModal && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[60]">
-          <div className="bg-gray-800 rounded-lg max-w-md w-full p-6">
+          <div className="bg-gray-800 rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold text-white">
-                {cancelarServicio ? '¿Por qué cancelas el servicio?' : '¿Por qué rechazas este diseño?'}
+                {cancelarServicio ? '¿Por qué cancelas el servicio?' : 'Solicitar Ajustes a la Propuesta'}
               </h3>
               <button
                 onClick={() => {
                   setShowFeedbackModal(false);
                   setCancelarServicio(false);
+                  setFeedbackCategory('');
+                  setFeedbackReason('');
                 }}
                 className="text-gray-400 hover:text-white"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <p className="text-gray-400 mb-4">
-              {cancelarServicio 
-                ? 'Por favor cuéntanos el motivo de la cancelación.'
-                : 'Tu feedback ayudará al diseñador a crear una propuesta que se ajuste mejor a tus expectativas.'
-              }
-            </p>
-            <textarea
-              value={feedback}
-              onChange={(e) => setFeedback(e.target.value)}
-              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4"
-              rows="4"
-              placeholder={cancelarServicio 
-                ? "Ejemplo: No puedo aceptar el reagendamiento, la fecha no me sirve..."
-                : "Ejemplo: Me gustaría más plantas nativas, el presupuesto es muy alto, prefiero un estilo más moderno..."
-              }
-              required
-            />
-            {!cancelarServicio && (
-              <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-600/30 rounded-lg">
-                <p className="text-yellow-400 text-sm">
-                  El diseño será rechazado y el empleado creará una nueva propuesta basada en tu feedback.
+
+            {cancelarServicio ? (
+              <>
+                <p className="text-gray-400 mb-4">
+                  Por favor cuéntanos el motivo de la cancelación.
                 </p>
+                <textarea
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4"
+                  rows="4"
+                  placeholder="Ejemplo: No puedo aceptar el reagendamiento, la fecha no me sirve..."
+                  required
+                />
+                <div className="mb-4 p-3 bg-red-900/20 border border-red-600/30 rounded-lg">
+                  <p className="text-red-400 text-sm">
+                    <AlertCircle className="w-4 h-4 inline mr-1" />
+                    El servicio será cancelado completamente.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-6">
+                <p className="text-gray-300">
+                  Ayúdanos a mejorar la propuesta seleccionando qué aspecto te gustaría ajustar:
+                </p>
+
+                {/* Nivel 1: Categorías */}
+                <div className="grid grid-cols-2 gap-3">
+                  {Object.entries(FEEDBACK_OPTIONS).map(([key, option]) => {
+                    const Icon = option.icon;
+                    const isSelected = feedbackCategory === key;
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => {
+                          setFeedbackCategory(key);
+                          setFeedbackReason('');
+                        }}
+                        className={`p-4 rounded-lg border flex flex-col items-center justify-center gap-2 transition-all ${
+                          isSelected
+                            ? 'bg-emerald-600 border-emerald-500 text-white'
+                            : 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600'
+                        }`}
+                      >
+                        <Icon className="w-6 h-6" />
+                        <span className="font-medium text-sm">{option.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Nivel 2: Motivos específicos */}
+                {feedbackCategory && (
+                  <div className="animate-fadeIn">
+                    <h4 className="text-white font-medium mb-3">
+                      ¿Cuál es el detalle principal?
+                    </h4>
+                    <div className="space-y-2">
+                      {FEEDBACK_OPTIONS[feedbackCategory].reasons.map((reason) => (
+                        <button
+                          key={reason}
+                          onClick={() => setFeedbackReason(reason)}
+                          className={`w-full text-left p-3 rounded-lg border transition-all ${
+                            feedbackReason === reason
+                              ? 'bg-emerald-900/50 border-emerald-500 text-emerald-100'
+                              : 'bg-gray-700/50 border-gray-600 text-gray-300 hover:bg-gray-700'
+                          }`}
+                        >
+                          <div className="flex items-center">
+                            <div className={`w-4 h-4 rounded-full border mr-3 flex items-center justify-center ${
+                              feedbackReason === reason ? 'border-emerald-500 bg-emerald-500' : 'border-gray-500'
+                            }`}>
+                              {feedbackReason === reason && <CheckCircle className="w-3 h-3 text-white" />}
+                            </div>
+                            {reason}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Nivel 3: Detalles adicionales */}
+                {feedbackReason && (
+                  <div className="animate-fadeIn">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      ¿Algún otro detalle o comentario? (Opcional)
+                    </label>
+                    <textarea
+                      value={feedback}
+                      onChange={(e) => setFeedback(e.target.value)}
+                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      rows="3"
+                      placeholder="Escribe aquí cualquier detalle adicional..."
+                    />
+                  </div>
+                )}
+
+                <div className="p-3 bg-blue-900/20 border border-blue-600/30 rounded-lg">
+                  <p className="text-blue-300 text-sm flex items-start">
+                    <Info className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
+                    El paisajista recibirá esta información para ajustar la propuesta según tus preferencias.
+                  </p>
+                </div>
               </div>
             )}
-            {cancelarServicio && (
-              <div className="mb-4 p-3 bg-red-900/20 border border-red-600/30 rounded-lg">
-                <p className="text-red-400 text-sm">
-                  <AlertCircle className="w-4 h-4 inline mr-1" />
-                  El servicio será cancelado completamente.
-                </p>
+
+            {!cancelarServicio ? (
+              <div className="mt-4 flex justify-center">
+                <button
+                  onClick={() => setCancelarServicio(true)}
+                  className="text-red-400 text-sm hover:text-red-300 underline flex items-center"
+                >
+                  <XCircle className="w-4 h-4 mr-1" />
+                  Prefiero cancelar el servicio
+                </button>
+              </div>
+            ) : (
+              <div className="mt-4 flex justify-center">
+                <button
+                  onClick={() => setCancelarServicio(false)}
+                  className="text-gray-400 text-sm hover:text-white underline"
+                >
+                  Volver a solicitar ajustes
+                </button>
               </div>
             )}
-            <div className="flex gap-3">
+
+            <div className="flex gap-3 mt-6">
               <button
                 onClick={() => {
                   setShowFeedbackModal(false);
                   setCancelarServicio(false);
+                  setFeedbackCategory('');
+                  setFeedbackReason('');
                 }}
                 className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors"
               >
@@ -495,10 +669,19 @@ const DisenoClienteModal = ({ isOpen, onClose, reservaId, onDisenoActualizado })
               </button>
               <button
                 onClick={handleEnviarRechazo}
-                disabled={procesando || !feedback.trim()}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                disabled={procesando || (!cancelarServicio && (!feedbackCategory || !feedbackReason)) || (cancelarServicio && !feedback.trim())}
+                className={`flex-1 px-4 py-2 text-white rounded-lg transition-colors disabled:opacity-50 ${
+                    cancelarServicio 
+                    ? 'bg-red-600 hover:bg-red-700' 
+                    : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}
               >
-                {procesando ? 'Enviando...' : cancelarServicio ? 'Cancelar Servicio' : 'Enviar Rechazo'}
+                {procesando 
+                  ? 'Enviando...' 
+                  : cancelarServicio 
+                    ? 'Confirmar Cancelación' 
+                    : 'Enviar Solicitud de Ajustes'
+                }
               </button>
             </div>
           </div>
@@ -590,7 +773,7 @@ const DisenoClienteModal = ({ isOpen, onClose, reservaId, onDisenoActualizado })
                 disabled={procesando}
                 className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
               >
-                {procesando ? 'Procesando...' : 'Acepto Nueva Fecha'}
+                {procesando ? 'Procesando...' : 'Acepto y Pagar'}
               </button>
             </div>
           </div>
