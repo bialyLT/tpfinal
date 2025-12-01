@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { productosService, categoriasService, marcasService } from '../services';
 import ProductSelector from '../components/ProductSelector';
 import { handleApiError, success } from '../utils/notifications';
@@ -38,11 +38,7 @@ const ProductosPage = () => {
     imagen: null
   });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -67,7 +63,11 @@ const ProductosPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchTerm, selectedCategoria, priceRange, stockRange]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handleOpenModal = (producto = null) => {
     if (producto) {

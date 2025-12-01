@@ -11,7 +11,6 @@ import Pagination from '../components/Pagination';
 
 const ServiciosPage = () => {
   const navigate = useNavigate();
-  const [servicios, setServicios] = useState([]);
   const [solicitudes, setSolicitudes] = useState([]);
   const [disenos, setDisenos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,7 +20,6 @@ const ServiciosPage = () => {
   const [dateFilter, setDateFilter] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('');
   const [isDisenoModalOpen, setIsDisenoModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState('diseno');
   const [isJardinModalOpen, setIsJardinModalOpen] = useState(false);
   const [servicioParaJardin, setServicioParaJardin] = useState(null);
   const [isDisenoClienteModalOpen, setIsDisenoClienteModalOpen] = useState(false);
@@ -51,7 +49,6 @@ const ServiciosPage = () => {
     try {
       setLoading(true);
       const promises = [
-        serviciosService.getServicios(),
         serviciosService.getReservas({
           page: solicitudesPagination.currentPage,
           page_size: solicitudesPagination.pageSize,
@@ -71,9 +68,7 @@ const ServiciosPage = () => {
       }
 
       const results = await Promise.all(promises);
-      const [serviciosData, reservasData, disenosData] = results;
-
-      setServicios(serviciosData.results || serviciosData);
+      const [reservasData, disenosData] = results;
 
       // Actualizar solicitudes con datos de paginación
       if (reservasData.results) {
@@ -159,14 +154,6 @@ const ServiciosPage = () => {
     if (tipo === 'reserva') {
       navigate(`/servicios/reservas/${servicioId}`);
     }
-  };
-
-  const handleCrearDiseno = (reserva) => {
-    // Pasar la reserva completa al modal
-    setServicioParaDiseno(reserva);
-    // Open the design modal, but only if reservation has garden
-    setModalMode('diseno');
-    setIsDisenoModalOpen(true);
   };
 
   const handleCargarJardin = (reserva) => {
@@ -569,7 +556,7 @@ const ServiciosPage = () => {
         isOpen={isDisenoModalOpen}
         onClose={handleCloseDisenoModal}
         onDisenoCreado={handleDisenoCreado}
-        mode={modalMode}
+        mode="diseno"
         onCargarJardin={handleCargarJardin}
       />
 

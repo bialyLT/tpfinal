@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { success, error } from '../utils/notifications';
 import api from '../services/api';
+import { addressService } from '../services';
 import { User, Mail, Phone, MapPin, Edit, Save, Shield, FileText, IdCard } from 'lucide-react';
 
 const MiPerfil = () => {
@@ -13,6 +14,11 @@ const MiPerfil = () => {
     tipos_documento: [],
     localidades: []
   });
+  const [addressSearch, setAddressSearch] = useState('');
+  const [addressInfo, setAddressInfo] = useState(null);
+  const [addressError, setAddressError] = useState('');
+  const [isAddressLoading, setIsAddressLoading] = useState(false);
+  const [showManualLocalidad, setShowManualLocalidad] = useState(false);
   
   const [profileData, setProfileData] = useState({
     first_name: '',
@@ -28,6 +34,13 @@ const MiPerfil = () => {
     dpto: '',
     localidad_id: ''
   });
+  const selectedLocalidad = referenceData.localidades.find(
+    (loc) => String(loc.id) === String(profileData.localidad_id)
+  );
+  const ciudadDisplay = addressInfo?.ciudad || selectedLocalidad?.nombre || user?.persona?.localidad?.nombre || '';
+  const provinciaDisplay = addressInfo?.provincia || selectedLocalidad?.provincia || user?.persona?.localidad?.provincia || '';
+  const paisDisplay = addressInfo?.pais || selectedLocalidad?.pais || user?.persona?.localidad?.pais || '';
+  const cpDisplay = addressInfo?.codigo_postal || selectedLocalidad?.cp || user?.persona?.localidad?.cp || '';
 
   useEffect(() => {
     const fetchReferenceData = async () => {
@@ -59,6 +72,8 @@ const MiPerfil = () => {
         dpto: user.persona.dpto || '',
         localidad_id: user.persona.localidad?.id || ''
       });
+      setAddressSearch(user.cliente?.direccion_completa || '');
+      setAddressInfo(null);
     } else {
       console.log('❌ No se encontró persona en el usuario');
     }
@@ -71,9 +86,41 @@ const MiPerfil = () => {
     });
   };
 
+  const handleAddressLookup = async () => {
+    if (!addressSearch.trim()) {
+      setAddressError('Ingresa una dirección completa para buscar');
+      return;
+    }
+
+    setIsAddressLoading(true);
+    setAddressError('');
+    try {
+      const data = await addressService.lookup(addressSearch.trim());
+      setAddressInfo(data);
+      setShowManualLocalidad(false);
+      setProfileData((prev) => ({
+        ...prev,
+        calle: data.calle || prev.calle,
+        numero: data.numero || prev.numero,
+        localidad_id: data.localidad_id ? String(data.localidad_id) : prev.localidad_id,
+      }));
+    } catch (err) {
+      console.error('Error al buscar dirección', err);
+      setAddressInfo(null);
+      setAddressError(err.response?.data?.error || 'No pudimos validar la dirección.');
+    } finally {
+      setIsAddressLoading(false);
+    }
+  };
+
   const handleSave = async () => {
     setLoading(true);
     try {
+      if (!profileData.localidad_id) {
+        error('Selecciona o busca tu localidad antes de guardar.');
+        setLoading(false);
+        return;
+      }
       const updateData = {
         first_name: profileData.first_name,
         last_name: profileData.last_name,
@@ -365,8 +412,34 @@ const MiPerfil = () => {
                 <MapPin className="w-5 h-5 mr-2 text-emerald-400" />
                 Dirección
               </h3>
+              {isEditing && (
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Buscar dirección</label>
+                  <div className="flex flex-col md:flex-row gap-3">
+                    <input
+                      type="text"
+                      value={addressSearch}
+                      onChange={(e) => setAddressSearch(e.target.value)}
+                      className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
+                      placeholder="Ej: Av. Siempre Viva 742, Buenos Aires"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddressLookup}
+                      disabled={isAddressLoading}
+                      className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                    >
+                      {isAddressLoading ? 'Buscando...' : 'Buscar'}
+                    </button>
+                  </div>
+                  {addressError && <p className="text-sm text-red-400 mt-2">{addressError}</p>}
+                  {addressInfo?.direccion_formateada && (
+                    <p className="text-sm text-emerald-400 mt-2">Dirección detectada: {addressInfo.direccion_formateada}</p>
+                  )}
+                </div>
+              )}
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-300 mb-2">Calle</label>
                   {isEditing ? (
@@ -381,7 +454,6 @@ const MiPerfil = () => {
                     <p className="text-white px-3 py-2">{user?.persona?.calle || '-'}</p>
                   )}
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Número</label>
                   {isEditing ? (
@@ -396,7 +468,6 @@ const MiPerfil = () => {
                     <p className="text-white px-3 py-2">{user?.persona?.numero || '-'}</p>
                   )}
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Piso</label>
                   {isEditing ? (
@@ -411,7 +482,6 @@ const MiPerfil = () => {
                     <p className="text-white px-3 py-2">{user?.persona?.piso || '-'}</p>
                   )}
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Departamento</label>
                   {isEditing ? (
@@ -426,26 +496,60 @@ const MiPerfil = () => {
                     <p className="text-white px-3 py-2">{user?.persona?.dpto || '-'}</p>
                   )}
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Localidad</label>
-                  {isEditing ? (
-                    <select
-                      name="localidad_id"
-                      value={profileData.localidad_id}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
-                    >
-                      <option value="">Selecciona...</option>
-                      {referenceData.localidades.map(localidad => (
-                        <option key={localidad.id} value={localidad.id}>{localidad.nombre}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <p className="text-white px-3 py-2">{user?.persona?.localidad?.nombre || '-'}</p>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
+                {['Ciudad', 'Provincia', 'País', 'Código Postal'].map((label, idx) => {
+                  const valueMap = [ciudadDisplay, provinciaDisplay, paisDisplay, cpDisplay];
+                  return (
+                    <div key={label}>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">{label}</label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={valueMap[idx]}
+                          readOnly
+                          className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white"
+                        />
+                      ) : (
+                        <p className="text-white px-3 py-2">{valueMap[idx] || '-'}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {isEditing && (
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowManualLocalidad(!showManualLocalidad)}
+                    className="text-sm text-emerald-400 hover:text-emerald-300 underline"
+                  >
+                    {showManualLocalidad ? 'Ocultar selección manual' : 'Seleccionar localidad manualmente'}
+                  </button>
+                  {showManualLocalidad && (
+                    <div className="mt-3">
+                      <select
+                        name="localidad_id"
+                        value={profileData.localidad_id}
+                        onChange={handleChange}
+                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
+                      >
+                        <option value="">Selecciona...</option>
+                        {referenceData.localidades.map((localidad) => (
+                          <option key={localidad.id} value={localidad.id}>
+                            {localidad.nombre}, {localidad.provincia} ({localidad.pais})
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Usa esta opción solo si tu dirección no se detecta correctamente.
+                      </p>
+                    </div>
                   )}
                 </div>
-              </div>
+              )}
 
               {!isEditing && user?.cliente?.direccion_completa && (
                 <div className="mt-4 p-3 bg-gray-700 rounded-lg">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { success, handleApiError } from '../utils/notifications';
 import {
   Plus, Edit, Trash2, Search, ShoppingCart, X, Calendar,
@@ -38,11 +38,7 @@ const ComprasPage = () => {
     precio_unitario: 0
   });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -67,7 +63,11 @@ const ComprasPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchTerm, dateRange, totalRange]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handleOpenModal = (compra = null) => {
     if (compra) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import flatpickr from 'flatpickr';
 // No localization imports for now
 import { X, Upload, Plus, Trash2, Palette, DollarSign, Calendar, Image as ImageIcon, Package, Search } from 'lucide-react';
@@ -6,6 +6,8 @@ import { serviciosService, productosService } from '../services';
 import { useAuth } from '../context/AuthContext';
 import ProductSelector from '../components/ProductSelector';
 import { success, error as showError } from '../utils/notifications';
+
+const isSameDateTime = (a, b) => Boolean(a && b && a.getTime() === b.getTime());
 
 const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDisenoCreado, mode = 'diseno', onCargarJardin }) => {
   const [loading, setLoading] = useState(false);
@@ -52,6 +54,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
     try {
       return dateObj.toISOString();
     } catch (err) {
+      console.warn('No se pudo convertir la fecha local a ISO', err);
       return null;
     }
   };
@@ -62,8 +65,6 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
     presupuesto: '',
     presupuesto_final: ''
   });
-  // Formas Terreno may still be used in other contexts
-  const [formasTerreno, setFormasTerreno] = useState([]);
   
   const [imagenesDiseno, setImagenesDiseno] = useState([]);
   const [imagenesExistentes, setImagenesExistentes] = useState([]); // Imágenes ya guardadas del diseño
@@ -75,6 +76,21 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
   const [searchReservaLoading, setSearchReservaLoading] = useState(false);
   const [searchReservaError, setSearchReservaError] = useState('');
   const [reservaBuscada, setReservaBuscada] = useState(null);
+
+  const getStockForProduct = useCallback((productId) => {
+    if (!productId && productId !== 0) return 0;
+    const id = parseInt(productId, 10);
+    if (Number.isNaN(id)) return 0;
+    const prod = productos.find(p => p.id_producto === id);
+    if (!prod) return 0;
+    if (typeof prod.stock_actual !== 'undefined' && prod.stock_actual !== null) {
+      return parseInt(prod.stock_actual, 10) || 0;
+    }
+    if (prod.stock && typeof prod.stock.cantidad !== 'undefined' && prod.stock.cantidad !== null) {
+      return parseInt(prod.stock.cantidad, 10) || 0;
+    }
+    return 0;
+  }, [productos]);
 
   const cargarDisenoParaEditar = useCallback(async () => {
     if (!diseno?.id_diseno) return;
@@ -161,12 +177,11 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       console.error('❌ Error completo:', error);
       console.error('❌ Response:', error.response);
     }
-  }, [diseno]);
+  }, [diseno, getStockForProduct]);
 
   useEffect(() => {
     if (isOpen) {
       fetchProductos();
-      fetchFormasTerreno();
       if (modoEdicion && diseno) {
         cargarDisenoParaEditar();
       } else {
@@ -190,7 +205,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       const now = new Date();
       const tzOffset = now.getTimezoneOffset() * 60000;
       const localNow = new Date(now.getTime() - tzOffset);
-      setMinFechaLocal(new Date());
+      setMinFechaLocal(localNow);
 
       // Fetch blocked dates for the next 60 days
       (async () => {
@@ -210,22 +225,24 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
         setReservaSeleccionadaId(String(reserva.id_reserva || reserva.id));
         // preselect date/time if reserva prop has fecha_reserva
         if (reserva.fecha_reserva) {
-          try {
-            const d = new Date(reserva.fecha_reserva);
+          const d = new Date(reserva.fecha_reserva);
+          if (!Number.isNaN(d.getTime())) {
             setFechaPropuesta(d);
             setFechaPropuestaDatePart(new Date(d.getFullYear(), d.getMonth(), d.getDate()));
             setFechaPropuestaTimePart(`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`);
-          } catch (_) {}
+          } else {
+            console.warn('La fecha de la reserva no es válida y no se aplicó preselección');
+          }
         }
       }
     }
-  }, [isOpen, modoEdicion, diseno, cargarDisenoParaEditar]);
+  }, [isOpen, modoEdicion, diseno, cargarDisenoParaEditar, mode, reserva]);
 
   // Initialize flatpickr on our input (DATE ONLY)
   useEffect(() => {
     if (!fpRef.current) return;
     if (fpInstanceRef.current) {
-      try { fpInstanceRef.current.destroy(); } catch(e) {}
+      fpInstanceRef.current.destroy();
       fpInstanceRef.current = null;
     }
 
@@ -256,29 +273,30 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       }
     };
     
-    options.onDayCreate = (dObj, dStr, fp, dayElem) => {
-      try {
-        const dayISO = dayElem.dateObj.toISOString().split('T')[0];
-        if (disabledDatesArr && disabledDatesArr.includes(dayISO)) {
-          dayElem.classList.add('blocked');
-        }
-      } catch (err) {}
+    options.onDayCreate = (...args) => {
+      const dayElem = args[3];
+      const dayObj = dayElem?.dateObj;
+      if (!dayObj) return;
+      const dayISO = dayObj.toISOString().split('T')[0];
+      if (disabledDatesArr?.includes(dayISO)) {
+        dayElem.classList.add('blocked');
+      }
     };
 
     fpInstanceRef.current = flatpickr(fpRef.current, options);
     return () => {
       if (fpInstanceRef.current) {
-        try { fpInstanceRef.current.destroy(); } catch(e) {}
+        fpInstanceRef.current.destroy();
         fpInstanceRef.current = null;
       }
     };
-  }, [fpRef, minFechaLocal, fechasBloqueadas, fechaPropuestaDatePart]);
+  }, [fpRef, minFechaLocal, fechasBloqueadas, fechaPropuestaDatePart, fechaPropuestaTimePart, originalFechaPropuesta]);
 
   // Initialize flatpickr for TIME ONLY
   useEffect(() => {
     if (!fpTimeRef.current) return;
     if (fpTimeInstanceRef.current) {
-      try { fpTimeInstanceRef.current.destroy(); } catch(e) {}
+      fpTimeInstanceRef.current.destroy();
       fpTimeInstanceRef.current = null;
     }
 
@@ -307,7 +325,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
     fpTimeInstanceRef.current = flatpickr(fpTimeRef.current, options);
     return () => {
       if (fpTimeInstanceRef.current) {
-        try { fpTimeInstanceRef.current.destroy(); } catch(e) {}
+        fpTimeInstanceRef.current.destroy();
         fpTimeInstanceRef.current = null;
       }
     };
@@ -335,57 +353,12 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       return;
     }
     const selDay = selectedDate.toISOString().split('T')[0];
-    if (fechasBloqueadas.includes(selDay)) {
+    if (fechasBloqueadas.includes(selDay) && !isSameDateTime(selectedDate, originalFechaPropuesta)) {
       setFechaError('La fecha seleccionada no está disponible: todos los empleados están ocupados ese día.');
       return;
     }
     setFechaError('');
-  }, [fechaPropuesta, fechasBloqueadas]);
-
-  // Build blocked dates as Date objects for DatePicker
-  const disabledDateObjects = useMemo(() => {
-    try {
-      const bs = (fechasBloqueadas || []).map(dstr => {
-        const parts = dstr.split('-').map(Number);
-        if (parts.length !== 3) return null;
-        const [y, m, d] = parts;
-        return new Date(y, m - 1, d);
-      }).filter(Boolean);
-      // If editing, and the original fechaPropuesta exists, allow keeping that exact day
-      if (originalFechaPropuesta) {
-        const originalDay = new Date(originalFechaPropuesta.getFullYear(), originalFechaPropuesta.getMonth(), originalFechaPropuesta.getDate());
-        return bs.filter(bd => !isSameDay(bd, originalDay));
-      }
-      return bs;
-      } catch (err) {
-        return [];
-      }
-  }, [fechasBloqueadas, originalFechaPropuesta]);
-
-  const isSameDay = (d1, d2) => (
-    d1.getFullYear() === d2.getFullYear() &&
-    d1.getMonth() === d2.getMonth() &&
-    d1.getDate() === d2.getDate()
-  );
-
-  const isSameDateTime = (a, b) => a && b && a.getTime() === b.getTime();
-
-  const getMinTimeForDate = (date) => {
-    if (!date) return new Date();
-    const now = new Date();
-    if (isSameDay(date, now)) return roundUpToInterval(now, 15);
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 8, 0);
-  };
-
-  const roundUpToInterval = (date, interval = 15) => {
-    const ms = 1000 * 60 * interval;
-    return new Date(Math.ceil(date.getTime() / ms) * ms);
-  };
-
-  const getMaxTimeForDate = (date) => {
-    if (!date) return new Date();
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 20, 0);
-  };
+  }, [fechaPropuesta, fechasBloqueadas, originalFechaPropuesta]);
 
   
 
@@ -397,31 +370,6 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       showError('Error al cargar productos');
       console.error(error);
     }
-  };
-
-  const fetchFormasTerreno = async () => {
-    try {
-      const data = await serviciosService.getFormasTerreno();
-      setFormasTerreno(Array.isArray(data) ? data : data.results || []);
-    } catch (error) {
-      console.error('Error al cargar formas de terreno', error);
-    }
-  };
-
-  // Helper para obtener stock numérico de un producto (prefiere stock_actual). Devuelve 0 si no existe.
-  const getStockForProduct = (productId) => {
-    if (!productId && productId !== 0) return 0;
-    const id = parseInt(productId, 10);
-    if (Number.isNaN(id)) return 0;
-    const prod = productos.find(p => p.id_producto === id);
-    if (!prod) return 0;
-    if (typeof prod.stock_actual !== 'undefined' && prod.stock_actual !== null) {
-      return parseInt(prod.stock_actual, 10) || 0;
-    }
-    if (prod.stock && typeof prod.stock.cantidad !== 'undefined' && prod.stock.cantidad !== null) {
-      return parseInt(prod.stock.cantidad, 10) || 0;
-    }
-    return 0;
   };
 
   const getProductImage = (productId) => {

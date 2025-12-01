@@ -43,6 +43,13 @@ export const authService = {
   }
 };
 
+export const  addressService = {
+  lookup: async (addressText) => {
+    const response = await api.post('/users/address/lookup/', { address: addressText });
+    return response.data;
+  },
+};
+
 // Productos Services
 export const productosService = {
   getAll: async (params = {}) => {

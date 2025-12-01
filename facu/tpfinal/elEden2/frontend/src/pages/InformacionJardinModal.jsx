@@ -42,7 +42,7 @@ const InformacionJardinModal = ({ reserva, isOpen, onClose, onJardinSaved }) => 
           setDescripcion('');
         }
       }).catch(err => {
-        // If none, default to a single zone
+        console.warn('No se encontró información de jardín existente', err);
         setZonas([{ nombre: '', ancho: '', largo: '', forma: '' }]);
         setDescripcion('');
       });

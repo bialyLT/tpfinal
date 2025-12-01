@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import flatpickr from 'flatpickr';
-import { serviciosService } from '../services';
+import api from '../services/api';
+import { addressService, serviciosService } from '../services';
 import { success, error, handleApiError } from '../utils/notifications';
 import { useAuth } from '../context/AuthContext';
 import { handlePagarSena } from '../utils/pagoHelpers';
@@ -45,6 +46,7 @@ const SolicitarServicioPage = () => {
     fecha_preferida: '',
     hora_preferida: '',
     direccion_servicio: '',
+    localidad_id: '',
     notas_adicionales: '',
     imagenes_jardin: [],
     imagenes_ideas: [],
@@ -55,6 +57,29 @@ const SolicitarServicioPage = () => {
     nivel_intervencion: '',
     presupuesto_aproximado: ''
   });
+  const [referenceData, setReferenceData] = useState({ localidades: [] });
+  const [addressSearch, setAddressSearch] = useState('');
+  const [addressInfo, setAddressInfo] = useState(null);
+  const [addressError, setAddressError] = useState('');
+  const [isAddressLoading, setIsAddressLoading] = useState(false);
+  const [showManualLocalidad, setShowManualLocalidad] = useState(false);
+
+  const selectedLocalidad = referenceData.localidades.find(
+    (loc) => String(loc.id) === String(formData.localidad_id)
+  );
+  const userLocalidad = user?.persona?.localidad;
+  const ciudadDisplay = addressInfo?.ciudad || selectedLocalidad?.nombre || userLocalidad?.nombre || '';
+  const provinciaDisplay = addressInfo?.provincia || selectedLocalidad?.provincia || userLocalidad?.provincia || '';
+  const paisDisplay = addressInfo?.pais || selectedLocalidad?.pais || userLocalidad?.pais || '';
+  const cpDisplay = addressInfo?.codigo_postal || selectedLocalidad?.cp || userLocalidad?.cp || '';
+  const hasAddressDetails = Boolean(ciudadDisplay || provinciaDisplay || paisDisplay || cpDisplay);
+  const locationDetailsList = [
+    ciudadDisplay && `Ciudad: ${ciudadDisplay}`,
+    provinciaDisplay && `Provincia: ${provinciaDisplay}`,
+    paisDisplay && `País: ${paisDisplay}`,
+    cpDisplay && `CP: ${cpDisplay}`,
+  ].filter(Boolean);
+  const locationSummaryText = locationDetailsList.join(' • ');
 
   const steps = [
     { id: 1, title: 'Tipo de Servicio', icon: Settings },
@@ -104,11 +129,13 @@ const SolicitarServicioPage = () => {
 
     fetchServicios();
 
-    if (user?.cliente?.direccion_completa) {
+    if (user) {
       setFormData(prev => ({
         ...prev,
-        direccion_servicio: user.cliente.direccion_completa
+        direccion_servicio: prev.direccion_servicio || user.cliente?.direccion_completa || '',
+        localidad_id: prev.localidad_id || (user.persona?.localidad?.id ? String(user.persona.localidad.id) : '')
       }));
+      setAddressSearch(prev => prev || user.cliente?.direccion_completa || '');
     }
   }, [user]);
 
@@ -128,6 +155,19 @@ const SolicitarServicioPage = () => {
     fetchFechasBloqueadas();
   }, []);
 
+  useEffect(() => {
+    const fetchReferenceData = async () => {
+      try {
+        const response = await api.get('/reference-data/');
+        setReferenceData(response.data);
+      } catch (err) {
+        console.error('Error al cargar localidades:', err);
+      }
+    };
+
+    fetchReferenceData();
+  }, []);
+
   // Initialize flatpickr
   useEffect(() => {
     // Only initialize if we are on step 3 (Cita de Revisión)
@@ -136,7 +176,7 @@ const SolicitarServicioPage = () => {
     // Date Picker
     if (fpRef.current) {
       if (fpInstanceRef.current) {
-        try { fpInstanceRef.current.destroy(); } catch(e) {}
+        fpInstanceRef.current.destroy();
         fpInstanceRef.current = null;
       }
 
@@ -151,13 +191,14 @@ const SolicitarServicioPage = () => {
         }
       };
       
-      options.onDayCreate = (dObj, dStr, fp, dayElem) => {
-        try {
-          const dayISO = dayElem.dateObj.toISOString().split('T')[0];
-          if (fechasBloqueadas && fechasBloqueadas.includes(dayISO)) {
-            dayElem.classList.add('blocked');
-          }
-        } catch (err) {}
+      options.onDayCreate = (...args) => {
+        const dayElem = args[3];
+        const dayObj = dayElem?.dateObj;
+        if (!dayObj) return;
+        const dayISO = dayObj.toISOString().split('T')[0];
+        if (fechasBloqueadas?.includes(dayISO)) {
+          dayElem.classList.add('blocked');
+        }
       };
 
       fpInstanceRef.current = flatpickr(fpRef.current, options);
@@ -166,7 +207,7 @@ const SolicitarServicioPage = () => {
     // Time Picker
     if (fpTimeRef.current) {
       if (fpTimeInstanceRef.current) {
-        try { fpTimeInstanceRef.current.destroy(); } catch(e) {}
+        fpTimeInstanceRef.current.destroy();
         fpTimeInstanceRef.current = null;
       }
 
@@ -189,11 +230,11 @@ const SolicitarServicioPage = () => {
 
     return () => {
       if (fpInstanceRef.current) {
-        try { fpInstanceRef.current.destroy(); } catch(e) {}
+        fpInstanceRef.current.destroy();
         fpInstanceRef.current = null;
       }
       if (fpTimeInstanceRef.current) {
-        try { fpTimeInstanceRef.current.destroy(); } catch(e) {}
+        fpTimeInstanceRef.current.destroy();
         fpTimeInstanceRef.current = null;
       }
     };
@@ -222,10 +263,41 @@ const SolicitarServicioPage = () => {
       }
     }
 
+    if (name === 'direccion_servicio') {
+      setAddressSearch(value);
+    }
+
     setFormData({
       ...formData,
       [name]: value
     });
+  };
+
+  const handleAddressLookup = async () => {
+    if (!addressSearch.trim()) {
+      setAddressError('Ingresa una dirección completa para buscar');
+      return;
+    }
+
+    setIsAddressLoading(true);
+    setAddressError('');
+    try {
+      const data = await addressService.lookup(addressSearch.trim());
+      setAddressInfo(data);
+      setShowManualLocalidad(false);
+      setAddressSearch(data.direccion_formateada || addressSearch.trim());
+      setFormData(prev => ({
+        ...prev,
+        direccion_servicio: data.direccion_formateada || prev.direccion_servicio || addressSearch.trim(),
+        localidad_id: data.localidad_id ? String(data.localidad_id) : prev.localidad_id,
+      }));
+    } catch (err) {
+      console.error('Error al buscar dirección', err);
+      setAddressInfo(null);
+      setAddressError(err.response?.data?.error || 'No pudimos validar la dirección, intenta nuevamente.');
+    } finally {
+      setIsAddressLoading(false);
+    }
   };
 
   const handleImageUpload = (e, tipo) => {
@@ -380,6 +452,10 @@ const SolicitarServicioPage = () => {
           error('Por favor ingresa la dirección del servicio');
           return false;
         }
+        if (!formData.localidad_id) {
+          error('Busca tu dirección o selecciona una localidad para continuar');
+          return false;
+        }
         break;
       default:
         return true;
@@ -424,6 +500,17 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
           formDataToSend.append('tipo_servicio_solicitado', 'consulta_express');
         }
         // Para mantenimiento no enviamos tipo_servicio_solicitado específico (o podríamos agregar uno 'mantenimiento' si el backend lo soporta, pero por ahora null o default)
+      }
+
+      const ubicacionExtra = [
+        locationSummaryText && `Ubicación detectada: ${locationSummaryText}`,
+        formData.localidad_id && `Localidad asociada (ID): ${formData.localidad_id}`,
+      ].filter(Boolean).join('\n');
+
+      if (ubicacionExtra) {
+        observacionesCompletas = observacionesCompletas
+          ? `${observacionesCompletas}\n\n${ubicacionExtra}`
+          : ubicacionExtra;
       }
 
       formDataToSend.append('observaciones', observacionesCompletas);
@@ -745,22 +832,137 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
                 )}
 
                 {/* Dirección */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    <MapPin className="w-4 h-4 inline mr-2" />
-                    Dirección del servicio
-                  </label>
-                  <input
-                    type="text"
-                    name="direccion_servicio"
-                    value={formData.direccion_servicio}
-                    onChange={handleChange}
-                    placeholder="Calle, número, ciudad..."
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                  />
-                  <p className="text-xs text-gray-400 mt-2">
-                    Se ha cargado tu dirección registrada por defecto. Puedes modificarla si el servicio será en otra ubicación.
-                  </p>
+                <div className="space-y-4 p-4 bg-gray-800/40 border border-gray-700 rounded-lg">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      <MapPin className="w-4 h-4 inline mr-2" />
+                      Dirección del servicio *
+                    </label>
+                    <p className="text-xs text-gray-400">
+                      Busca la dirección completa donde se realizará el servicio
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-3 mt-2">
+                      <input
+                        type="text"
+                        value={addressSearch}
+                        onChange={(e) => setAddressSearch(e.target.value)}
+                        placeholder="Ej: Av. Siempre Viva 742, Buenos Aires"
+                        className="flex-1 px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddressLookup}
+                        disabled={isAddressLoading}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                      >
+                        {isAddressLoading ? 'Buscando...' : 'Buscar dirección'}
+                      </button>
+                    </div>
+                    {addressError && <p className="text-sm text-red-400 mt-2">{addressError}</p>}
+                    {addressInfo?.direccion_formateada && (
+                      <p className="text-sm text-emerald-400 mt-2">
+                        Dirección sugerida: {addressInfo.direccion_formateada}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Dirección confirmada para la visita *
+                    </label>
+                    <input
+                      type="text"
+                      name="direccion_servicio"
+                      value={formData.direccion_servicio}
+                      onChange={handleChange}
+                      placeholder="Confirma o ajusta la dirección detectada"
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      Se precarga tu domicilio registrado, pero puedes indicar una ubicación distinta para esta solicitud.
+                    </p>
+                  </div>
+
+                  {!isDisenoCompleto() && (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <div>
+                          <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Ciudad</label>
+                          <input
+                            type="text"
+                            value={ciudadDisplay}
+                            readOnly
+                            placeholder="-"
+                            className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Provincia</label>
+                          <input
+                            type="text"
+                            value={provinciaDisplay}
+                            readOnly
+                            placeholder="-"
+                            className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">País</label>
+                          <input
+                            type="text"
+                            value={paisDisplay}
+                            readOnly
+                            placeholder="-"
+                            className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Código Postal</label>
+                          <input
+                            type="text"
+                            value={cpDisplay}
+                            readOnly
+                            placeholder="-"
+                            className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => setShowManualLocalidad(!showManualLocalidad)}
+                          className="text-sm text-emerald-400 hover:text-emerald-300 underline"
+                        >
+                          {showManualLocalidad ? 'Ocultar selección manual de localidad' : 'Seleccionar localidad manualmente'}
+                        </button>
+                        {showManualLocalidad && (
+                          referenceData.localidades.length > 0 ? (
+                            <select
+                              name="localidad_id"
+                              value={formData.localidad_id}
+                              onChange={handleChange}
+                              className="mt-2 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                            >
+                              <option value="">Selecciona una localidad...</option>
+                              {referenceData.localidades.map((loc) => (
+                                <option key={loc.id} value={loc.id}>
+                                  {loc.nombre} - {loc.provincia} ({loc.pais})
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <p className="mt-2 text-sm text-gray-400">Cargando listado de localidades...</p>
+                          )
+                        )}
+                        {!showManualLocalidad && !formData.localidad_id && (
+                          <p className="text-xs text-yellow-400 mt-2">
+                            Si la búsqueda no detecta tu localidad, selecciónala manualmente para continuar.
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Sección de imágenes */}
@@ -1004,6 +1206,9 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
                   <div>
                     <span className="text-gray-300">Dirección: </span>
                     <span className="text-white">{formData.direccion_servicio}</span>
+                    {locationSummaryText && (
+                      <p className="text-sm text-gray-400">{locationSummaryText}</p>
+                    )}
                   </div>
                 </div>
 

@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { error } from '../../utils/notifications';
 import { Leaf, ArrowLeft } from 'lucide-react';
 import api from '../../services/api';
+import { addressService } from '../../services';
 import GoogleLoginButton from '../../components/GoogleLoginButton';
 
 const RegisterPage = () => {
@@ -28,10 +29,22 @@ const RegisterPage = () => {
   const [referenceData, setReferenceData] = useState({
     localidades: []
   });
+  const [addressSearch, setAddressSearch] = useState('');
+  const [addressInfo, setAddressInfo] = useState(null);
+  const [addressError, setAddressError] = useState('');
+  const [isAddressLoading, setIsAddressLoading] = useState(false);
+  const [showManualLocalidad, setShowManualLocalidad] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
+  const selectedLocalidad = referenceData.localidades.find(
+    (loc) => String(loc.id) === String(formData.localidad_id)
+  );
+  const ciudadDisplay = addressInfo?.ciudad || selectedLocalidad?.nombre || '';
+  const provinciaDisplay = addressInfo?.provincia || selectedLocalidad?.provincia || '';
+  const paisDisplay = addressInfo?.pais || selectedLocalidad?.pais || '';
+  const cpDisplay = addressInfo?.codigo_postal || selectedLocalidad?.cp || '';
 
   // Cargar datos de referencia
   useEffect(() => {
@@ -54,6 +67,33 @@ const RegisterPage = () => {
     });
   };
 
+  const handleAddressLookup = async () => {
+    if (!addressSearch.trim()) {
+      setAddressError('Ingresa una dirección completa para buscar');
+      return;
+    }
+
+    setIsAddressLoading(true);
+    setAddressError('');
+    try {
+      const data = await addressService.lookup(addressSearch.trim());
+      setAddressInfo(data);
+      setShowManualLocalidad(false);
+      setFormData((prev) => ({
+        ...prev,
+        calle: data.calle || prev.calle,
+        numero: data.numero || prev.numero,
+        localidad_id: data.localidad_id ? String(data.localidad_id) : prev.localidad_id,
+      }));
+    } catch (err) {
+      console.error('Error al buscar dirección', err);
+      setAddressInfo(null);
+      setAddressError(err.response?.data?.error || 'No pudimos validar la dirección, intenta nuevamente.');
+    } finally {
+      setIsAddressLoading(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -63,6 +103,10 @@ const RegisterPage = () => {
     }
     if (formData.password.length < 8) {
       error('La contraseña debe tener al menos 8 caracteres');
+      return;
+    }
+    if (!formData.localidad_id) {
+      error('Busca tu dirección o selecciona una localidad para continuar');
       return;
     }
 
@@ -207,7 +251,37 @@ const RegisterPage = () => {
             {/* SECCIÓN: DIRECCIÓN */}
             <div className="bg-gray-800 bg-opacity-50 p-6 rounded-lg space-y-4">
               <h3 className="text-xl font-semibold text-emerald-400 mb-4">Dirección</h3>
-              
+
+              <div>
+                <label htmlFor="direccion_search" className="block text-sm font-medium text-gray-300 mb-1">
+                  Dirección completa <span className="text-red-500">*</span>
+                </label>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    id="direccion_search"
+                    name="direccion_search"
+                    type="text"
+                    value={addressSearch}
+                    onChange={(e) => setAddressSearch(e.target.value)}
+                    className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-md placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="Ej: Av. Siempre Viva 742, Buenos Aires"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddressLookup}
+                    disabled={isAddressLoading}
+                    className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                  >
+                    {isAddressLoading ? 'Buscando...' : 'Buscar dirección'}
+                  </button>
+                </div>
+                <p className="text-sm text-gray-400 mt-1">Usaremos este dato para completar ciudad, provincia y país automáticamente.</p>
+                {addressError && <p className="text-sm text-red-400 mt-2">{addressError}</p>}
+                {addressInfo?.direccion_formateada && (
+                  <p className="text-sm text-emerald-400 mt-2">Dirección detectada: {addressInfo.direccion_formateada}</p>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-2">
                   <label htmlFor="calle" className="block text-sm font-medium text-gray-300 mb-1">
@@ -241,7 +315,47 @@ const RegisterPage = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Ciudad</label>
+                  <input
+                    type="text"
+                    value={ciudadDisplay}
+                    readOnly
+                    className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-md text-white"
+                    placeholder="Completa tu dirección para detectar la ciudad"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Provincia</label>
+                  <input
+                    type="text"
+                    value={provinciaDisplay}
+                    readOnly
+                    className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-md text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">País</label>
+                  <input
+                    type="text"
+                    value={paisDisplay}
+                    readOnly
+                    className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-md text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Código Postal</label>
+                  <input
+                    type="text"
+                    value={cpDisplay}
+                    readOnly
+                    className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-md text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="piso" className="block text-sm font-medium text-gray-300 mb-1">
                     Piso <span className="text-gray-500">(opcional)</span>
@@ -270,8 +384,21 @@ const RegisterPage = () => {
                     placeholder="A"
                   />
                 </div>
+              </div>
+
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowManualLocalidad(!showManualLocalidad)}
+                  className="text-sm text-emerald-400 hover:text-emerald-300 underline"
+                >
+                  {showManualLocalidad ? 'Ocultar selección manual' : 'Seleccionar localidad manualmente'}
+                </button>
+              </div>
+
+              {showManualLocalidad && (
                 <div>
-                  <label htmlFor="localidad_id" className="block text-sm font-medium text-gray-300 mb-1">
+                  <label htmlFor="localidad_id" className="block text-sm font-medium text-gray-300 mb-1 mt-2">
                     Localidad <span className="text-red-500">*</span>
                   </label>
                   <select
@@ -279,16 +406,18 @@ const RegisterPage = () => {
                     name="localidad_id"
                     value={formData.localidad_id}
                     onChange={handleChange}
-                    required
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   >
                     <option value="">Selecciona...</option>
                     {referenceData.localidades.map(localidad => (
-                      <option key={localidad.id} value={localidad.id}>{localidad.nombre}</option>
+                      <option key={localidad.id} value={localidad.id}>
+                        {localidad.nombre}, {localidad.provincia} ({localidad.pais})
+                      </option>
                     ))}
                   </select>
+                  <p className="text-xs text-gray-400 mt-1">Usa esta opción si tu dirección no se detectó correctamente.</p>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* SECCIÓN: CUENTA */}

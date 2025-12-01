@@ -41,7 +41,6 @@ const DashboardPage = () => {
   const [modalMessage, setModalMessage] = useState('Simulación de lluvia para pruebas');
   const [loadingWeather, setLoadingWeather] = useState(false);
   const [simulatingRain, setSimulatingRain] = useState(false);
-  const [updatingReserva, setUpdatingReserva] = useState(false);
   const [weatherError, setWeatherError] = useState('');
   const [weatherSuccess, setWeatherSuccess] = useState('');
 
@@ -360,8 +359,7 @@ const DashboardPage = () => {
                         <div className="flex gap-2">
                           <button
                             onClick={() => handleReprogram(alerta)}
-                            disabled={updatingReserva}
-                            className={`px-4 py-2 rounded-md text-sm font-semibold transition ${updatingReserva ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500 text-white'}`}
+                            className="px-4 py-2 rounded-md text-sm font-semibold transition bg-emerald-600 hover:bg-emerald-500 text-white"
                           >
                             Reprogramar
                           </button>
