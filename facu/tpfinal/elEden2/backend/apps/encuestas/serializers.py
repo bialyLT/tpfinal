@@ -167,3 +167,49 @@ class RespuestaSerializer(serializers.ModelSerializer):
 
     def get_valor(self, obj):
         return obj.get_valor()
+
+
+class RespuestaImpactoSerializer(serializers.ModelSerializer):
+    pregunta_texto = serializers.CharField(source='pregunta.texto', read_only=True)
+    encuesta_titulo = serializers.CharField(source='encuesta_respuesta.encuesta.titulo', read_only=True)
+    fecha_encuesta = serializers.DateTimeField(source='encuesta_respuesta.fecha_completada', read_only=True)
+    reserva = serializers.SerializerMethodField()
+    cliente = serializers.SerializerMethodField()
+    valor = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Respuesta
+        fields = [
+            'id_respuesta',
+            'pregunta_texto',
+            'valor_numerico',
+            'valor',
+            'encuesta_titulo',
+            'fecha_encuesta',
+            'reserva',
+            'cliente',
+        ]
+
+    def get_reserva(self, obj):
+        reserva = getattr(obj.encuesta_respuesta, 'reserva', None)
+        if not reserva:
+            return None
+        servicio = reserva.servicio.nombre if reserva.servicio else None
+        return {
+            'id_reserva': reserva.id_reserva,
+            'servicio': servicio,
+            'fecha_reserva': reserva.fecha_reserva,
+        }
+
+    def get_cliente(self, obj):
+        cliente = getattr(obj.encuesta_respuesta, 'cliente', None)
+        if not cliente or not cliente.persona:
+            return None
+        persona = cliente.persona
+        return {
+            'nombre': persona.nombre,
+            'apellido': persona.apellido,
+        }
+
+    def get_valor(self, obj):
+        return obj.get_valor()

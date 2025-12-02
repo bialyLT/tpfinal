@@ -368,6 +368,11 @@ export const encuestasService = {
   enviarEncuesta: async (id) => {
     const response = await api.post(`/encuestas/encuestas/${id}/enviar_encuesta/`);
     return response.data;
+  },
+
+  getImpactoRespuestasEmpleado: async (params = {}) => {
+    const response = await api.get('/encuestas/empleados/impacto-respuestas/', { params });
+    return response.data;
   }
 };
 

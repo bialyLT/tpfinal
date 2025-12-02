@@ -1,20 +1,25 @@
-﻿from rest_framework import viewsets, filters, status
+﻿from datetime import datetime, time
+
+from rest_framework import viewsets, filters, status
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
+from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.db import transaction
 from decimal import Decimal
 from .models import Encuesta, Pregunta, EncuestaRespuesta, Respuesta
-from apps.users.models import Cliente
+from apps.users.models import Cliente, Empleado
 from .serializers import (
     EncuestaSerializer,
     EncuestaDetalleSerializer,
     EncuestaCreateUpdateSerializer,
     PreguntaSerializer,
     EncuestaRespuestaSerializer,
-    RespuestaSerializer
+    RespuestaSerializer,
+    RespuestaImpactoSerializer,
 )
 import logging
 
@@ -321,3 +326,77 @@ class RespuestaViewSet(viewsets.ModelViewSet):
     ordering = ['pregunta__orden']
 
     ordering = ['pregunta__orden']
+
+
+class EmpleadoImpactoEncuestaAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        empleado = self._get_empleado(request.user)
+        if not empleado:
+            return Response({'detail': 'Solo los empleados pueden acceder a esta información.'}, status=status.HTTP_403_FORBIDDEN)
+
+        queryset = Respuesta.objects.select_related(
+            'pregunta',
+            'encuesta_respuesta__encuesta',
+            'encuesta_respuesta__cliente__persona',
+            'encuesta_respuesta__reserva__servicio'
+        ).filter(
+            pregunta__impacta_puntuacion=True,
+            pregunta__tipo='escala',
+            encuesta_respuesta__estado='completada',
+            encuesta_respuesta__reserva__empleados=empleado,
+            encuesta_respuesta__reserva__isnull=False,
+        ).distinct()
+
+        queryset = self._apply_date_filters(request, queryset)
+
+        total = queryset.count()
+
+        queryset = queryset.order_by('-encuesta_respuesta__fecha_completada', 'pregunta__orden')
+
+        limit = self._resolve_limit(request.query_params.get('limit'))
+        if limit is not None:
+            queryset = queryset[:limit]
+
+        serializer = RespuestaImpactoSerializer(queryset, many=True)
+        return Response({'count': total, 'results': serializer.data})
+
+    def _apply_date_filters(self, request, queryset):
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
+
+        if start_date_str:
+            parsed = parse_date(start_date_str)
+            if parsed:
+                start_dt = datetime.combine(parsed, time.min)
+                if timezone.is_naive(start_dt):
+                    start_dt = timezone.make_aware(start_dt, timezone.get_current_timezone())
+                queryset = queryset.filter(encuesta_respuesta__fecha_completada__gte=start_dt)
+
+        if end_date_str:
+            parsed = parse_date(end_date_str)
+            if parsed:
+                end_dt = datetime.combine(parsed, time.max.replace(microsecond=0))
+                if timezone.is_naive(end_dt):
+                    end_dt = timezone.make_aware(end_dt, timezone.get_current_timezone())
+                queryset = queryset.filter(encuesta_respuesta__fecha_completada__lte=end_dt)
+
+        return queryset
+
+    def _get_empleado(self, user):
+        persona = getattr(user, 'persona', None)
+        if persona and hasattr(persona, 'empleado'):
+            return persona.empleado
+        return Empleado.objects.filter(persona__email=user.email).first()
+
+    def _resolve_limit(self, limit_param):
+        if limit_param in (None, '', 'all', 'todos', '*'):
+            return None
+        try:
+            limit_value = int(limit_param)
+        except (TypeError, ValueError):
+            return 100
+        if limit_value <= 0:
+            return None
+        return min(limit_value, 500)

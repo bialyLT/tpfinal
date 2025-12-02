@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { success, error } from '../utils/notifications';
 import api from '../services/api';
-import { addressService } from '../services';
-import { User, Mail, Phone, MapPin, Edit, Save, Shield, FileText, IdCard } from 'lucide-react';
+import { addressService, encuestasService } from '../services';
+import { User, Mail, Phone, MapPin, Edit, Save, Shield, FileText, IdCard, BarChart3, RefreshCw } from 'lucide-react';
 
 const MiPerfil = () => {
   const { user, updateUser } = useAuth();
@@ -34,6 +34,14 @@ const MiPerfil = () => {
     dpto: '',
     localidad_id: ''
   });
+  const [impactResponses, setImpactResponses] = useState([]);
+  const [impactCount, setImpactCount] = useState(0);
+  const [impactLoading, setImpactLoading] = useState(false);
+  const [impactError, setImpactError] = useState('');
+  const [impactFilters, setImpactFilters] = useState({
+    start_date: '',
+    end_date: ''
+  });
   const selectedLocalidad = referenceData.localidades.find(
     (loc) => String(loc.id) === String(profileData.localidad_id)
   );
@@ -41,6 +49,73 @@ const MiPerfil = () => {
   const provinciaDisplay = addressInfo?.provincia || selectedLocalidad?.provincia || user?.persona?.localidad?.provincia || '';
   const paisDisplay = addressInfo?.pais || selectedLocalidad?.pais || user?.persona?.localidad?.pais || '';
   const cpDisplay = addressInfo?.codigo_postal || selectedLocalidad?.cp || user?.persona?.localidad?.cp || '';
+  const isEmpleado = user?.groups?.includes('Empleados');
+
+  const formatImpactDate = (value) => {
+    if (!value) return '-';
+    try {
+      return new Date(value).toLocaleString('es-AR', {
+        dateStyle: 'medium',
+        timeStyle: 'short'
+      });
+    } catch (err) {
+      console.warn('No se pudo formatear fecha de impacto', err);
+      return value;
+    }
+  };
+
+  const fetchImpactResponses = useCallback(async (filters) => {
+    if (!isEmpleado) return;
+    setImpactLoading(true);
+    setImpactError('');
+    try {
+      const params = {};
+      if (filters?.start_date) params.start_date = filters.start_date;
+      if (filters?.end_date) params.end_date = filters.end_date;
+      const response = await encuestasService.getImpactoRespuestasEmpleado(params);
+      setImpactResponses(response.results || []);
+      setImpactCount(response.count || 0);
+    } catch (err) {
+      console.error('Error al cargar respuestas de impacto', err);
+      setImpactResponses([]);
+      setImpactCount(0);
+      const message = err.response?.data?.detail || 'No pudimos cargar las respuestas que impactaron tu puntuación.';
+      setImpactError(message);
+    } finally {
+      setImpactLoading(false);
+    }
+  }, [isEmpleado]);
+
+  const handleImpactFilterChange = (e) => {
+    const { name, value } = e.target;
+    setImpactFilters((prev) => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleImpactFiltersApply = () => {
+    if (
+      impactFilters.start_date &&
+      impactFilters.end_date &&
+      impactFilters.start_date > impactFilters.end_date
+    ) {
+      setImpactError('La fecha "desde" no puede ser posterior a la fecha "hasta".');
+      return;
+    }
+    fetchImpactResponses(impactFilters);
+  };
+
+  const handleImpactFiltersReset = () => {
+    const resetFilters = { start_date: '', end_date: '' };
+    setImpactFilters(resetFilters);
+    setImpactError('');
+    fetchImpactResponses(resetFilters);
+  };
+
+  const handleImpactManualRefresh = () => {
+    fetchImpactResponses(impactFilters);
+  };
 
   useEffect(() => {
     const fetchReferenceData = async () => {
@@ -78,6 +153,15 @@ const MiPerfil = () => {
       console.log('❌ No se encontró persona en el usuario');
     }
   }, [user]);
+
+  useEffect(() => {
+    if (!isEmpleado) {
+      setImpactResponses([]);
+      setImpactCount(0);
+      return;
+    }
+    fetchImpactResponses();
+  }, [isEmpleado, fetchImpactResponses]);
 
   const handleChange = (e) => {
     setProfileData({
@@ -558,6 +642,130 @@ const MiPerfil = () => {
                 </div>
               )}
             </div>
+
+            {isEmpleado && (
+              <div className="bg-gray-800 rounded-lg p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                  <div>
+                    <h3 className="text-xl font-semibold text-white flex items-center">
+                      <BarChart3 className="w-5 h-5 mr-2 text-emerald-400" />
+                      Impacto de Encuestas en tu Puntaje
+                    </h3>
+                    <p className="text-sm text-gray-400">
+                      Visualiza las respuestas de clientes que influyeron en tus evaluaciones recientes.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {impactCount > 0 && (
+                      <span className="text-sm text-gray-400">
+                        {impactResponses.length} / {impactCount} respuestas recientes
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleImpactManualRefresh}
+                      disabled={impactLoading}
+                      className="flex items-center px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-4 h-4 mr-2 ${impactLoading ? 'animate-spin' : ''}`} />
+                      Actualizar
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Desde</label>
+                    <input
+                      type="date"
+                      name="start_date"
+                      value={impactFilters.start_date}
+                      onChange={handleImpactFilterChange}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Hasta</label>
+                    <input
+                      type="date"
+                      name="end_date"
+                      value={impactFilters.end_date}
+                      onChange={handleImpactFilterChange}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                    />
+                  </div>
+                  <div className="flex items-end gap-3">
+                    <button
+                      type="button"
+                      onClick={handleImpactFiltersApply}
+                      className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                    >
+                      Filtrar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleImpactFiltersReset}
+                      className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                    >
+                      Limpiar
+                    </button>
+                  </div>
+                </div>
+
+                {impactLoading ? (
+                  <div className="flex items-center justify-center py-10 text-gray-400">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-500 mr-3"></div>
+                    Cargando respuestas...
+                  </div>
+                ) : impactError ? (
+                  <div className="bg-red-900/40 border border-red-800 text-red-200 px-4 py-3 rounded-lg">
+                    {impactError}
+                  </div>
+                ) : impactResponses.length > 0 ? (
+                  <ul className="space-y-4">
+                    {impactResponses.map((respuesta) => (
+                      <li
+                        key={respuesta.id_respuesta}
+                        className="bg-gray-900/50 border border-gray-700 rounded-lg p-4"
+                      >
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                          <div>
+                            <p className="text-white font-semibold">{respuesta.pregunta_texto}</p>
+                            <p className="text-sm text-gray-400">{respuesta.encuesta_titulo}</p>
+                          </div>
+                          <div className="flex items-center text-emerald-400 text-lg font-semibold">
+                            <BarChart3 className="w-4 h-4 mr-2" />
+                            {respuesta.valor ?? respuesta.valor_numerico ?? '-'}
+                          </div>
+                        </div>
+                        <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-gray-300">
+                          <div>
+                            <p className="text-xs uppercase text-gray-500 mb-1">Cliente</p>
+                            {respuesta.cliente
+                              ? `${respuesta.cliente.nombre} ${respuesta.cliente.apellido}`
+                              : 'No informado'}
+                          </div>
+                          <div>
+                            <p className="text-xs uppercase text-gray-500 mb-1">Reserva / Servicio</p>
+                            {respuesta.reserva
+                              ? `${respuesta.reserva.servicio || 'Servicio'} · ${formatImpactDate(respuesta.reserva.fecha_reserva)}`
+                              : 'Sin reserva asociada'}
+                          </div>
+                          <div>
+                            <p className="text-xs uppercase text-gray-500 mb-1">Respondida</p>
+                            {formatImpactDate(respuesta.fecha_encuesta)}
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="text-sm text-gray-400 bg-gray-900/40 border border-dashed border-gray-700 rounded-lg p-6 text-center">
+                    Aún no registramos respuestas de encuestas que hayan impactado tu puntuación.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
