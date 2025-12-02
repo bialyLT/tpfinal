@@ -468,11 +468,6 @@ export const weatherService = {
     return response.data;
   },
 
-  getEligibleReservations: async () => {
-    const response = await api.get('/weather/reservas/eligibles/');
-    return response.data;
-  },
-
   simulateRainAlert: async (payload) => {
     const response = await api.post('/weather/simulate/', payload);
     return response.data;
@@ -486,7 +481,20 @@ export const weatherService = {
   applyReprogramacion: async (reservaId, data) => {
     const response = await api.post(`/servicios/reservas/${reservaId}/reprogramar-por-clima/`, data);
     return response.data;
+  },
+
+  getReservationForecastSummary: async (params = {}) => {
+    const response = await api.get('/weather/reservas/forecast-summary/', { params });
+    return response.data;
   }
+};
+
+// Auditoría Services
+export const auditService = {
+  listLogs: async (params = {}) => {
+    const response = await api.get('/audit/logs/', { params });
+    return response.data;
+  },
 };
 
 // Categorías Services

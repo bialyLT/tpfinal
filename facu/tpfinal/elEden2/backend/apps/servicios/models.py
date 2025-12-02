@@ -257,6 +257,14 @@ class Reserva(models.Model):
         blank=True,
         related_name='reservas_afectadas'
     )
+    localidad_servicio = models.ForeignKey(
+        'users.Localidad',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reservas_programadas',
+        help_text='Localidad donde se realizará el servicio'
+    )
     requiere_reprogramacion = models.BooleanField(default=False)
     motivo_reprogramacion = models.CharField(max_length=255, blank=True, null=True)
     fecha_reprogramada_sugerida = models.DateTimeField(null=True, blank=True)

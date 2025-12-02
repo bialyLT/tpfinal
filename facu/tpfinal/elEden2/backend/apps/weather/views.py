@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import datetime, timedelta
+from decimal import Decimal
 import requests
 
 from django.conf import settings
@@ -49,22 +50,57 @@ class WeatherSimulateAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        reserva = Reserva.objects.select_related('servicio', 'cliente__persona').get(id_reserva=data['reserva_id'])
-        service = WeatherAlertService()
-        if not reserva.servicio.reprogramable_por_clima:
+        alert_date = data['alert_date']
+        alert_datetime = datetime.combine(alert_date, datetime.min.time())
+        if timezone.is_naive(alert_datetime):
+            alert_datetime = timezone.make_aware(alert_datetime, timezone.get_current_timezone())
+
+        reservas_qs = (
+            Reserva.objects.select_related('servicio', 'cliente__persona')
+            .filter(
+                fecha_reserva__date=alert_datetime.date(),
+                servicio__reprogramable_por_clima=True,
+                estado__in=['pendiente', 'confirmada', 'en_curso']
+            )
+        )
+        reservas = list(reservas_qs)
+        if not reservas:
             return Response(
-                {'error': 'Este servicio no permite simulaciones de clima'},
-                status=status.HTTP_400_BAD_REQUEST
+                {
+                    'created': 0,
+                    'reservas_detectadas': 0,
+                    'alerts': [],
+                    'message': 'No hay reservas reprogramables para la fecha seleccionada.',
+                    'date': alert_datetime.date(),
+                },
+                status=status.HTTP_200_OK
             )
 
-        alerta = service.simulate_alert(
-            reserva=reserva,
-            alert_date=data.get('alert_date'),
-            precipitation_mm=data.get('precipitation_mm'),
-            message=data.get('message'),
+        service = WeatherAlertService()
+        alerts = []
+        for reserva in reservas:
+            try:
+                alerta = service.simulate_alert(
+                    reserva=reserva,
+                    alert_date=alert_datetime,
+                    precipitation_mm=Decimal('2.0'),
+                    message=data.get('message'),
+                )
+                alerts.append(alerta)
+            except ValueError:
+                continue
+
+        serialized_alerts = WeatherAlertSerializer(alerts, many=True).data
+        status_code = status.HTTP_201_CREATED if alerts else status.HTTP_200_OK
+        return Response(
+            {
+                'created': len(alerts),
+                'reservas_detectadas': len(reservas),
+                'alerts': serialized_alerts,
+                'date': alert_datetime.date(),
+            },
+            status=status_code
         )
-        payload = WeatherAlertSerializer(alerta).data
-        return Response(payload, status=status.HTTP_201_CREATED)
 
 
 class PendingWeatherAlertsAPIView(APIView):
@@ -166,3 +202,30 @@ class CurrentTemperatureAPIView(APIView):
                 {'error': 'Datos de temperatura no disponibles'},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE
             )
+
+
+class ReservationForecastSummaryAPIView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        try:
+            days = int(request.query_params.get('days', 7))
+        except (TypeError, ValueError):
+            days = 7
+        days = max(1, min(days, 7))
+
+        now = timezone.now()
+        max_reserva_date = now + timedelta(days=30)
+
+        reservas = (
+            Reserva.objects.select_related('servicio', 'cliente__persona', 'localidad_servicio')
+            .filter(
+                fecha_reserva__gte=now,
+                fecha_reserva__lte=max_reserva_date,
+            )
+            .order_by('fecha_reserva')
+        )
+
+        service = WeatherAlertService()
+        summaries = service.build_locality_forecasts(reservas, days)
+        return Response({'results': summaries, 'count': len(summaries)}, status=status.HTTP_200_OK)

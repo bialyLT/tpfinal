@@ -4,6 +4,7 @@ from .views import (
     CurrentTemperatureAPIView,
     EligibleReservationsAPIView,
     PendingWeatherAlertsAPIView,
+    ReservationForecastSummaryAPIView,
     WeatherCheckAPIView,
     WeatherSimulateAPIView,
 )
@@ -14,4 +15,5 @@ urlpatterns = [
     path('weather/alerts/pending/', PendingWeatherAlertsAPIView.as_view(), name='weather-alerts-pending'),
     path('weather/reservas/eligibles/', EligibleReservationsAPIView.as_view(), name='weather-eligible-reservations'),
     path('weather/current-temperature/', CurrentTemperatureAPIView.as_view(), name='weather-current-temperature'),
+    path('weather/reservas/forecast-summary/', ReservationForecastSummaryAPIView.as_view(), name='weather-forecast-summary'),
 ]

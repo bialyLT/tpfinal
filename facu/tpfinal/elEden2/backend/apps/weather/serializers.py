@@ -1,6 +1,6 @@
+from django.utils import timezone
 from rest_framework import serializers
 
-from apps.servicios.models import Reserva
 from .models import WeatherAlert, WeatherForecast
 
 
@@ -25,7 +25,7 @@ class WeatherAlertSerializer(serializers.ModelSerializer):
             'latitude', 'longitude', 'precipitation_mm', 'precipitation_threshold',
             'probability_percentage', 'is_simulated', 'requires_reprogramming',
             'payload', 'reserva', 'servicio', 'servicio_nombre', 'reserva_detalle',
-            'created_at'
+            'triggered_by', 'created_at'
         ]
         read_only_fields = fields
 
@@ -52,14 +52,12 @@ class WeatherAlertSerializer(serializers.ModelSerializer):
 
 
 class WeatherSimulationSerializer(serializers.Serializer):
-    reserva_id = serializers.IntegerField(required=True)
-    alert_date = serializers.DateTimeField(required=False)
+    alert_date = serializers.DateField(required=True)
     message = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    precipitation_mm = serializers.DecimalField(max_digits=6, decimal_places=2, required=False)
 
-    def validate_reserva_id(self, value):
-        if not Reserva.objects.filter(id_reserva=value).exists():
-            raise serializers.ValidationError('La reserva indicada no existe')
+    def validate_alert_date(self, value):
+        if value < timezone.localdate():
+            raise serializers.ValidationError('La fecha debe ser hoy o una fecha futura')
         return value
 
 

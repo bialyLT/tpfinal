@@ -13,6 +13,10 @@ from django.conf import settings
 import logging
 
 from apps.users.models import Persona, Cliente, Genero, TipoDocumento, Localidad
+from apps.users.services.address_service import (
+    get_or_create_localidad,
+    normalize_google_address,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +42,8 @@ def google_login(request):
         first_name = request.data.get('first_name', '')
         last_name = request.data.get('last_name', '')
         google_id = request.data.get('google_id')
+        address_payload = request.data.get('address')
+        normalized_address = normalize_google_address(address_payload)
         
         if not token or not email:
             return Response(
@@ -93,6 +99,21 @@ def google_login(request):
         try:
             user = User.objects.get(email=email)
             is_new_user = False
+            if hasattr(user, 'persona') and normalized_address:
+                persona = user.persona
+                needs_update = (
+                    not persona.calle or persona.calle.upper() == 'PENDIENTE' or
+                    not persona.numero or persona.numero.upper() == 'S/N' or
+                    persona.localidad is None
+                )
+
+                if needs_update:
+                    localidad = get_or_create_localidad(normalized_address)
+                    persona.calle = normalized_address.get('calle') or persona.calle
+                    persona.numero = normalized_address.get('numero') or persona.numero
+                    persona.localidad = localidad
+                    persona.save(update_fields=['calle', 'numero', 'localidad'])
+                    logger.info('✅ Dirección actualizada automáticamente para %s', email)
             
         except User.DoesNotExist:
             # Crear nuevo usuario
@@ -122,10 +143,20 @@ def google_login(request):
                 # Obtener valores por defecto
                 genero_default = Genero.objects.filter(genero='Prefiero no decir').first() or Genero.objects.first()
                 tipo_doc_default = TipoDocumento.objects.filter(tipo='DNI').first() or TipoDocumento.objects.first()
-                localidad_default = Localidad.objects.first()
+                localidad_default = None
+                if normalized_address:
+                    localidad_default = get_or_create_localidad(normalized_address)
+                else:
+                    localidad_default = Localidad.objects.first()
                 
                 if not localidad_default:
                     logger.warning("No hay localidades en el sistema. Crear al menos una.")
+                    localidad_default = Localidad.objects.create(
+                        cp='S/N',
+                        nombre_localidad='Sin ciudad',
+                        nombre_provincia='Sin provincia',
+                        nombre_pais='Argentina'
+                    )
                 
                 # Generar un nro_documento único usando el google_id (máximo 20 chars)
                 # Formato: GGL-{últimos 13 dígitos del google_id}
@@ -139,8 +170,8 @@ def google_login(request):
                     email=email,
                     telefono='PENDIENTE',
                     nro_documento=nro_documento_unico,
-                    calle='PENDIENTE',
-                    numero='S/N',
+                    calle=(normalized_address.get('calle') if normalized_address else 'PENDIENTE') or 'PENDIENTE',
+                    numero=(normalized_address.get('numero') if normalized_address else 'S/N') or 'S/N',
                     localidad=localidad_default,
                     genero=genero_default,
                     tipo_documento=tipo_doc_default
@@ -180,6 +211,8 @@ def google_login(request):
             direccion_completa = ", ".join(direccion_partes)
             if persona.localidad:
                 direccion_completa += f", {persona.localidad.nombre_localidad}, {persona.localidad.nombre_provincia}"
+                if persona.localidad.nombre_pais:
+                    direccion_completa += f", {persona.localidad.nombre_pais}"
             
             # Datos completos de Persona
             persona_data = {
@@ -200,7 +233,10 @@ def google_login(request):
                 } if persona.tipo_documento else None,
                 'localidad': {
                     'id': persona.localidad.id_localidad,
-                    'nombre': persona.localidad.nombre_localidad
+                    'nombre': persona.localidad.nombre_localidad,
+                    'provincia': persona.localidad.nombre_provincia,
+                    'pais': persona.localidad.nombre_pais,
+                    'cp': persona.localidad.cp,
                 } if persona.localidad else None
             }
             

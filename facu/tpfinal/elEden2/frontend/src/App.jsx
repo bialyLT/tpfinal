@@ -32,6 +32,7 @@ import ComprasPage from './pages/ComprasPage';
 import CategoriasPage from './pages/CategoriasPage';
 import MarcasPage from './pages/MarcasPage';
 import ProveedoresPage from './pages/ProveedoresPage';
+import AuditLogPage from './pages/AuditLogPage';
 
 // Basic Protected Route Component (solo requiere autenticación)
 const BasicProtectedRoute = ({ children }) => {
@@ -182,6 +183,16 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['administrador']}>
                   <EmpleadosPage />
+                </ProtectedRoute>
+              } 
+            />
+
+            {/* Auditoría - Solo Administradores */}
+            <Route 
+              path="/auditoria" 
+              element={
+                <ProtectedRoute allowedRoles={['administrador']}>
+                  <AuditLogPage />
                 </ProtectedRoute>
               } 
             />

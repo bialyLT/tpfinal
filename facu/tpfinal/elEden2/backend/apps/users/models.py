@@ -39,6 +39,21 @@ class Localidad(models.Model):
     cp = models.CharField(max_length=10, verbose_name='Código Postal')
     nombre_localidad = models.CharField(max_length=100)
     nombre_provincia = models.CharField(max_length=100)
+    nombre_pais = models.CharField(max_length=100, default='Argentina')
+    latitud = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text='Latitud geográfica aproximada'
+    )
+    longitud = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text='Longitud geográfica aproximada'
+    )
 
     class Meta:
         verbose_name = 'Localidad'
@@ -48,10 +63,11 @@ class Localidad(models.Model):
         indexes = [
             models.Index(fields=['cp']),
             models.Index(fields=['nombre_provincia']),
+            models.Index(fields=['nombre_pais']),
         ]
 
     def __str__(self):
-        return f"{self.nombre_localidad}, {self.nombre_provincia} (CP: {self.cp})"
+        return f"{self.nombre_localidad}, {self.nombre_provincia}, {self.nombre_pais} (CP: {self.cp})"
 
 
 class Persona(models.Model):

@@ -20,7 +20,11 @@ from .serializers import (
     , JardinSerializer, ZonaJardinSerializer, FormaTerrenoSerializer
 )
 from .pagination import StandardResultsSetPagination, LargeResultsSetPagination, SmallResultsSetPagination
-from apps.users.models import Cliente, Empleado
+from apps.users.models import Cliente, Empleado, Localidad
+from apps.users.services.address_service import (
+    is_operational_area,
+    get_operational_area_message,
+)
 from apps.productos.models import Producto
 
 logger = logging.getLogger(__name__)
@@ -37,7 +41,7 @@ class ServicioViewSet(viewsets.ModelViewSet):
 
 
 class ReservaViewSet(viewsets.ModelViewSet):
-    queryset = Reserva.objects.select_related('cliente__persona', 'servicio').prefetch_related(
+    queryset = Reserva.objects.select_related('cliente__persona', 'servicio', 'localidad_servicio').prefetch_related(
         'encuestas__cliente__persona',
         'encuestas__encuesta'
     ).all()
@@ -67,7 +71,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
         
         # Si es staff, mostrar solo reservas con seña pagada
         if user.is_staff:
-            return Reserva.objects.select_related('cliente__persona', 'servicio').filter(
+            return Reserva.objects.select_related('cliente__persona', 'servicio', 'localidad_servicio').filter(
                 estado_pago_sena__in=['sena_pagada', 'aprobado']
             )
         
@@ -75,7 +79,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
         try:
             Empleado.objects.get(persona__email=user.email)
             # Empleados también solo ven reservas con seña pagada
-            return Reserva.objects.select_related('cliente__persona', 'servicio').filter(
+            return Reserva.objects.select_related('cliente__persona', 'servicio', 'localidad_servicio').filter(
                 estado_pago_sena__in=['sena_pagada', 'aprobado']
             )
         except Empleado.DoesNotExist:
@@ -84,7 +88,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
         # Si es cliente, filtrar solo sus reservas (sin restricción de estado)
         try:
             cliente = Cliente.objects.get(persona__email=user.email)
-            return Reserva.objects.select_related('cliente__persona', 'servicio').filter(cliente=cliente)
+            return Reserva.objects.select_related('cliente__persona', 'servicio', 'localidad_servicio').filter(cliente=cliente)
         except Cliente.DoesNotExist:
             # Si no es cliente ni empleado, no mostrar nada
             return Reserva.objects.none()
@@ -143,6 +147,29 @@ class ReservaViewSet(viewsets.ModelViewSet):
         # Asignar automáticamente el cliente autenticado
         data['cliente'] = cliente.id_cliente
         data['servicio'] = servicio.id_servicio
+
+        localidad_id = data.get('localidad_servicio') or data.get('localidad_id')
+        if not localidad_id:
+            return Response(
+                {'error': 'Selecciona una localidad para poder avanzar.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            localidad = Localidad.objects.get(id_localidad=localidad_id)
+        except Localidad.DoesNotExist:
+            return Response(
+                {'error': 'La localidad seleccionada no existe.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not is_operational_area(localidad.nombre_provincia, localidad.nombre_pais):
+            return Response(
+                {'error': get_operational_area_message()},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        data['localidad_servicio'] = localidad.id_localidad
         
         # Asegurar estado inicial
         if 'estado' not in data:

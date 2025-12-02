@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import flatpickr from 'flatpickr';
 import api from '../services/api';
 import { addressService, serviciosService } from '../services';
@@ -27,6 +27,27 @@ import {
   Zap,
   Shovel
 } from 'lucide-react';
+
+const OPERATIONAL_PROVINCES = ['corrientes', 'misiones'];
+const OPERATIONAL_COUNTRY = 'argentina';
+const OPERATIONAL_MESSAGE = 'Por el momento solo operamos en Corrientes y Misiones, Argentina.';
+
+const normalizeText = (value) => (value || '').toString().trim().toLowerCase();
+
+const isLocationWithinOperationalArea = (province, country) => {
+  const provinceValue = normalizeText(province);
+  const countryValue = normalizeText(country);
+
+  if (!provinceValue || !countryValue) {
+    return false;
+  }
+
+  if (countryValue !== OPERATIONAL_COUNTRY) {
+    return false;
+  }
+
+  return OPERATIONAL_PROVINCES.some((allowed) => provinceValue.includes(allowed));
+};
 
 const SolicitarServicioPage = () => {
   const { user } = useAuth();
@@ -63,8 +84,12 @@ const SolicitarServicioPage = () => {
   const [addressError, setAddressError] = useState('');
   const [isAddressLoading, setIsAddressLoading] = useState(false);
   const [showManualLocalidad, setShowManualLocalidad] = useState(false);
+  const allowedLocalidades = useMemo(
+    () => referenceData.localidades.filter((loc) => isLocationWithinOperationalArea(loc.provincia, loc.pais)),
+    [referenceData.localidades]
+  );
 
-  const selectedLocalidad = referenceData.localidades.find(
+  const selectedLocalidad = allowedLocalidades.find(
     (loc) => String(loc.id) === String(formData.localidad_id)
   );
   const userLocalidad = user?.persona?.localidad;
@@ -130,10 +155,15 @@ const SolicitarServicioPage = () => {
     fetchServicios();
 
     if (user) {
+      const userLocalidadId = user.persona?.localidad?.id ? String(user.persona.localidad.id) : '';
+      const userLocalidadAllowed = isLocationWithinOperationalArea(
+        user.persona?.localidad?.provincia,
+        user.persona?.localidad?.pais
+      );
       setFormData(prev => ({
         ...prev,
         direccion_servicio: prev.direccion_servicio || user.cliente?.direccion_completa || '',
-        localidad_id: prev.localidad_id || (user.persona?.localidad?.id ? String(user.persona.localidad.id) : '')
+        localidad_id: prev.localidad_id || (userLocalidadAllowed ? userLocalidadId : '')
       }));
       setAddressSearch(prev => prev || user.cliente?.direccion_completa || '');
     }
@@ -167,6 +197,19 @@ const SolicitarServicioPage = () => {
 
     fetchReferenceData();
   }, []);
+
+  useEffect(() => {
+    if (!formData.localidad_id) {
+      return;
+    }
+    const matched = referenceData.localidades.find(
+      (loc) => String(loc.id) === String(formData.localidad_id)
+    );
+    if (matched && !isLocationWithinOperationalArea(matched.provincia, matched.pais)) {
+      setFormData((prev) => ({ ...prev, localidad_id: '' }));
+      setAddressError(OPERATIONAL_MESSAGE);
+    }
+  }, [formData.localidad_id, referenceData.localidades]);
 
   // Initialize flatpickr
   useEffect(() => {
@@ -263,6 +306,14 @@ const SolicitarServicioPage = () => {
       }
     }
 
+    if (name === 'localidad_id' && value) {
+      const allowed = allowedLocalidades.find((loc) => String(loc.id) === String(value));
+      if (!allowed) {
+        error(OPERATIONAL_MESSAGE);
+        return;
+      }
+    }
+
     if (name === 'direccion_servicio') {
       setAddressSearch(value);
     }
@@ -283,6 +334,12 @@ const SolicitarServicioPage = () => {
     setAddressError('');
     try {
       const data = await addressService.lookup(addressSearch.trim());
+      if (!isLocationWithinOperationalArea(data?.provincia, data?.pais)) {
+        setAddressInfo(null);
+        setFormData(prev => ({ ...prev, localidad_id: '' }));
+        setAddressError(`${OPERATIONAL_MESSAGE} La dirección detectada corresponde a ${data?.ciudad || data?.provincia || 'otra ubicación'}.`);
+        return;
+      }
       setAddressInfo(data);
       setShowManualLocalidad(false);
       setAddressSearch(data.direccion_formateada || addressSearch.trim());
@@ -456,6 +513,14 @@ const SolicitarServicioPage = () => {
           error('Busca tu dirección o selecciona una localidad para continuar');
           return false;
         }
+        if (!selectedLocalidad) {
+          error(OPERATIONAL_MESSAGE);
+          return false;
+        }
+        if (!isLocationWithinOperationalArea(selectedLocalidad.provincia, selectedLocalidad.pais)) {
+          error(OPERATIONAL_MESSAGE);
+          return false;
+        }
         break;
       default:
         return true;
@@ -523,6 +588,9 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
       formDataToSend.append('fecha_reserva', fechaReserva);
       
       formDataToSend.append('direccion', formData.direccion_servicio);
+      if (formData.localidad_id) {
+        formDataToSend.append('localidad_servicio', formData.localidad_id);
+      }
 
       // Agregar imágenes del jardín
       formData.imagenes_jardin.forEach((img) => {
@@ -937,7 +1005,7 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
                           {showManualLocalidad ? 'Ocultar selección manual de localidad' : 'Seleccionar localidad manualmente'}
                         </button>
                         {showManualLocalidad && (
-                          referenceData.localidades.length > 0 ? (
+                          allowedLocalidades.length > 0 ? (
                             <select
                               name="localidad_id"
                               value={formData.localidad_id}
@@ -945,14 +1013,18 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
                               className="mt-2 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
                             >
                               <option value="">Selecciona una localidad...</option>
-                              {referenceData.localidades.map((loc) => (
+                              {allowedLocalidades.map((loc) => (
                                 <option key={loc.id} value={loc.id}>
                                   {loc.nombre} - {loc.provincia} ({loc.pais})
                                 </option>
                               ))}
                             </select>
                           ) : (
-                            <p className="mt-2 text-sm text-gray-400">Cargando listado de localidades...</p>
+                            <p className="mt-2 text-sm text-yellow-400">
+                              {referenceData.localidades.length === 0
+                                ? 'Cargando listado de localidades...'
+                                : OPERATIONAL_MESSAGE}
+                            </p>
                           )
                         )}
                         {!showManualLocalidad && !formData.localidad_id && (

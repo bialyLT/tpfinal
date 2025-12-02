@@ -3,13 +3,14 @@ from rest_framework.decorators import action
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from django_filters.rest_framework import DjangoFilterBackend
 from django.contrib.auth.models import User, Group
 from apps.emails import EmailService
 import logging
 
 from .models import Genero, TipoDocumento, Localidad, Persona, Cliente, Empleado, Proveedor
+from .services.address_service import geocode_address, get_or_create_localidad
 from .serializers import (
     GeneroSerializer, TipoDocumentoSerializer, LocalidadSerializer,
     PersonaSerializer, ClienteSerializer, EmpleadoSerializer, ProveedorSerializer,
@@ -17,6 +18,37 @@ from .serializers import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class AddressLookupView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        address_text = request.data.get('address')
+        if not address_text:
+            return Response({'error': 'La dirección es requerida'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            geocoded = geocode_address(address_text)
+            localidad = get_or_create_localidad(geocoded)
+
+            geocoded['localidad_id'] = localidad.id_localidad
+            geocoded['localidad'] = {
+                'id': localidad.id_localidad,
+                'nombre': localidad.nombre_localidad,
+                'provincia': localidad.nombre_provincia,
+                'pais': localidad.nombre_pais,
+                'cp': localidad.cp,
+                'latitud': float(localidad.latitud) if localidad.latitud is not None else None,
+                'longitud': float(localidad.longitud) if localidad.longitud is not None else None,
+            }
+
+            return Response(geocoded, status=status.HTTP_200_OK)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:  # pragma: no cover - red externa
+            logger.error('Error inesperado en AddressLookupView: %s', exc, exc_info=True)
+            return Response({'error': 'No se pudo procesar la dirección'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class CurrentUserView(APIView):
@@ -62,6 +94,8 @@ class CurrentUserView(APIView):
             direccion_completa = ", ".join(direccion_partes)
             if persona.localidad:
                 direccion_completa += f", {persona.localidad.nombre_localidad}, {persona.localidad.nombre_provincia}"
+                if persona.localidad.nombre_pais:
+                    direccion_completa += f", {persona.localidad.nombre_pais}"
             
             # Datos completos de Persona para edición
             persona_data = {
@@ -82,7 +116,10 @@ class CurrentUserView(APIView):
                 } if persona.tipo_documento else None,
                 'localidad': {
                     'id': persona.localidad.id_localidad,
-                    'nombre': persona.localidad.nombre_localidad
+                    'nombre': persona.localidad.nombre_localidad,
+                    'provincia': persona.localidad.nombre_provincia,
+                    'pais': persona.localidad.nombre_pais,
+                    'cp': persona.localidad.cp,
                 } if persona.localidad else None
             }
             

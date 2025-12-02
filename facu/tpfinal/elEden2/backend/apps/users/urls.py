@@ -14,4 +14,5 @@ router.register(r'empleados', views.EmpleadoViewSet, basename='empleado')
 urlpatterns = [
     path('users/', include(router.urls)),
     path('users/me/', views.CurrentUserView.as_view(), name='current-user'),
+    path('users/address/lookup/', views.AddressLookupView.as_view(), name='address-lookup'),
 ]

@@ -27,6 +27,8 @@ class PersonaSerializer(serializers.ModelSerializer):
     genero_nombre = serializers.CharField(source='genero.genero', read_only=True)
     tipo_documento_nombre = serializers.CharField(source='tipo_documento.tipo', read_only=True)
     localidad_nombre = serializers.CharField(source='localidad.nombre_localidad', read_only=True)
+    localidad_provincia = serializers.CharField(source='localidad.nombre_provincia', read_only=True)
+    localidad_pais = serializers.CharField(source='localidad.nombre_pais', read_only=True)
     
     class Meta:
         model = Persona

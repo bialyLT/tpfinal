@@ -71,6 +71,7 @@ LOCAL_APPS = [
     'apps.emails',
     'apps.mercadopago',  # Nueva app para gestión de pagos
     'apps.weather',
+    'apps.audit',
 ]
 
 # --------------------------------------------------
@@ -160,6 +161,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',  # Required by django-allauth
+    'apps.audit.middleware.AuditLogMiddleware',
 ]
 
 ROOT_URLCONF = 'elEden_api.urls'

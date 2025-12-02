@@ -28,6 +28,9 @@ django-rest-auth==0.9.5
 # HTTP Clients
 requests==2.32.3
 
+# Geocoding
+geopy==2.4.1
+
 # Development & Debug
 django-debug-toolbar==4.4.6
 factory-boy==3.3.1

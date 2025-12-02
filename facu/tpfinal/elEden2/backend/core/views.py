@@ -77,7 +77,16 @@ class ReferenceDataView(APIView):
         
         generos = [{'id': g.id_genero, 'nombre': g.genero} for g in Genero.objects.all()]
         tipos_documento = [{'id': t.id_tipo_documento, 'nombre': t.tipo} for t in TipoDocumento.objects.all()]
-        localidades = [{'id': l.id_localidad, 'nombre': l.nombre_localidad} for l in Localidad.objects.all()]
+        localidades = [
+            {
+                'id': l.id_localidad,
+                'nombre': l.nombre_localidad,
+                'provincia': l.nombre_provincia,
+                'pais': l.nombre_pais,
+                'cp': l.cp,
+            }
+            for l in Localidad.objects.all()
+        ]
         
         return Response({
             'generos': generos,

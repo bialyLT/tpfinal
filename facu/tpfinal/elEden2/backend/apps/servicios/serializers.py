@@ -138,6 +138,7 @@ class ReservaSerializer(serializers.ModelSerializer):
     disenos = serializers.SerializerMethodField()
     encuesta_cliente_completada = serializers.SerializerMethodField()
     encuesta_cliente_respuesta_id = serializers.SerializerMethodField()
+    localidad_servicio_info = serializers.SerializerMethodField()
     
     class Meta:
         model = Reserva
@@ -208,6 +209,20 @@ class ReservaSerializer(serializers.ModelSerializer):
             resultado.append(data)
 
         return resultado
+
+    def get_localidad_servicio_info(self, obj):
+        localidad = obj.localidad_servicio
+        if not localidad:
+            return None
+        return {
+            'id': localidad.id_localidad,
+            'nombre': localidad.nombre_localidad,
+            'provincia': localidad.nombre_provincia,
+            'pais': localidad.nombre_pais,
+            'cp': localidad.cp,
+            'latitud': float(localidad.latitud) if localidad.latitud is not None else None,
+            'longitud': float(localidad.longitud) if localidad.longitud is not None else None,
+        }
 
 
 class ImagenDisenoSerializer(serializers.ModelSerializer):

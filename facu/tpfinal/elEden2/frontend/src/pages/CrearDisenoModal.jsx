@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import flatpickr from 'flatpickr';
 // No localization imports for now
 import { X, Upload, Plus, Trash2, Palette, DollarSign, Calendar, Image as ImageIcon, Package, Search } from 'lucide-react';
@@ -77,11 +77,12 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
   const [searchReservaError, setSearchReservaError] = useState('');
   const [reservaBuscada, setReservaBuscada] = useState(null);
 
-  const getStockForProduct = useCallback((productId) => {
+  const getStockForProduct = (productId, inventario = null) => {
     if (!productId && productId !== 0) return 0;
     const id = parseInt(productId, 10);
     if (Number.isNaN(id)) return 0;
-    const prod = productos.find(p => p.id_producto === id);
+    const lista = inventario || productos;
+    const prod = lista.find(p => p.id_producto === id || p.id === id);
     if (!prod) return 0;
     if (typeof prod.stock_actual !== 'undefined' && prod.stock_actual !== null) {
       return parseInt(prod.stock_actual, 10) || 0;
@@ -89,10 +90,13 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
     if (prod.stock && typeof prod.stock.cantidad !== 'undefined' && prod.stock.cantidad !== null) {
       return parseInt(prod.stock.cantidad, 10) || 0;
     }
+    if (typeof prod.stock !== 'undefined') {
+      return parseInt(prod.stock, 10) || 0;
+    }
     return 0;
-  }, [productos]);
+  };
 
-  const cargarDisenoParaEditar = useCallback(async () => {
+  const cargarDisenoParaEditar = async (productosDisponibles = null) => {
     if (!diseno?.id_diseno) return;
     try {
       console.log('🔍 Intentando cargar diseño con ID:', diseno.id_diseno);
@@ -133,10 +137,11 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       
       if (disenoData.productos && disenoData.productos.length > 0) {
         console.log('📦 Productos del backend:', disenoData.productos);
+        const inventario = productosDisponibles || productos;
         const productosEditados = disenoData.productos.map(p => {
           console.log('📦 Producto individual:', p);
           const cantidadRaw = parseInt(p.cantidad, 10) || 0;
-          const stockActual = getStockForProduct(p.producto);
+          const stockActual = getStockForProduct(p.producto, inventario);
           const cantidad = stockActual > 0 ? Math.min(Math.max(cantidadRaw || 1, 1), stockActual) : 0;
           return {
             producto_id: p.producto,  // ID del producto
@@ -177,53 +182,55 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       console.error('❌ Error completo:', error);
       console.error('❌ Response:', error.response);
     }
-  }, [diseno, getStockForProduct]);
+  };
 
   useEffect(() => {
-    if (isOpen) {
-      fetchProductos();
+    if (!isOpen) return;
+
+    let isMounted = true;
+
+    const initializeModal = async () => {
+      const productosDisponibles = await fetchProductos();
+      if (!isMounted) return;
+
       if (modoEdicion && diseno) {
-        cargarDisenoParaEditar();
+        await cargarDisenoParaEditar(productosDisponibles);
       } else {
         resetForm();
       }
-      
-      // If no reservation (reserva prop) and we're in diseno mode, fetch reservas with garden
+
       if (!reserva && mode === 'diseno') {
-        (async () => {
-          try {
-            const data = await serviciosService.getReservas({ page: 1, page_size: 100 });
-            const allReservas = data.results || data;
-            const withJardin = allReservas.filter(r => !!r.jardin);
-            setReservasConJardin(withJardin);
-          } catch (err) {
-            console.error('Error fetching reservas with jardn', err);
-          }
-        })();
+        try {
+          const data = await serviciosService.getReservas({ page: 1, page_size: 100 });
+          if (!isMounted) return;
+          const allReservas = data.results || data;
+          const withJardin = allReservas.filter(r => !!r.jardin);
+          setReservasConJardin(withJardin);
+        } catch (err) {
+          console.error('Error fetching reservas con jardín', err);
+        }
       }
-      // Set min date (now) for datetime-local
+
       const now = new Date();
       const tzOffset = now.getTimezoneOffset() * 60000;
       const localNow = new Date(now.getTime() - tzOffset);
       setMinFechaLocal(localNow);
 
-      // Fetch blocked dates for the next 60 days
-      (async () => {
-        try {
-          const hoy = new Date().toISOString().split('T')[0];
-          const fechaFinDate = new Date();
-          fechaFinDate.setDate(fechaFinDate.getDate() + 60);
-          const fechaFin = fechaFinDate.toISOString().split('T')[0];
-          const response = await serviciosService.getFechasDisponibles(hoy, fechaFin);
+      try {
+        const hoy = new Date().toISOString().split('T')[0];
+        const fechaFinDate = new Date();
+        fechaFinDate.setDate(fechaFinDate.getDate() + 60);
+        const fechaFin = fechaFinDate.toISOString().split('T')[0];
+        const response = await serviciosService.getFechasDisponibles(hoy, fechaFin);
+        if (isMounted) {
           setFechasBloqueadas(response.fechas_bloqueadas || []);
-        } catch (err) {
-          console.error('Error al cargar fechas bloqueadas:', err);
         }
-      })();
-      // If a reserva prop is provided (modal opened from a reserva), preselect it
+      } catch (err) {
+        console.error('Error al cargar fechas bloqueadas:', err);
+      }
+
       if (reserva && !modoEdicion) {
         setReservaSeleccionadaId(String(reserva.id_reserva || reserva.id));
-        // preselect date/time if reserva prop has fecha_reserva
         if (reserva.fecha_reserva) {
           const d = new Date(reserva.fecha_reserva);
           if (!Number.isNaN(d.getTime())) {
@@ -235,8 +242,14 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
           }
         }
       }
-    }
-  }, [isOpen, modoEdicion, diseno, cargarDisenoParaEditar, mode, reserva]);
+    };
+
+    initializeModal();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, modoEdicion, diseno?.id_diseno, mode, reserva?.id_reserva, reserva?.fecha_reserva]);
 
   // Initialize flatpickr on our input (DATE ONLY)
   useEffect(() => {
@@ -365,10 +378,13 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
   const fetchProductos = async () => {
     try {
       const data = await productosService.getProductos();
-      setProductos(data.results || []);
+      const list = data?.results || data || [];
+      setProductos(list);
+      return list;
     } catch (error) {
       showError('Error al cargar productos');
       console.error(error);
+      return [];
     }
   };
 
@@ -395,6 +411,12 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
     setFechaPropuestaDatePart(null);
     setFechaPropuestaTimePart('');
     setOriginalFechaPropuesta(null);
+    setFechaError('');
+    setReservaSeleccionadaId(null);
+    setSearchReservaInput('');
+    setSearchReservaError('');
+    setSearchReservaLoading(false);
+    setReservaBuscada(null);
   };
 
   const handleInputChange = (e) => {

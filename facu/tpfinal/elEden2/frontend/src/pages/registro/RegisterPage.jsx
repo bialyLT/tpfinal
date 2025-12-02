@@ -131,7 +131,7 @@ const RegisterPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex">
+    <div className="bg-gray-900 text-white flex flex-col lg:flex-row lg:h-screen">
       {/* Botón para volver al inicio */}
       <Link
         to="/"
@@ -142,24 +142,26 @@ const RegisterPage = () => {
       </Link>
 
       {/* Columna de la imagen (izquierda) */}
-      <div className="hidden lg:block lg:w-1/2 relative">
-        <img
-          src="https://images.unsplash.com/photo-1523348837708-15d4a09cfac2?q=80&w=1974&auto=format&fit=crop"
-          alt="Jardín frondoso"
-          className="absolute inset-0 w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-gray-900 bg-opacity-60"></div>
-        <div className="relative z-10 flex flex-col justify-center items-center h-full text-center p-12">
-          <Leaf className="text-emerald-400 h-16 w-16 mb-6" />
-          <h1 className="text-4xl font-bold text-white mb-4">Bienvenido a El Edén</h1>
-          <p className="text-lg text-gray-200">
-            Crea tu cuenta para empezar a transformar tu jardín en un paraíso.
-          </p>
+      <div className="hidden lg:block lg:w-1/2">
+        <div className="sticky top-0 h-screen relative">
+          <img
+            src="https://images.unsplash.com/photo-1523348837708-15d4a09cfac2?q=80&w=1974&auto=format&fit=crop"
+            alt="Jardín frondoso"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gray-900 bg-opacity-60"></div>
+          <div className="relative z-10 flex flex-col justify-center items-center h-full text-center p-12">
+            <Leaf className="text-emerald-400 h-16 w-16 mb-6" />
+            <h1 className="text-4xl font-bold text-white mb-4">Bienvenido a El Edén</h1>
+            <p className="text-lg text-gray-200">
+              Crea tu cuenta para empezar a transformar tu jardín en un paraíso.
+            </p>
+          </div>
         </div>
       </div>
 
       {/* Columna del formulario (derecha) */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-8 lg:p-12 overflow-y-auto">
+      <div className="w-full lg:w-1/2 flex justify-center p-6 sm:p-8 lg:p-12 overflow-y-auto lg:h-screen">
         <div className="w-full max-w-2xl">
           <div className="text-center lg:hidden mb-8">
             <Leaf className="text-emerald-400 h-12 w-12 mx-auto mb-4" />
