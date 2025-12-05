@@ -4,11 +4,7 @@ import api from '../services/api';
 import { encuestasService } from '../services/encuestasService';
 
 const TIPOS_PREGUNTA = [
-  { value: 'texto', label: 'Texto Libre' },
-  { value: 'numero', label: 'Número' },
-  { value: 'escala', label: 'Escala (1-5)' },
-  { value: 'si_no', label: 'Sí/No' },
-  { value: 'multiple', label: 'Opción Múltiple' }
+  { value: 'escala', label: 'Escala (1-10)' }
 ];
 
 const CrearEncuestaModal = ({ show, onClose, onSuccess, encuesta, modoEdicion }) => {
@@ -51,9 +47,11 @@ const CrearEncuestaModal = ({ show, onClose, onSuccess, encuesta, modoEdicion })
         titulo: encuesta.titulo,
         descripcion: encuesta.descripcion || '',
         activa: encuesta.activa,
-  preguntas: (encuesta.preguntas || []).map((pregunta) => ({
+        preguntas: (encuesta.preguntas || []).map((pregunta) => ({
           ...pregunta,
-          impacta_puntuacion: Boolean(pregunta.impacta_puntuacion)
+          tipo: 'escala',
+          impacta_puntuacion: Boolean(pregunta.impacta_puntuacion),
+          opciones: []
         }))
       });
     } else {
@@ -74,7 +72,7 @@ const CrearEncuestaModal = ({ show, onClose, onSuccess, encuesta, modoEdicion })
         ...prev.preguntas,
         {
           texto: '',
-          tipo: 'texto',
+          tipo: 'escala',
           orden: prev.preguntas.length + 1,
           obligatoria: true,
           opciones: [],
@@ -99,19 +97,7 @@ const CrearEncuestaModal = ({ show, onClose, onSuccess, encuesta, modoEdicion })
       ...prev,
       preguntas: prev.preguntas.map((p, i) => {
         if (i === index) {
-          const updated = { ...p, [campo]: valor };
-          // Si cambia a tipo múltiple y no tiene opciones, inicializar array
-          if (campo === 'tipo' && valor === 'multiple' && (!updated.opciones || updated.opciones.length === 0)) {
-            updated.opciones = [''];
-          }
-          // Si cambia de tipo múltiple a otro, limpiar opciones
-          if (campo === 'tipo' && valor !== 'multiple') {
-            updated.opciones = [];
-          }
-          if (campo === 'tipo' && valor !== 'escala') {
-            updated.impacta_puntuacion = false;
-          }
-          return updated;
+          return { ...p, [campo]: valor, tipo: 'escala', opciones: [] };
         }
         return p;
       })
@@ -178,9 +164,6 @@ const CrearEncuestaModal = ({ show, onClose, onSuccess, encuesta, modoEdicion })
       if (!pregunta.texto.trim()) {
         newErrors[`pregunta_${index}_texto`] = 'El texto de la pregunta es obligatorio';
       }
-      if (pregunta.tipo === 'multiple' && (!pregunta.opciones || pregunta.opciones.filter(o => o.trim()).length < 2)) {
-        newErrors[`pregunta_${index}_opciones`] = 'Debe proporcionar al menos 2 opciones';
-      }
     });
 
     setErrors(newErrors);
@@ -210,8 +193,9 @@ const CrearEncuestaModal = ({ show, onClose, onSuccess, encuesta, modoEdicion })
         ...formData,
         preguntas: formData.preguntas.map(p => ({
           ...p,
-          impacta_puntuacion: p.tipo === 'escala' ? Boolean(p.impacta_puntuacion) : false,
-          opciones: p.tipo === 'multiple' ? p.opciones.filter(o => o.trim()) : []
+          tipo: 'escala',
+          impacta_puntuacion: Boolean(p.impacta_puntuacion),
+          opciones: []
         }))
       };
 
@@ -364,18 +348,10 @@ const CrearEncuestaModal = ({ show, onClose, onSuccess, encuesta, modoEdicion })
                         )}
                       </div>
 
-                      <div className="flex gap-3">
-                        <select
-                          value={pregunta.tipo}
-                          onChange={(e) => actualizarPregunta(index, 'tipo', e.target.value)}
-                          className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          {TIPOS_PREGUNTA.map(tipo => (
-                            <option key={tipo.value} value={tipo.value}>
-                              {tipo.label}
-                            </option>
-                          ))}
-                        </select>
+                      <div className="flex gap-3 items-center">
+                        <span className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm">
+                          Escala (1-10)
+                        </span>
 
                         <label className="flex items-center gap-2 text-sm text-gray-300">
                           <input
@@ -387,53 +363,16 @@ const CrearEncuestaModal = ({ show, onClose, onSuccess, encuesta, modoEdicion })
                           Obligatoria
                         </label>
 
-                        {pregunta.tipo === 'escala' && (
-                          <label className="flex items-center gap-2 text-sm text-gray-300">
-                            <input
-                              type="checkbox"
-                              checked={pregunta.impacta_puntuacion}
-                              onChange={(e) => actualizarPregunta(index, 'impacta_puntuacion', e.target.checked)}
-                              className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
-                            />
-                            Impacta en puntuación
-                          </label>
-                        )}
+                        <label className="flex items-center gap-2 text-sm text-gray-300">
+                          <input
+                            type="checkbox"
+                            checked={pregunta.impacta_puntuacion}
+                            onChange={(e) => actualizarPregunta(index, 'impacta_puntuacion', e.target.checked)}
+                            className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
+                          />
+                          Impacta en puntuación
+                        </label>
                       </div>
-
-                      {/* Opciones para preguntas múltiples */}
-                      {pregunta.tipo === 'multiple' && (
-                        <div className="mt-3 space-y-2">
-                          <label className="block text-sm font-medium text-gray-300">Opciones:</label>
-                          {(pregunta.opciones || []).map((opcion, optIndex) => (
-                            <div key={optIndex} className="flex gap-2">
-                              <input
-                                type="text"
-                                value={opcion}
-                                onChange={(e) => actualizarOpcion(index, optIndex, e.target.value)}
-                                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder={`Opción ${optIndex + 1}`}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => eliminarOpcion(index, optIndex)}
-                                className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ))}
-                          <button
-                            type="button"
-                            onClick={() => agregarOpcion(index)}
-                            className="text-sm text-blue-400 hover:text-blue-300"
-                          >
-                            + Agregar opción
-                          </button>
-                          {errors[`pregunta_${index}_opciones`] && (
-                            <p className="text-red-400 text-sm">{errors[`pregunta_${index}_opciones`]}</p>
-                          )}
-                        </div>
-                      )}
                     </div>
 
                     <button

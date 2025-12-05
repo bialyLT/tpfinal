@@ -30,18 +30,12 @@ class PreguntaCreateUpdateSerializer(serializers.ModelSerializer):
         read_only_fields = ['id_pregunta']
 
     def validate(self, data):
-        """Validar que las preguntas de tipo múltiple tengan opciones"""
+        """Validar que solo se permitan preguntas de escala."""
         tipo = data.get('tipo') or (self.instance.tipo if self.instance else None)
-        if tipo == 'multiple':
-            if not data.get('opciones'):
-                raise serializers.ValidationError({
-                    'opciones': 'Las preguntas de opción múltiple deben tener opciones definidas.'
-                })
-            # Validar que opciones sea una lista
-            if not isinstance(data.get('opciones'), list):
-                raise serializers.ValidationError({
-                    'opciones': 'Las opciones deben ser una lista.'
-                })
+        if tipo != 'escala':
+            raise serializers.ValidationError({
+                'tipo': 'Solo se permiten preguntas de tipo escala (1-10).'
+            })
 
         impacta = data.get('impacta_puntuacion')
         if impacta is None and self.instance:
@@ -100,6 +94,12 @@ class EncuestaCreateUpdateSerializer(serializers.ModelSerializer):
         """Validar que haya al menos una pregunta"""
         if not value or len(value) == 0:
             raise serializers.ValidationError('Debe agregar al menos una pregunta a la encuesta.')
+
+        # Validar que todas sean de tipo escala
+        for preg in value:
+            tipo = preg.get('tipo')
+            if tipo and tipo != 'escala':
+                raise serializers.ValidationError('Solo se permiten preguntas de tipo escala (1-10).')
         return value
 
     def create(self, validated_data):
@@ -176,6 +176,7 @@ class RespuestaImpactoSerializer(serializers.ModelSerializer):
     reserva = serializers.SerializerMethodField()
     cliente = serializers.SerializerMethodField()
     valor = serializers.SerializerMethodField()
+    valor_texto = serializers.CharField(read_only=True, allow_null=True, allow_blank=True)
 
     class Meta:
         model = Respuesta
@@ -184,6 +185,7 @@ class RespuestaImpactoSerializer(serializers.ModelSerializer):
             'pregunta_texto',
             'valor_numerico',
             'valor',
+            'valor_texto',
             'encuesta_titulo',
             'fecha_encuesta',
             'reserva',

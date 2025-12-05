@@ -22,6 +22,17 @@ import { useAuth } from '../../context/AuthContext';
 import { handleApiError, success } from '../../utils/notifications';
 import { handlePagarFinal, handlePagarSena } from '../../utils/pagoHelpers';
 
+const FEEDBACK_PRESETS = [
+  'Demora en la atención',
+  'Calidad del servicio',
+  'Comunicación',
+  'No se cumplió lo acordado',
+  'Atención del personal',
+  'Otro'
+];
+
+const getPreguntaId = (pregunta) => pregunta?.id_pregunta ?? pregunta?.id;
+
 const ReservaDetallePage = () => {
   const { reservaId } = useParams();
   const navigate = useNavigate();
@@ -40,6 +51,7 @@ const ReservaDetallePage = () => {
     completada: false,
     yaRespondio: false,
   });
+  const [feedbackPreset, setFeedbackPreset] = useState({});
   const [enviandoEncuesta, setEnviandoEncuesta] = useState(false);
 
   const isAdmin = useMemo(() => (
@@ -128,12 +140,12 @@ const ReservaDetallePage = () => {
 
       const respuestasIniciales = {};
       encuestaActiva.preguntas.forEach((pregunta) => {
-        const preguntaId = pregunta.id ?? pregunta.id_pregunta;
+        const preguntaId = getPreguntaId(pregunta);
         respuestasIniciales[preguntaId] = {
           pregunta_id: preguntaId,
           valor_texto: null,
           valor_numero: null,
-          valor_escala: null,
+          valor_escala: 10,
           valor_boolean: null,
           valor_multiple: null,
         };
@@ -149,6 +161,7 @@ const ReservaDetallePage = () => {
         yaRespondio,
         error: null,
       });
+      setFeedbackPreset({});
     } catch (error) {
       if (error.response?.status === 404) {
         setSurveyState({
@@ -175,13 +188,42 @@ const ReservaDetallePage = () => {
   };
 
   const handleRespuestaChange = (preguntaId, tipo, valor) => {
+    setSurveyState((prev) => {
+      const updated = {
+        ...prev,
+        respuestas: {
+          ...prev.respuestas,
+          [preguntaId]: {
+            ...prev.respuestas[preguntaId],
+            [`valor_${tipo}`]: valor,
+          },
+        },
+      };
+
+      // Limpiar feedback si vuelve a 10 para evitar enviar texto innecesario
+      if (tipo === 'escala' && Number(valor) === 10) {
+        updated.respuestas[preguntaId].valor_texto = null;
+        setFeedbackPreset((prevPresets) => {
+          const next = { ...prevPresets };
+          delete next[preguntaId];
+          return next;
+        });
+      }
+
+      return updated;
+    });
+  };
+
+  const handleFeedbackPreset = (preguntaId, preset) => {
+    setFeedbackPreset((prev) => ({ ...prev, [preguntaId]: preset }));
+
     setSurveyState((prev) => ({
       ...prev,
       respuestas: {
         ...prev.respuestas,
         [preguntaId]: {
           ...prev.respuestas[preguntaId],
-          [`valor_${tipo}`]: valor,
+          valor_texto: preset === 'Otro' ? '' : preset,
         },
       },
     }));
@@ -194,20 +236,34 @@ const ReservaDetallePage = () => {
     }
 
     for (const pregunta of encuesta.preguntas) {
-      if (!pregunta.obligatoria) {
+      const preguntaId = getPreguntaId(pregunta);
+      const respuesta = respuestas[preguntaId];
+      const valor = respuesta?.valor_escala;
+      const respondida = valor !== null && valor !== undefined;
+
+      if (pregunta.obligatoria && !respondida) {
+        return false;
+      }
+
+      if (!respondida) {
         continue;
       }
 
-      const preguntaId = pregunta.id ?? pregunta.id_pregunta;
-      const respuesta = respuestas[preguntaId];
-      if (!respuesta) {
+      const escala = Number(valor);
+      if (Number.isNaN(escala) || escala < 1 || escala > 10) {
         return false;
       }
 
-      const valorCampo = `valor_${pregunta.tipo}`;
-      const valor = respuesta[valorCampo];
-      if (valor === null || valor === undefined || valor === '') {
-        return false;
+      if (escala < 10) {
+        const preset = feedbackPreset[preguntaId];
+        const feedback = (respuesta?.valor_texto || '').trim();
+        if (!preset && !feedback) {
+          return false;
+        }
+
+        if (preset === 'Otro' && !feedback) {
+          return false;
+        }
       }
     }
 
@@ -223,7 +279,23 @@ const ReservaDetallePage = () => {
 
     try {
       setEnviandoEncuesta(true);
-      const respuestasArray = Object.values(surveyState.respuestas);
+      const respuestasArray = Object.values(surveyState.respuestas).map((respuesta) => {
+        const preguntaId = respuesta.pregunta_id;
+        const preset = feedbackPreset[preguntaId];
+        const escala = respuesta?.valor_escala ?? null;
+        const textoBase = (respuesta?.valor_texto || '').trim();
+
+        let valorTexto = null;
+        if (escala !== null && escala < 10) {
+          valorTexto = preset === 'Otro' ? textoBase : (preset || textoBase) || null;
+        }
+
+        return {
+          ...respuesta,
+          valor_escala: escala,
+          valor_texto: valorTexto,
+        };
+      });
       await encuestasService.responderEncuesta(apiReservaId, respuestasArray);
       success('¡Gracias por compartir tu experiencia!');
       setSurveyState((prev) => ({
@@ -314,104 +386,67 @@ const ReservaDetallePage = () => {
   const puedeMostrarEncuesta = isCliente && reserva?.estado === 'completada' && surveyState.encuesta && !surveyState.completada;
 
   const renderPregunta = (pregunta) => {
-    const preguntaId = pregunta.id ?? pregunta.id_pregunta;
-    const respuesta = surveyState.respuestas[preguntaId];
+    const preguntaId = getPreguntaId(pregunta);
+    const respuesta = surveyState.respuestas[preguntaId] || {};
+    const escalaValue = respuesta.valor_escala ?? 10;
+    const requiereFeedback = Number(escalaValue) < 10;
+    const selectedPreset = feedbackPreset[preguntaId];
 
-    switch (pregunta.tipo) {
-      case 'texto':
-        return (
-          <textarea
-            className="w-full border border-gray-700 bg-gray-800 text-white rounded-lg p-3 focus:ring-2 focus:ring-emerald-500"
-            rows={3}
-            value={respuesta?.valor_texto || ''}
-            onChange={(e) => handleRespuestaChange(preguntaId, 'texto', e.target.value)}
-            required={pregunta.obligatoria}
-          />
-        );
-      case 'numero':
-        return (
-          <input
-            type="number"
-            className="w-full border border-gray-700 bg-gray-800 text-white rounded-lg p-3 focus:ring-2 focus:ring-emerald-500"
-            value={respuesta?.valor_numero ?? ''}
-            onChange={(e) => handleRespuestaChange(preguntaId, 'numero', e.target.value ? parseFloat(e.target.value) : null)}
-            required={pregunta.obligatoria}
-          />
-        );
-      case 'escala':
-        return (
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm text-gray-400">
-              <span>1 (Muy malo)</span>
-              <span>10 (Excelente)</span>
+    return (
+      <div className="space-y-3">
+        <div className="flex justify-between text-sm text-gray-400">
+          <span>1 (Muy malo)</span>
+          <span>10 (Excelente)</span>
+        </div>
+        <input
+          type="range"
+          min={1}
+          max={10}
+          className="w-full"
+          value={escalaValue}
+          onChange={(e) => handleRespuestaChange(preguntaId, 'escala', parseInt(e.target.value, 10))}
+          required={pregunta.obligatoria}
+        />
+        <div className="flex items-center justify-between">
+          <div className="text-center text-2xl font-bold text-emerald-400">
+            {escalaValue}
+          </div>
+          {/* Mensaje oculto para clientes */}
+        </div>
+
+        {requiereFeedback && (
+          <div className="space-y-2 border border-amber-500/50 rounded-lg p-3 bg-amber-900/30">
+            <p className="text-sm text-amber-100">Cuéntanos qué mejorar cuando la puntuación es menor a 10.</p>
+            <div className="flex flex-wrap gap-2">
+              {FEEDBACK_PRESETS.map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  className={`px-3 py-1 rounded-full text-xs border ${
+                    selectedPreset === preset
+                      ? 'bg-amber-500 text-white border-amber-400'
+                      : 'bg-transparent text-amber-100 border-amber-500/50 hover:bg-amber-800/60'
+                  }`}
+                  onClick={() => handleFeedbackPreset(preguntaId, preset)}
+                >
+                  {preset}
+                </button>
+              ))}
             </div>
-            <input
-              type="range"
-              min={1}
-              max={10}
-              className="w-full"
-              value={respuesta?.valor_escala ?? 5}
-              onChange={(e) => handleRespuestaChange(preguntaId, 'escala', parseInt(e.target.value, 10))}
-              required={pregunta.obligatoria}
-            />
-            <div className="text-center text-2xl font-bold text-emerald-400">
-              {respuesta?.valor_escala ?? 5}
-            </div>
-          </div>
-        );
-      case 'si_no':
-        return (
-          <div className="flex space-x-4">
-            <label className="flex items-center space-x-2 cursor-pointer">
-              <input
-                type="radio"
-                name={`pregunta_${preguntaId}`}
-                value="true"
-                checked={respuesta?.valor_boolean === true}
-                onChange={() => handleRespuestaChange(preguntaId, 'boolean', true)}
-                required={pregunta.obligatoria}
-                className="w-4 h-4 text-emerald-500"
+            {selectedPreset === 'Otro' && (
+              <textarea
+                className="w-full border border-gray-700 bg-gray-800 text-white rounded-lg p-3 focus:ring-2 focus:ring-amber-400"
+                rows={3}
+                placeholder="Ej: La atención fue lenta, faltó comunicación sobre los tiempos..."
+                value={respuesta.valor_texto || ''}
+                onChange={(e) => handleRespuestaChange(preguntaId, 'texto', e.target.value)}
+                required
               />
-              <span>Sí</span>
-            </label>
-            <label className="flex items-center space-x-2 cursor-pointer">
-              <input
-                type="radio"
-                name={`pregunta_${preguntaId}`}
-                value="false"
-                checked={respuesta?.valor_boolean === false}
-                onChange={() => handleRespuestaChange(preguntaId, 'boolean', false)}
-                required={pregunta.obligatoria}
-                className="w-4 h-4 text-emerald-500"
-              />
-              <span>No</span>
-            </label>
+            )}
           </div>
-        );
-      case 'multiple': {
-        const opciones = pregunta.opciones_multiple || pregunta.opciones || [];
-        return (
-          <div className="space-y-2">
-            {opciones.map((opcion, opcionIndex) => (
-              <label key={opcionIndex} className="flex items-center space-x-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name={`pregunta_${preguntaId}`}
-                  value={opcion}
-                  checked={respuesta?.valor_multiple === opcion}
-                  onChange={() => handleRespuestaChange(preguntaId, 'multiple', opcion)}
-                  required={pregunta.obligatoria}
-                  className="w-4 h-4 text-emerald-500"
-                />
-                <span>{opcion}</span>
-              </label>
-            ))}
-          </div>
-        );
-      }
-      default:
-        return null;
-    }
+        )}
+      </div>
+    );
   };
 
   if (loading) {

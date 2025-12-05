@@ -61,11 +61,7 @@ class Pregunta(models.Model):
     Cada pregunta pertenece a una encuesta.
     """
     TIPO_CHOICES = [
-        ('texto', 'Texto Libre'),
-        ('numero', 'Número'),
-        ('escala', 'Escala (1-5)'),
-        ('si_no', 'Sí/No'),
-        ('multiple', 'Opción Múltiple'),
+        ('escala', 'Escala (1-10)'),
     ]
 
     id_pregunta = models.AutoField(primary_key=True)
@@ -198,12 +194,6 @@ class Respuesta(models.Model):
     
     def get_valor(self):
         """Obtiene el valor de la respuesta según el tipo de pregunta"""
-        if self.pregunta.tipo == 'texto':
-            return self.valor_texto
-        elif self.pregunta.tipo in ['numero', 'escala']:
+        if self.pregunta.tipo == 'escala':
             return self.valor_numerico
-        elif self.pregunta.tipo == 'si_no':
-            return self.valor_boolean
-        elif self.pregunta.tipo == 'multiple':
-            return self.valor_texto
-        return None
+        return self.valor_texto or self.valor_boolean

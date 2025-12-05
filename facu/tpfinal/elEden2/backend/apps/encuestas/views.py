@@ -194,6 +194,13 @@ class EncuestaViewSet(viewsets.ModelViewSet):
                     except Pregunta.DoesNotExist:
                         continue
 
+                    # Solo se permiten preguntas de tipo escala
+                    if pregunta.tipo != 'escala':
+                        return Response(
+                            {'error': f'La pregunta "{pregunta.texto}" no es de tipo escala y no se puede responder.'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+
                     # Mapear valores a los campos reales del modelo Respuesta
                     valor_texto = respuesta_data.get('valor_texto')
                     # Aceptar varias claves numéricas y normalizarlas a valor_numerico
@@ -203,21 +210,41 @@ class EncuestaViewSet(viewsets.ModelViewSet):
                     if valor_numerico is None:
                         valor_numerico = respuesta_data.get('valor_escala')
 
-                    valor_boolean = respuesta_data.get('valor_boolean')
-                    # Para múltiples opciones, persistimos en valor_texto (como CSV o texto)
-                    if not valor_texto and respuesta_data.get('valor_multiple') is not None:
-                        vm = respuesta_data.get('valor_multiple')
-                        if isinstance(vm, (list, tuple)):
-                            valor_texto = ",".join(map(str, vm))
-                        else:
-                            valor_texto = str(vm)
+                    if valor_numerico is None:
+                        return Response(
+                            {'error': f'Debes proporcionar un valor de escala para "{pregunta.texto}".'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
 
+                    try:
+                        valor_numerico_int = int(valor_numerico)
+                    except (TypeError, ValueError):
+                        return Response(
+                            {'error': f'El valor de escala para "{pregunta.texto}" debe ser numérico entre 1 y 10.'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+
+                    if valor_numerico_int < 1 or valor_numerico_int > 10:
+                        return Response(
+                            {'error': f'El valor de escala para "{pregunta.texto}" debe estar entre 1 y 10.'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+
+                    # Feedback obligatorio si la escala es menor al máximo (10)
+                    if valor_numerico_int < 10:
+                        feedback = (valor_texto or '').strip()
+                        if not feedback:
+                            return Response(
+                                {'error': f'Por favor agrega un feedback para la pregunta "{pregunta.texto}" al seleccionar una puntuación menor a 10.'},
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                    
                     Respuesta.objects.create(
                         encuesta_respuesta=encuesta_respuesta,
                         pregunta=pregunta,
                         valor_texto=valor_texto,
-                        valor_numerico=valor_numerico,
-                        valor_boolean=valor_boolean,
+                        valor_numerico=valor_numerico_int,
+                        valor_boolean=None,
                     )
                 
                 # Marcar como completada

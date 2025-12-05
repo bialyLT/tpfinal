@@ -3,6 +3,17 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { encuestasService } from '../services/encuestasService';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 
+const FEEDBACK_PRESETS = [
+  'Demora en la atención',
+  'Calidad del servicio',
+  'Comunicación',
+  'No se cumplió lo acordado',
+  'Atención del personal',
+  'Otro'
+];
+
+const getPreguntaId = (pregunta) => pregunta?.id_pregunta ?? pregunta?.id;
+
 const EncuestaModal = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -33,9 +44,10 @@ const EncuestaModal = () => {
       
       // Inicializar respuestas vacías
       const respuestasIniciales = {};
-      data.preguntas.forEach(pregunta => {
-        respuestasIniciales[pregunta.id] = {
-          pregunta_id: pregunta.id,
+      data.preguntas.forEach((pregunta, idx) => {
+        const preguntaId = getPreguntaId(pregunta) ?? idx;
+        respuestasIniciales[preguntaId] = {
+          pregunta_id: preguntaId,
           valor_texto: null,
           valor_numero: null,
           valor_escala: null,
@@ -53,11 +65,30 @@ const EncuestaModal = () => {
   };
 
   const handleRespuestaChange = (preguntaId, tipo, valor) => {
+    setRespuestas(prev => {
+      const next = {
+        ...prev,
+        [preguntaId]: {
+          ...prev[preguntaId],
+          [`valor_${tipo}`]: valor
+        }
+      };
+
+      // Si la escala vuelve a 10, limpiar feedback para no enviarlo innecesariamente
+      if (tipo === 'escala' && Number(valor) === 10) {
+        next[preguntaId].valor_texto = null;
+      }
+
+      return next;
+    });
+  };
+
+  const handleFeedbackPreset = (preguntaId, preset) => {
     setRespuestas(prev => ({
       ...prev,
       [preguntaId]: {
         ...prev[preguntaId],
-        [`valor_${tipo}`]: valor
+        valor_texto: preset
       }
     }));
   };
@@ -66,14 +97,35 @@ const EncuestaModal = () => {
     if (!encuesta) return false;
 
     for (const pregunta of encuesta.preguntas) {
-      if (!pregunta.obligatoria) continue;
-
-      const respuesta = respuestas[pregunta.id];
+      const preguntaId = getPreguntaId(pregunta);
+      const respuesta = respuestas[preguntaId];
       const valorCampo = `valor_${pregunta.tipo}`;
-      
-      if (!respuesta[valorCampo] && respuesta[valorCampo] !== 0 && respuesta[valorCampo] !== false) {
+      const valor = respuesta?.[valorCampo];
+      const respondida = valor !== undefined && valor !== null;
+
+      if (pregunta.obligatoria && !respondida) {
         alert(`La pregunta "${pregunta.texto}" es obligatoria`);
         return false;
+      }
+
+      if (!respondida) {
+        continue;
+      }
+
+      if (pregunta.tipo === 'escala') {
+        const escala = Number(valor);
+        if (Number.isNaN(escala) || escala < 1 || escala > 10) {
+          alert(`Selecciona un valor entre 1 y 10 para "${pregunta.texto}"`);
+          return false;
+        }
+
+        if (escala < 10) {
+          const feedback = (respuesta?.valor_texto || '').trim();
+          if (!feedback) {
+            alert(`Agrega un feedback para la pregunta "${pregunta.texto}" al elegir menos de 10.`);
+            return false;
+          }
+        }
       }
     }
 
@@ -90,8 +142,12 @@ const EncuestaModal = () => {
     try {
       setEnviando(true);
       
-      // Convertir el objeto de respuestas a un array
-      const respuestasArray = Object.values(respuestas);
+      // Convertir el objeto de respuestas a un array y normalizar datos
+      const respuestasArray = Object.values(respuestas).map(respuesta => ({
+        ...respuesta,
+        valor_escala: respuesta?.valor_escala ?? null,
+        valor_texto: (respuesta?.valor_texto || '').trim() || null
+      }));
       
       await encuestasService.responderEncuesta(reservaId, respuestasArray);
       setCompletada(true);
@@ -109,108 +165,74 @@ const EncuestaModal = () => {
   };
 
   const renderPregunta = (pregunta) => {
-    const respuesta = respuestas[pregunta.id];
+    const preguntaId = getPreguntaId(pregunta);
+    const respuesta = respuestas[preguntaId] || {};
+    const escalaValue = respuesta.valor_escala ?? 5;
+    const requiereFeedback = Number(escalaValue) < 10;
 
-    switch (pregunta.tipo) {
-      case 'texto':
-        return (
-          <textarea
-            className="w-full border rounded-lg p-3 focus:ring-2 focus:ring-green-500"
-            rows="3"
-            value={respuesta.valor_texto || ''}
-            onChange={(e) => handleRespuestaChange(pregunta.id, 'texto', e.target.value)}
-            required={pregunta.obligatoria}
-          />
-        );
-
-      case 'numero':
-        return (
-          <input
-            type="number"
-            className="w-full border rounded-lg p-3 focus:ring-2 focus:ring-green-500"
-            value={respuesta.valor_numero || ''}
-            onChange={(e) => handleRespuestaChange(pregunta.id, 'numero', parseFloat(e.target.value))}
-            required={pregunta.obligatoria}
-          />
-        );
-
-      case 'escala':
-        return (
-          <div className="flex flex-col space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">1 (Muy malo)</span>
-              <span className="text-sm text-gray-600">10 (Excelente)</span>
-            </div>
-            <input
-              type="range"
-              min="1"
-              max="10"
-              className="w-full"
-              value={respuesta.valor_escala || 5}
-              onChange={(e) => handleRespuestaChange(pregunta.id, 'escala', parseInt(e.target.value))}
-              required={pregunta.obligatoria}
-            />
-            <div className="text-center text-2xl font-bold text-green-600">
-              {respuesta.valor_escala || 5}
-            </div>
-          </div>
-        );
-
-      case 'si_no':
-        return (
-          <div className="flex space-x-4">
-            <label className="flex items-center space-x-2 cursor-pointer">
-              <input
-                type="radio"
-                name={`pregunta_${pregunta.id}`}
-                value="true"
-                checked={respuesta.valor_boolean === true}
-                onChange={() => handleRespuestaChange(pregunta.id, 'boolean', true)}
-                required={pregunta.obligatoria}
-                className="w-4 h-4 text-green-600"
-              />
-              <span>Sí</span>
-            </label>
-            <label className="flex items-center space-x-2 cursor-pointer">
-              <input
-                type="radio"
-                name={`pregunta_${pregunta.id}`}
-                value="false"
-                checked={respuesta.valor_boolean === false}
-                onChange={() => handleRespuestaChange(pregunta.id, 'boolean', false)}
-                required={pregunta.obligatoria}
-                className="w-4 h-4 text-green-600"
-              />
-              <span>No</span>
-            </label>
-          </div>
-        );
-
-      case 'multiple': {
-        const opciones = pregunta.opciones_multiple || [];
-        return (
-          <div className="space-y-2">
-            {opciones.map((opcion, index) => (
-              <label key={index} className="flex items-center space-x-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name={`pregunta_${pregunta.id}`}
-                  value={opcion}
-                  checked={respuesta.valor_multiple === opcion}
-                  onChange={() => handleRespuestaChange(pregunta.id, 'multiple', opcion)}
-                  required={pregunta.obligatoria}
-                  className="w-4 h-4 text-green-600"
-                />
-                <span>{opcion}</span>
-              </label>
-            ))}
-          </div>
-        );
-      }
-
-      default:
-        return null;
+    if (pregunta.tipo !== 'escala') {
+      return (
+        <div className="text-sm text-red-600">
+          Este tipo de pregunta ya no está soportado. Contacta al administrador.
+        </div>
+      );
     }
+
+    return (
+      <div className="flex flex-col space-y-3">
+        <div className="flex justify-between items-center">
+          <span className="text-sm text-gray-600">1 (Muy malo)</span>
+          <span className="text-sm text-gray-600">10 (Excelente)</span>
+        </div>
+        <input
+          type="range"
+          min="1"
+          max="10"
+          className="w-full"
+          value={escalaValue}
+          onChange={(e) => handleRespuestaChange(preguntaId, 'escala', parseInt(e.target.value, 10))}
+          required={pregunta.obligatoria}
+        />
+        <div className="flex items-center justify-between">
+          <div className="text-center text-2xl font-bold text-green-600">
+            {escalaValue}
+          </div>
+          {/* Mensaje eliminado para clientes */}
+        </div>
+
+        {requiereFeedback && (
+          <div className="space-y-2 border rounded-lg p-3 bg-amber-50 border-amber-200">
+            <p className="text-sm text-amber-800">
+              Cuéntanos qué mejorar cuando la puntuación es menor a 10.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {FEEDBACK_PRESETS.map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  className={`px-3 py-1 rounded-full text-sm border ${
+                    respuesta.valor_texto === preset
+                      ? 'bg-amber-600 text-white border-amber-600'
+                      : 'bg-white text-amber-800 border-amber-300 hover:bg-amber-100'
+                  }`}
+                  onClick={() => handleFeedbackPreset(preguntaId, preset)}
+                >
+                  {preset}
+                </button>
+              ))}
+            </div>
+            <textarea
+              className="w-full border rounded-lg p-3 focus:ring-2 focus:ring-amber-500"
+              rows="3"
+              placeholder="Ej: La atención fue lenta, faltó comunicación sobre los tiempos..."
+              value={respuesta.valor_texto || ''}
+              onChange={(e) => handleRespuestaChange(preguntaId, 'texto', e.target.value)}
+              required={requiereFeedback}
+            />
+          </div>
+        )}
+      </div>
+    );
   };
 
   const cerrarModal = () => {
@@ -286,20 +308,23 @@ const EncuestaModal = () => {
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6">
           <div className="space-y-6">
-            {encuesta?.preguntas?.map((pregunta, index) => (
-              <div key={pregunta.id} className="border-b pb-6 last:border-b-0">
-                <label className="block mb-3">
-                  <span className="text-gray-700 font-medium">
-                    {index + 1}. {pregunta.texto}
-                    {pregunta.obligatoria && <span className="text-red-500 ml-1">*</span>}
-                  </span>
-                  {pregunta.descripcion && (
-                    <p className="text-sm text-gray-500 mt-1">{pregunta.descripcion}</p>
-                  )}
-                </label>
-                {renderPregunta(pregunta)}
-              </div>
-            ))}
+            {encuesta?.preguntas?.map((pregunta, index) => {
+              const preguntaId = getPreguntaId(pregunta) ?? index;
+              return (
+                <div key={preguntaId} className="border-b pb-6 last:border-b-0">
+                  <label className="block mb-3">
+                    <span className="text-gray-700 font-medium">
+                      {index + 1}. {pregunta.texto}
+                      {pregunta.obligatoria && <span className="text-red-500 ml-1">*</span>}
+                    </span>
+                    {pregunta.descripcion && (
+                      <p className="text-sm text-gray-500 mt-1">{pregunta.descripcion}</p>
+                    )}
+                  </label>
+                  {renderPregunta(pregunta)}
+                </div>
+              );
+            })}
           </div>
 
           {/* Footer */}

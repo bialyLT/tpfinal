@@ -789,12 +789,6 @@ const MiPerfil = () => {
                         </div>
                         <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-gray-300">
                           <div>
-                            <p className="text-xs uppercase text-gray-500 mb-1">Cliente</p>
-                            {respuesta.cliente
-                              ? `${respuesta.cliente.nombre} ${respuesta.cliente.apellido}`
-                              : 'No informado'}
-                          </div>
-                          <div>
                             <p className="text-xs uppercase text-gray-500 mb-1">Reserva / Servicio</p>
                             {respuesta.reserva
                               ? `${respuesta.reserva.servicio || 'Servicio'} · ${formatImpactDate(respuesta.reserva.fecha_reserva)}`
@@ -805,6 +799,12 @@ const MiPerfil = () => {
                             {formatImpactDate(respuesta.fecha_encuesta)}
                           </div>
                         </div>
+                        {respuesta.valor_texto && (
+                          <div className="mt-3 p-3 bg-gray-800/60 border border-gray-700 rounded-lg text-sm text-gray-200">
+                            <p className="text-xs uppercase text-gray-500 mb-1">La calificación no fue de 10 debido a:</p>
+                            <p className="whitespace-pre-wrap">{respuesta.valor_texto}</p>
+                          </div>
+                        )}
                       </li>
                     ))}
                   </ul>
