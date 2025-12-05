@@ -332,7 +332,17 @@ class EmpleadoViewSet(viewsets.ModelViewSet):
         """Obtener solo usuarios que pertenecen al grupo 'Empleados'"""
         empleados_group = Group.objects.filter(name='Empleados').first()
         if empleados_group:
-            return User.objects.filter(groups=empleados_group).select_related('persona').select_related('persona__empleado')
+            return (
+                User.objects
+                .filter(groups=empleados_group)
+                .select_related(
+                    'persona',
+                    'persona__empleado',
+                    'persona__localidad',
+                    'persona__genero',
+                    'persona__tipo_documento'
+                )
+            )
         return User.objects.none()
     
     def get_serializer_class(self):
@@ -367,7 +377,7 @@ class EmpleadoViewSet(viewsets.ModelViewSet):
             # No fallar la creación si el email falla
             logger.error(f"Error al enviar email de bienvenida a empleado: {str(e)}")
         
-        headers = self.get_success_headers(serializer.data)
+        headers = self.get_success_headers({'id': user.id})
         return Response(
             UserSerializer(user).data,
             status=status.HTTP_201_CREATED,

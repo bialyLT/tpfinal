@@ -58,10 +58,53 @@ class ProveedorSerializer(serializers.ModelSerializer):
         read_only_fields = ['id_proveedor', 'fecha_alta']
 
 
+class EmpleadoPersonaSerializer(serializers.ModelSerializer):
+    """Resumen compacto de datos de persona para empleados."""
+    genero = serializers.CharField(source='genero.genero', read_only=True)
+    tipo_documento = serializers.CharField(source='tipo_documento.tipo', read_only=True)
+    localidad = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Persona
+        fields = [
+            'id_persona',
+            'nombre',
+            'apellido',
+            'email',
+            'telefono',
+            'nro_documento',
+            'calle',
+            'numero',
+            'piso',
+            'dpto',
+            'genero',
+            'genero_id',
+            'tipo_documento',
+            'tipo_documento_id',
+            'localidad',
+            'localidad_id'
+        ]
+        read_only_fields = fields
+
+    def get_localidad(self, obj):
+        localidad = getattr(obj, 'localidad', None)
+        if not localidad:
+            return None
+        return {
+            'id': localidad.id_localidad,
+            'nombre': localidad.nombre_localidad,
+            'provincia': localidad.nombre_provincia,
+            'pais': localidad.nombre_pais,
+            'cp': localidad.cp
+        }
+
+
 class UserSerializer(serializers.ModelSerializer):
     """Serializer para listar empleados (usuarios del grupo "Empleados")"""
     groups = serializers.SerializerMethodField()
     empleado_metricas = serializers.SerializerMethodField()
+    persona = EmpleadoPersonaSerializer(read_only=True)
+    empleado = serializers.SerializerMethodField()
     
     class Meta:
         model = User
@@ -76,6 +119,8 @@ class UserSerializer(serializers.ModelSerializer):
             'groups',
             'date_joined',
             'last_login',
+            'persona',
+            'empleado',
             'empleado_metricas'
         ]
         read_only_fields = ['id', 'date_joined', 'last_login']
@@ -109,6 +154,18 @@ class UserSerializer(serializers.ModelSerializer):
             return getattr(persona, 'empleado', None)
 
         return None
+
+    def get_empleado(self, obj):
+        empleado = self._resolve_empleado(obj)
+        if not empleado:
+            return None
+        return {
+            'id_empleado': empleado.id_empleado,
+            'cargo': empleado.cargo,
+            'activo': empleado.activo,
+            'fecha_contratacion': empleado.fecha_contratacion,
+            'observaciones': empleado.observaciones,
+        }
 
 
 class CreateEmpleadoSerializer(serializers.Serializer):

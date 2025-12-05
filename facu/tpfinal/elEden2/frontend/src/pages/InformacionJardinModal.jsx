@@ -114,14 +114,14 @@ const InformacionJardinModal = ({ reserva, isOpen, onClose, onJardinSaved }) => 
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+      <div className="bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
           <div className="flex items-center space-x-3">
               <h2 className="text-xl font-bold text-white">{reserva && reserva.jardin ? 'Actualizar información del jardín' : 'Cargar información del jardín'}</h2>
             </div>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg"><X className="w-5 h-5" /></button>
         </div>
-        <div className="p-6">
+        <div className="p-6 overflow-y-auto flex-1">
           <div className="bg-gray-700 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-white font-semibold">Zonas del Jardín</h3>
