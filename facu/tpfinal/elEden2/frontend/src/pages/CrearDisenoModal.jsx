@@ -483,12 +483,6 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
   };
 
   const agregarProducto = () => {
-    // Si no hay productos con stock > 0, no permitir agregar
-    const anyStockAvailable = productos.some(p => getStockForProduct(p.id_producto) > 0);
-    if (!anyStockAvailable) {
-      showError('No hay productos con stock disponible');
-      return;
-    }
     setProductosSeleccionados([...productosSeleccionados, {
       producto_id: '',
       cantidad: 1,
@@ -520,18 +514,8 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
     } else if (campo === 'cantidad') {
       let cantidad = parseInt(valor, 10);
       if (Number.isNaN(cantidad)) cantidad = 0;
-
-      const prodIdForIndex = parseInt(nuevosProductos[index].producto_id, 10);
-      const stock = prodIdForIndex ? getStockForProduct(prodIdForIndex) : null;
-
-      if (stock !== null && stock !== undefined) {
-        const min = stock > 0 ? 1 : 0;
-        const max = stock;
-        if (cantidad < min) cantidad = min;
-        if (cantidad > max) cantidad = max;
-      } else {
-        if (cantidad < 1) cantidad = 1;
-      }
+      // Permitimos cualquier cantidad >= 0 (sin clamp por stock para poder estimar presupuesto)
+      if (cantidad < 0) cantidad = 0;
       nuevosProductos[index][campo] = cantidad;
     } else {
       nuevosProductos[index][campo] = valor;
@@ -577,6 +561,30 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       }
       
       const formDataToSend = new FormData();
+
+      // No permitir crear si se seleccionó un producto con stock 0 y cantidad >= 1
+      const productoSinStock = productosSeleccionados.find(p => {
+        const qty = Number(p.cantidad) || 0;
+        const stock = p.producto_id ? getStockForProduct(p.producto_id) : null;
+        return p.producto_id && qty >= 1 && (stock === 0 || stock === null || stock === undefined || stock < 1);
+      });
+
+      if (productoSinStock) {
+        showError('Uno de los productos seleccionados no tiene stock disponible. Ajusta la cantidad a 0 o elimínalo.');
+        return;
+      }
+
+      // No permitir crear si la cantidad excede el stock disponible
+      const productoExcedeStock = productosSeleccionados.find(p => {
+        const qty = Number(p.cantidad) || 0;
+        const stock = p.producto_id ? getStockForProduct(p.producto_id) : null;
+        return p.producto_id && stock !== null && stock !== undefined && stock >= 0 && qty > stock;
+      });
+
+      if (productoExcedeStock) {
+        showError('La cantidad de un producto excede el stock disponible. Ajusta la cantidad o selecciona otro producto.');
+        return;
+      }
       
       // Agregar datos básicos
       // Determine servicio_id: use existing servicioId or derive from selected reserva
@@ -942,7 +950,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                         }}
                         placeholder="Buscar producto..."
                         showStock={true}
-                        allowSelectZeroStock={!!producto.producto_id}
+                        allowSelectZeroStock={true}
                       />
                     </div>
                     
@@ -950,11 +958,9 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                       <label className="block text-xs text-gray-400 mb-1">Cantidad</label>
                       <input
                         type="number"
-                        min={getStockForProduct(producto.producto_id) > 0 ? 1 : 0}
-                        max={getStockForProduct(producto.producto_id)}
+                        min={0}
                         value={producto.cantidad}
                         onChange={(e) => actualizarProducto(index, 'cantidad', e.target.value)}
-                        disabled={getStockForProduct(producto.producto_id) === 0}
                         className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                       />
                       <p className="text-xs text-gray-400 mt-1">Stock disponible: {getStockForProduct(producto.producto_id)}</p>
