@@ -129,28 +129,28 @@ const InformacionJardinModal = ({ reserva, isOpen, onClose, onJardinSaved }) => 
             </div>
             <div className="mt-2">
               {zonas.map((zona, zi) => (
-                <div key={zi} className="grid grid-cols-1 md:grid-cols-6 gap-3 mb-2 items-end">
-                  <div className="md:col-span-2">
-                    <label className="block text-xs text-gray-400 mb-1">Nombre <span className="text-xs text-gray-500">(opcional)</span></label>
-                    <input placeholder="Nombre de la zona (opcional)" type="text" value={zona.nombre} onChange={(e) => setZonas(prev => { const next = [...prev]; next[zi].nombre = e.target.value; return next; })} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1">Ancho (m)</label>
-                    <input type="number" value={zona.ancho} onChange={(e) => setZonas(prev => { const next = [...prev]; next[zi].ancho = e.target.value; return next; })} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1">Largo (m)</label>
-                    <input type="number" value={zona.largo} onChange={(e) => setZonas(prev => { const next = [...prev]; next[zi].largo = e.target.value; return next; })} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1">Forma</label>
-                    <select value={zona.forma || ''} onChange={(e) => setZonas(prev => { const next = [...prev]; next[zi].forma = e.target.value; return next; })} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm">
-                      <option value="">Seleccionar...</option>
-                      {formas.map(f => <option key={f.id_forma} value={f.id_forma}>{f.nombre}</option>)}
-                    </select>
-                  </div>
-                  <div className="md:col-span-1">
-                    <div className="mb-2">
+                <div key={zi} className="mb-4 rounded-lg border border-gray-600 bg-gray-700/70 p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-7 gap-3 items-start">
+                    <div className="md:col-span-2">
+                      <label className="block text-xs text-gray-400 mb-1">Nombre <span className="text-xs text-gray-500">(opcional)</span></label>
+                      <input placeholder="Nombre de la zona (opcional)" type="text" value={zona.nombre} onChange={(e) => setZonas(prev => { const next = [...prev]; next[zi].nombre = e.target.value; return next; })} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Ancho (m)</label>
+                      <input type="number" value={zona.ancho} onChange={(e) => setZonas(prev => { const next = [...prev]; next[zi].ancho = e.target.value; return next; })} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Largo (m)</label>
+                      <input type="number" value={zona.largo} onChange={(e) => setZonas(prev => { const next = [...prev]; next[zi].largo = e.target.value; return next; })} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Forma</label>
+                      <select value={zona.forma || ''} onChange={(e) => setZonas(prev => { const next = [...prev]; next[zi].forma = e.target.value; return next; })} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm">
+                        <option value="">Seleccionar...</option>
+                        {formas.map(f => <option key={f.id_forma} value={f.id_forma}>{f.nombre}</option>)}
+                      </select>
+                    </div>
+                    <div className="md:col-span-2">
                       <label className="block text-xs text-gray-400 mb-1">Imágenes (máx 3)</label>
                       <div className="flex flex-wrap gap-2">
                         {(zona.imagenes || []).map((img, imgIdx) => (
@@ -171,9 +171,9 @@ const InformacionJardinModal = ({ reserva, isOpen, onClose, onJardinSaved }) => 
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => handleRemove(zi)} className="px-3 py-1 bg-red-600 rounded">Eliminar</button>
-                    </div>
+                  </div>
+                  <div className="flex justify-end mt-4">
+                    <button type="button" onClick={() => handleRemove(zi)} className="px-3 py-1 bg-red-600 rounded">Eliminar</button>
                   </div>
                 </div>
               ))}

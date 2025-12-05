@@ -70,6 +70,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
   const [imagenesExistentes, setImagenesExistentes] = useState([]); // Imágenes ya guardadas del diseño
   const [productosSeleccionados, setProductosSeleccionados] = useState([]);
   const [previewImages, setPreviewImages] = useState([]);
+  const [productImagePreview, setProductImagePreview] = useState(null);
   const [reservasConJardin, setReservasConJardin] = useState([]);
   const [reservaSeleccionadaId, setReservaSeleccionadaId] = useState(null);
   const [searchReservaInput, setSearchReservaInput] = useState('');
@@ -891,10 +892,20 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
 
               {productosSeleccionados.map((producto, index) => (
                   <div key={index} className="bg-gray-700 rounded-lg p-4 mb-3">
-                  <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
+                  <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-start">
                     <div className="flex items-center justify-center">
                       { (producto.imagen || getProductImage(producto.producto_id)) ? (
-                        <img src={producto.imagen || getProductImage(producto.producto_id)} alt="producto" className="w-14 h-14 object-cover rounded-md" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const url = producto.imagen || getProductImage(producto.producto_id);
+                            if (url) setProductImagePreview({ url, nombre: 'Producto seleccionado' });
+                          }}
+                          className="relative group focus:outline-none"
+                        >
+                          <img src={producto.imagen || getProductImage(producto.producto_id)} alt="producto" className="w-14 h-14 object-cover rounded-md ring-1 ring-transparent group-hover:ring-green-500" />
+                          <span className="absolute inset-0 bg-black/50 text-white text-[10px] opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-md transition-opacity">Ver</span>
+                        </button>
                       ) : (
                         <div className="w-14 h-14 flex items-center justify-center rounded-md bg-gray-600 text-gray-400">
                           <Package className="w-6 h-6" />
@@ -960,7 +971,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                       />
                     </div>
                     
-                    <div>
+                    <div className="pt-5 flex items-start">
                       <button
                         type="button"
                         onClick={() => eliminarProducto(index)}
@@ -1045,14 +1056,14 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Fecha propuesta
                 </label>
-                <div className="bg-gray-900 p-2 rounded-md border border-gray-700">
+                <div className="bg-gray-800 p-2 rounded-md">
                   <div className="relative">
                     <input
                       ref={fpRef}
                       type="text"
                       readOnly
                       placeholder="Seleccionar fecha"
-                      className={`w-full px-3 py-2 bg-gray-700 border rounded-md text-white focus:outline-none focus:ring-2 ${fechaError ? 'border-red-500 focus:ring-red-500' : 'border-gray-600 focus:ring-green-500'}`}
+                      className={`w-full px-3 py-2 bg-gray-700 rounded-md text-white focus:outline-none focus:ring-2 ${fechaError ? 'focus:ring-red-500' : 'focus:ring-green-500'}`}
                     />
                   </div>
                 </div>
@@ -1066,14 +1077,14 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Hora
                 </label>
-                <div className="bg-gray-900 p-2 rounded-md border border-gray-700">
+                <div className="bg-gray-800 p-2 rounded-md">
                   <div className="relative">
                     <input
                       ref={fpTimeRef}
                       type="text"
                       readOnly
                       placeholder="Seleccionar hora"
-                      className={`w-full px-3 py-2 bg-gray-700 border rounded-md text-white focus:outline-none focus:ring-2 ${fechaError ? 'border-red-500 focus:ring-red-500' : 'border-gray-600 focus:ring-green-500'}`}
+                      className={`w-full px-3 py-2 bg-gray-700 rounded-md text-white focus:outline-none focus:ring-2 ${fechaError ? 'focus:ring-red-500' : 'focus:ring-green-500'}`}
                     />
                   </div>
                 </div>
@@ -1128,6 +1139,25 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
           </div>
         </form>
       </div>
+
+      {/* Vista previa grande de imagen de producto */}
+      {productImagePreview && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-6">
+          <div className="relative bg-gray-900 rounded-lg shadow-2xl p-4 max-w-3xl w-full">
+            <button
+              type="button"
+              onClick={() => setProductImagePreview(null)}
+              className="absolute top-3 right-3 p-2 bg-gray-800 text-gray-200 rounded-full hover:bg-gray-700"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div className="text-gray-200 text-sm mb-3 pr-10">{productImagePreview.nombre || 'Vista previa'}</div>
+            <div className="bg-black rounded-lg overflow-hidden border border-gray-700">
+              <img src={productImagePreview.url} alt="Vista previa producto" className="w-full max-h-[70vh] object-contain" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
