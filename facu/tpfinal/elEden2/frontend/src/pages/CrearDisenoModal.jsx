@@ -565,6 +565,16 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
 
     try {
       setLoading(true);
+
+      const validProducts = productosSeleccionados.filter(p => p.producto_id && Number(p.cantidad) >= 1);
+      const hasImages = modoEdicion
+        ? (imagenesDiseno.length > 0 || imagenesExistentes.length > 0)
+        : imagenesDiseno.length > 0;
+
+      if (!hasImages && validProducts.length === 0) {
+        showError('Debes agregar al menos una imagen o al menos un producto (cantidad mínima 1) antes de guardar el diseño');
+        return;
+      }
       
       const formDataToSend = new FormData();
       
@@ -618,9 +628,9 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       });
       
       // Agregar productos como JSON string
-      if (productosSeleccionados.length > 0) {
-        const productosValidados = productosSeleccionados.filter(p => 
-          p.producto_id && p.cantidad && p.precio_unitario
+      if (validProducts.length > 0) {
+        const productosValidados = validProducts.filter(p => 
+          p.producto_id && Number(p.cantidad) >= 1 && p.precio_unitario
         );
         formDataToSend.append('productos', JSON.stringify(productosValidados));
       }
