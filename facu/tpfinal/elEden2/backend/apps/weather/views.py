@@ -114,6 +114,43 @@ class PendingWeatherAlertsAPIView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+class DismissWeatherAlertAPIView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, alert_id):
+        try:
+            alerta = WeatherAlert.objects.select_related('reserva').get(pk=alert_id)
+        except WeatherAlert.DoesNotExist:
+            return Response({'detail': 'Alerta no encontrada'}, status=status.HTTP_404_NOT_FOUND)
+
+        comentario = request.data.get('comentario') or request.data.get('motivo') or 'Alerta descartada sin reprogramación'
+        payload = alerta.payload or {}
+        payload['manual_resolution'] = {
+            'comment': comentario,
+            'action': 'dismissed',
+            'resolved_at': timezone.now().isoformat(),
+            'user_id': request.user.id,
+            'user_email': request.user.email,
+        }
+        alerta.payload = payload
+        alerta.status = 'resolved'
+        alerta.requires_reprogramming = False
+        alerta.resolved_at = timezone.now()
+        alerta.resolved_by = request.user
+        alerta.save(update_fields=['payload', 'status', 'requires_reprogramming', 'resolved_at', 'resolved_by'])
+
+        reserva = alerta.reserva
+        if reserva:
+            reserva.requiere_reprogramacion = False
+            reserva.motivo_reprogramacion = None
+            reserva.fecha_reprogramada_sugerida = None
+            reserva.reprogramacion_fuente = None
+            reserva.save(update_fields=['requiere_reprogramacion', 'motivo_reprogramacion', 'fecha_reprogramada_sugerida', 'reprogramacion_fuente'])
+
+        serializer = WeatherAlertSerializer(alerta)
+        return Response({'mensaje': 'Alerta descartada, se mantiene la fecha original.', 'alerta': serializer.data}, status=status.HTTP_200_OK)
+
+
 class EligibleReservationsAPIView(APIView):
 
     def get(self, request):

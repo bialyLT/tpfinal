@@ -6,6 +6,7 @@ import { Leaf, ArrowLeft } from 'lucide-react';
 import api from '../../services/api';
 import { addressService } from '../../services';
 import GoogleLoginButton from '../../components/GoogleLoginButton';
+import useAddressSuggestions from '../../hooks/useAddressSuggestions';
 
 const RegisterPage = () => {
   const [formData, setFormData] = useState({
@@ -34,6 +35,12 @@ const RegisterPage = () => {
   const [addressError, setAddressError] = useState('');
   const [isAddressLoading, setIsAddressLoading] = useState(false);
   const [showManualLocalidad, setShowManualLocalidad] = useState(false);
+  const {
+    suggestions: addressSuggestions,
+    isLoading: isAutocompleteLoading,
+    autocompleteError,
+    clearSuggestions,
+  } = useAddressSuggestions(addressSearch);
 
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
@@ -67,8 +74,9 @@ const RegisterPage = () => {
     });
   };
 
-  const handleAddressLookup = async () => {
-    if (!addressSearch.trim()) {
+  const handleAddressLookup = async (forcedAddress) => {
+    const targetAddress = (forcedAddress ?? addressSearch).trim();
+    if (!targetAddress) {
       setAddressError('Ingresa una dirección completa para buscar');
       return;
     }
@@ -76,7 +84,7 @@ const RegisterPage = () => {
     setIsAddressLoading(true);
     setAddressError('');
     try {
-      const data = await addressService.lookup(addressSearch.trim());
+      const data = await addressService.lookup(targetAddress);
       setAddressInfo(data);
       setShowManualLocalidad(false);
       setFormData((prev) => ({
@@ -85,6 +93,8 @@ const RegisterPage = () => {
         numero: data.numero || prev.numero,
         localidad_id: data.localidad_id ? String(data.localidad_id) : prev.localidad_id,
       }));
+      clearSuggestions();
+      setAddressSearch(data.direccion_formateada || targetAddress);
     } catch (err) {
       console.error('Error al buscar dirección', err);
       setAddressInfo(null);
@@ -92,6 +102,16 @@ const RegisterPage = () => {
     } finally {
       setIsAddressLoading(false);
     }
+  };
+
+  const handleSuggestionSelect = (suggestion) => {
+    const formatted = suggestion?.direccion_formateada || `${suggestion?.calle || ''} ${suggestion?.numero || ''}`.trim();
+    if (!formatted) {
+      return;
+    }
+    setAddressSearch(formatted);
+    clearSuggestions();
+    handleAddressLookup(formatted);
   };
 
   const handleSubmit = async (e) => {
@@ -259,15 +279,39 @@ const RegisterPage = () => {
                   Dirección completa <span className="text-red-500">*</span>
                 </label>
                 <div className="flex flex-col sm:flex-row gap-3">
-                  <input
-                    id="direccion_search"
-                    name="direccion_search"
-                    type="text"
-                    value={addressSearch}
-                    onChange={(e) => setAddressSearch(e.target.value)}
-                    className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-md placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    placeholder="Ej: Av. Siempre Viva 742, Buenos Aires"
-                  />
+                  <div className="flex-1 relative">
+                    <input
+                      id="direccion_search"
+                      name="direccion_search"
+                      type="text"
+                      value={addressSearch}
+                      onChange={(e) => setAddressSearch(e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      placeholder="Ej: Av. Siempre Viva 742, Buenos Aires"
+                    />
+                    {addressSuggestions.length > 0 && (
+                      <ul className="absolute z-20 mt-1 w-full bg-gray-900 border border-gray-700 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                        {addressSuggestions.map((suggestion, idx) => (
+                          <li key={`${suggestion.latitud || idx}-${suggestion.longitud || idx}-${idx}`}>
+                            <button
+                              type="button"
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => handleSuggestionSelect(suggestion)}
+                              className="w-full text-left px-3 py-2 hover:bg-gray-800"
+                            >
+                              <p className="text-sm text-white">{suggestion.direccion_formateada || `${suggestion.calle || ''} ${suggestion.numero || ''}`}</p>
+                              <p className="text-xs text-gray-400">
+                                {[suggestion.ciudad, suggestion.provincia, suggestion.pais].filter(Boolean).join(' • ')}
+                              </p>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {isAutocompleteLoading && (
+                      <p className="absolute right-3 top-2 text-xs text-gray-400">Buscando...</p>
+                    )}
+                  </div>
                   <button
                     type="button"
                     onClick={handleAddressLookup}
@@ -278,6 +322,9 @@ const RegisterPage = () => {
                   </button>
                 </div>
                 <p className="text-sm text-gray-400 mt-1">Usaremos este dato para completar ciudad, provincia y país automáticamente.</p>
+                {autocompleteError && !addressError && (
+                  <p className="text-sm text-yellow-400 mt-2">{autocompleteError}</p>
+                )}
                 {addressError && <p className="text-sm text-red-400 mt-2">{addressError}</p>}
                 {addressInfo?.direccion_formateada && (
                   <p className="text-sm text-emerald-400 mt-2">Dirección detectada: {addressInfo.direccion_formateada}</p>

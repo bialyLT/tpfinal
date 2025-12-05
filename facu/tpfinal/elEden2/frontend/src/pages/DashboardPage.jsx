@@ -50,19 +50,31 @@ const DashboardPage = () => {
   const [reprogramDate, setReprogramDate] = useState('');
   const [reprogramMessage, setReprogramMessage] = useState('Reprogramación por alerta climática');
   const [reprogramming, setReprogramming] = useState(false);
+  const [dismissingAlertId, setDismissingAlertId] = useState(null);
 
   const [stats, setStats] = useState({
     total_users: 0,
     active_services: 0,
     monthly_revenue: 0
   });
-  const [temperature, setTemperature] = useState(null);
-  const [lastUpdate, setLastUpdate] = useState(null);
   const [loadingStats, setLoadingStats] = useState(false);
+
+  const parseDateValue = (value) => {
+    if (!value) return null;
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return new Date(`${value}T00:00:00`);
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+    return date;
+  };
 
   const formatDatetimeLocal = (value) => {
     if (!value) return '';
-    const date = new Date(value);
+    const date = parseDateValue(value);
+    if (!date) return '';
     const tz = date.getTimezoneOffset();
     const local = new Date(date.getTime() - tz * 60000);
     return local.toISOString().slice(0, 16);
@@ -70,12 +82,19 @@ const DashboardPage = () => {
 
   const formatDateForDisplay = (value) => {
     if (!value) return 'Sin fecha';
-    return new Date(value).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+    const date = parseDateValue(value);
+    if (!date) return value;
+    const isDateOnly = typeof value === 'string' && !value.includes('T');
+    return isDateOnly
+      ? date.toLocaleDateString('es-AR')
+      : date.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
   };
 
   const formatForecastDate = (value) => {
     if (!value) return '--';
-    return new Date(value).toLocaleDateString('es-AR', {
+    const date = parseDateValue(value);
+    if (!date) return '--';
+    return date.toLocaleDateString('es-AR', {
       weekday: 'short',
       day: 'numeric',
       month: 'short'
@@ -96,15 +115,19 @@ const DashboardPage = () => {
     return numeric.toFixed(1);
   };
 
+  const resolveSuggestedDatetime = (alerta) => {
+    if (!alerta) return formatDatetimeLocal(new Date().toISOString());
+    const candidate = alerta?.reserva_detalle?.fecha_reprogramada_sugerida
+      || alerta?.payload?.suggested_reprogramming
+      || alerta?.reserva_detalle?.fecha_reserva
+      || new Date().toISOString();
+    return formatDatetimeLocal(candidate);
+  };
+
   useEffect(() => {
     if (isAdmin) {
       setLoadingStats(true);
       fetchStats();
-      fetchTemperature();
-
-      // Actualizar temperatura cada 10 minutos
-      const interval = setInterval(fetchTemperature, 10 * 60 * 1000);
-      return () => clearInterval(interval);
     }
   }, [isAdmin]);
 
@@ -175,7 +198,7 @@ const DashboardPage = () => {
       const created = response?.created || 0;
       const reservasDetectadas = response?.reservas_detectadas || 0;
       const successMessage = created > 0
-        ? `Se generaron ${created} alertas para ${reservasDetectadas} reservas del ${new Date(modalDate).toLocaleDateString('es-AR')}.`
+        ? `Se generaron ${created} alertas para ${reservasDetectadas} reservas del ${formatDateForDisplay(modalDate)}.`
         : 'No hay reservas para la fecha seleccionada.';
       setWeatherSuccess(successMessage);
       closeWeatherModal();
@@ -191,7 +214,7 @@ const DashboardPage = () => {
 
   const handleReprogram = (alerta) => {
     if (!alerta?.reserva_detalle?.id_reserva) return;
-    const defaultValue = formatDatetimeLocal(alerta.reserva_detalle.fecha_reserva || new Date().toISOString());
+    const defaultValue = resolveSuggestedDatetime(alerta);
     setReprogramReservaId(alerta.reserva_detalle.id_reserva);
     setReprogramDate(defaultValue);
     setReprogramMessage('Reprogramación por alerta climática');
@@ -226,6 +249,23 @@ const DashboardPage = () => {
       setWeatherError('No se pudo reprogramar la reserva.');
     } finally {
       setReprogramming(false);
+    }
+  };
+
+  const handleDismissAlert = async (alerta) => {
+    if (!alerta?.id) return;
+    setWeatherError('');
+    setWeatherSuccess('');
+    setDismissingAlertId(alerta.id);
+    try {
+      await weatherService.dismissAlert(alerta.id, { comentario: 'Se mantiene la fecha original.' });
+      setWeatherSuccess('Alerta descartada. La reserva mantiene su fecha.');
+      await refreshWeatherData();
+    } catch (error) {
+      console.error('dismiss alert error', error);
+      setWeatherError('No se pudo descartar la alerta.');
+    } finally {
+      setDismissingAlertId(null);
     }
   };
 
@@ -264,17 +304,6 @@ const DashboardPage = () => {
     }
   };
 
-  const fetchTemperature = async () => {
-    try {
-      const data = await adminService.fetchCurrentTemperature();
-      setTemperature(data);
-      setLastUpdate(new Date());
-    } catch (error) {
-      console.error('Error fetching temperature:', error);
-      setTemperature(null);
-    }
-  };
-
   const recentActivity = [
     { id: 'SER-001', date: '2025-09-03', customer: 'Leslie Alexander', service: 'Poda de árboles', status: 'Completado', statusColor: 'bg-green-500' },
     { id: 'SER-002', date: '2025-09-02', customer: 'Michael Foster', service: 'Diseño de jardín', status: 'En Progreso', statusColor: 'bg-yellow-500' },
@@ -303,37 +332,6 @@ const DashboardPage = () => {
               ))}
             </div>
           </div>
-
-          {isAdmin && (
-            <div className="mb-10">
-              <h2 className="text-lg font-semibold text-white mb-4">Clima Actual</h2>
-              <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-sm font-medium text-gray-400">Temperatura</span>
-                  <button
-                    onClick={fetchTemperature}
-                    className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-gray-700 text-gray-100 hover:bg-gray-600 transition text-sm"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    Actualizar
-                  </button>
-                </div>
-                <div className="text-center">
-                  <p className="text-4xl font-bold text-white mb-2">
-                    {temperature ? `${temperature.temperature}°C` : 'N/A'}
-                  </p>
-                  {temperature?.location && (
-                    <p className="text-lg text-gray-400 mb-4">{temperature.location}</p>
-                  )}
-                  {lastUpdate && (
-                    <p className="text-xs text-gray-500">
-                      Última actualización: {lastUpdate.toLocaleString('es-AR')}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
 
           {isAdmin && (
             <div className="mb-10">
@@ -393,6 +391,13 @@ const DashboardPage = () => {
                             className="px-4 py-2 rounded-md text-sm font-semibold transition bg-emerald-600 hover:bg-emerald-500 text-white"
                           >
                             Reprogramar
+                          </button>
+                          <button
+                            onClick={() => handleDismissAlert(alerta)}
+                            disabled={dismissingAlertId === alerta.id}
+                            className="px-4 py-2 rounded-md text-sm font-semibold transition bg-gray-700 hover:bg-gray-600 text-white disabled:opacity-50"
+                          >
+                            Mantener fecha
                           </button>
                         </div>
                       </li>

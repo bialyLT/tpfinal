@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from decimal import Decimal
 
 from django.db import transaction
@@ -56,26 +56,16 @@ def get_operational_area_message() -> str:
     return _AREA_MESSAGE
 
 
-def geocode_address(address_text: str) -> Dict[str, Optional[str]]:
-    if not address_text:
-        raise ValueError('La dirección es requerida')
-
-    logger.info('🌎 Geocodificando dirección: %s', address_text)
-    try:
-        location = _rate_limited_geocode(address_text, addressdetails=True, language='es')
-    except Exception as exc:  # pragma: no cover - red de terceros
-        logger.error('Error al geocodificar dirección: %s', exc)
-        raise ValueError('No se pudo geocodificar la dirección') from exc
-
+def _normalize_location_result(location, fallback_text: str) -> Dict[str, Optional[str]]:
     if not location:
         raise ValueError('No se encontraron resultados para la dirección ingresada')
 
-    address = location.raw.get('address', {})
+    address = location.raw.get('address', {}) if hasattr(location, 'raw') else {}
     street_candidate = address.get('road') or address.get('pedestrian') or address.get('path') or ''
     house_number = address.get('house_number')
-    calle = street_candidate or address_text
+    calle = street_candidate or fallback_text
     if not house_number:
-        calle, house_number = _split_street_and_number(address_text)
+        calle, house_number = _split_street_and_number(fallback_text)
 
     ciudad = (
         address.get('city') or address.get('town') or address.get('village') or
@@ -92,13 +82,64 @@ def geocode_address(address_text: str) -> Dict[str, Optional[str]]:
         'provincia': (provincia or '').strip() or None,
         'pais': (pais or '').strip() or None,
         'codigo_postal': (codigo_postal or '').strip() or None,
-        'latitud': location.latitude,
-        'longitud': location.longitude,
-        'direccion_formateada': location.address
+        'latitud': location.latitude if hasattr(location, 'latitude') else None,
+        'longitud': location.longitude if hasattr(location, 'longitude') else None,
+        'direccion_formateada': getattr(location, 'address', fallback_text)
     }
 
     logger.debug('Resultado geocoding: %s', result)
     return result
+
+
+def geocode_address(address_text: str) -> Dict[str, Optional[str]]:
+    if not address_text:
+        raise ValueError('La dirección es requerida')
+
+    logger.info('🌎 Geocodificando dirección: %s', address_text)
+    try:
+        location = _rate_limited_geocode(address_text, addressdetails=True, language='es')
+    except Exception as exc:  # pragma: no cover - red de terceros
+        logger.error('Error al geocodificar dirección: %s', exc)
+        raise ValueError('No se pudo geocodificar la dirección') from exc
+
+    if not location:
+        raise ValueError('No se encontraron resultados para la dirección ingresada')
+
+    return _normalize_location_result(location, address_text)
+
+
+def suggest_addresses(address_text: str, limit: int = 5) -> List[Dict[str, Optional[str]]]:
+    if not address_text:
+        raise ValueError('La dirección es requerida')
+
+    safe_limit = max(1, min(limit or 5, 5))
+    logger.info('🔎 Buscando sugerencias para: %s (limite=%s)', address_text, safe_limit)
+    try:
+        locations = _rate_limited_geocode(
+            address_text,
+            addressdetails=True,
+            language='es',
+            exactly_one=False,
+            limit=safe_limit
+        )
+    except Exception as exc:  # pragma: no cover - red de terceros
+        logger.error('Error al obtener sugerencias: %s', exc)
+        raise ValueError('No se pudieron obtener sugerencias para la dirección') from exc
+
+    if not locations:
+        return []
+
+    if not isinstance(locations, list):
+        locations = [locations]
+
+    suggestions = []
+    for location in locations[:safe_limit]:
+        try:
+            suggestions.append(_normalize_location_result(location, address_text))
+        except ValueError:
+            continue
+
+    return suggestions
 
 
 def normalize_google_address(address_payload: Optional[Dict]) -> Optional[Dict[str, Optional[str]]]:

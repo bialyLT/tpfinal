@@ -4,6 +4,7 @@ import { success, error } from '../utils/notifications';
 import api from '../services/api';
 import { addressService, encuestasService } from '../services';
 import { User, Mail, Phone, MapPin, Edit, Save, Shield, FileText, IdCard, BarChart3, RefreshCw } from 'lucide-react';
+import useAddressSuggestions from '../hooks/useAddressSuggestions';
 
 const MiPerfil = () => {
   const { user, updateUser } = useAuth();
@@ -41,6 +42,14 @@ const MiPerfil = () => {
   const [impactFilters, setImpactFilters] = useState({
     start_date: '',
     end_date: ''
+  });
+  const {
+    suggestions: addressSuggestions,
+    isLoading: isAutocompleteLoading,
+    autocompleteError,
+    clearSuggestions,
+  } = useAddressSuggestions(isEditing ? addressSearch : '', {
+    enabled: isEditing,
   });
   const selectedLocalidad = referenceData.localidades.find(
     (loc) => String(loc.id) === String(profileData.localidad_id)
@@ -170,8 +179,9 @@ const MiPerfil = () => {
     });
   };
 
-  const handleAddressLookup = async () => {
-    if (!addressSearch.trim()) {
+  const handleAddressLookup = async (forcedAddress) => {
+    const targetAddress = (forcedAddress ?? addressSearch).trim();
+    if (!targetAddress) {
       setAddressError('Ingresa una dirección completa para buscar');
       return;
     }
@@ -179,7 +189,7 @@ const MiPerfil = () => {
     setIsAddressLoading(true);
     setAddressError('');
     try {
-      const data = await addressService.lookup(addressSearch.trim());
+      const data = await addressService.lookup(targetAddress);
       setAddressInfo(data);
       setShowManualLocalidad(false);
       setProfileData((prev) => ({
@@ -188,6 +198,8 @@ const MiPerfil = () => {
         numero: data.numero || prev.numero,
         localidad_id: data.localidad_id ? String(data.localidad_id) : prev.localidad_id,
       }));
+      clearSuggestions();
+      setAddressSearch(data.direccion_formateada || targetAddress);
     } catch (err) {
       console.error('Error al buscar dirección', err);
       setAddressInfo(null);
@@ -195,6 +207,16 @@ const MiPerfil = () => {
     } finally {
       setIsAddressLoading(false);
     }
+  };
+
+  const handleSuggestionSelect = (suggestion) => {
+    const formatted = suggestion?.direccion_formateada || `${suggestion?.calle || ''} ${suggestion?.numero || ''}`.trim();
+    if (!formatted) {
+      return;
+    }
+    setAddressSearch(formatted);
+    clearSuggestions();
+    handleAddressLookup(formatted);
   };
 
   const handleSave = async () => {
@@ -500,13 +522,37 @@ const MiPerfil = () => {
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-300 mb-2">Buscar dirección</label>
                   <div className="flex flex-col md:flex-row gap-3">
-                    <input
-                      type="text"
-                      value={addressSearch}
-                      onChange={(e) => setAddressSearch(e.target.value)}
-                      className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
-                      placeholder="Ej: Av. Siempre Viva 742, Buenos Aires"
-                    />
+                    <div className="flex-1 relative">
+                      <input
+                        type="text"
+                        value={addressSearch}
+                        onChange={(e) => setAddressSearch(e.target.value)}
+                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
+                        placeholder="Ej: Av. Siempre Viva 742, Buenos Aires"
+                      />
+                      {addressSuggestions.length > 0 && (
+                        <ul className="absolute z-20 mt-1 w-full bg-gray-900 border border-gray-700 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                          {addressSuggestions.map((suggestion, idx) => (
+                            <li key={`${suggestion.latitud || idx}-${suggestion.longitud || idx}-${idx}`}>
+                              <button
+                                type="button"
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => handleSuggestionSelect(suggestion)}
+                                className="w-full text-left px-3 py-2 hover:bg-gray-800"
+                              >
+                                <p className="text-sm text-white">{suggestion.direccion_formateada || `${suggestion.calle || ''} ${suggestion.numero || ''}`}</p>
+                                <p className="text-xs text-gray-400">
+                                  {[suggestion.ciudad, suggestion.provincia, suggestion.pais].filter(Boolean).join(' • ')}
+                                </p>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {isAutocompleteLoading && (
+                        <p className="absolute right-3 top-2 text-xs text-gray-400">Buscando...</p>
+                      )}
+                    </div>
                     <button
                       type="button"
                       onClick={handleAddressLookup}
@@ -516,6 +562,9 @@ const MiPerfil = () => {
                       {isAddressLoading ? 'Buscando...' : 'Buscar'}
                     </button>
                   </div>
+                  {autocompleteError && !addressError && (
+                    <p className="text-sm text-yellow-400 mt-2">{autocompleteError}</p>
+                  )}
                   {addressError && <p className="text-sm text-red-400 mt-2">{addressError}</p>}
                   {addressInfo?.direccion_formateada && (
                     <p className="text-sm text-emerald-400 mt-2">Dirección detectada: {addressInfo.direccion_formateada}</p>

@@ -48,6 +48,12 @@ export const  addressService = {
     const response = await api.post('/users/address/lookup/', { address: addressText });
     return response.data;
   },
+  suggest: async (query, limit = 5) => {
+    const response = await api.get('/users/address/lookup/', {
+      params: { q: query, limit }
+    });
+    return response.data;
+  },
 };
 
 // Productos Services
@@ -485,6 +491,11 @@ export const weatherService = {
 
   applyReprogramacion: async (reservaId, data) => {
     const response = await api.post(`/servicios/reservas/${reservaId}/reprogramar-por-clima/`, data);
+    return response.data;
+  },
+
+  dismissAlert: async (alertId, data = {}) => {
+    const response = await api.post(`/weather/alerts/${alertId}/dismiss/`, data);
     return response.data;
   },
 

@@ -36,6 +36,8 @@ class WeatherAlertSerializer(serializers.ModelSerializer):
         return {
             'id_reserva': reserva.id_reserva,
             'fecha_reserva': reserva.fecha_reserva,
+            'fecha_reprogramada_sugerida': reserva.fecha_reprogramada_sugerida,
+            'fecha_reprogramada_confirmada': reserva.fecha_reprogramada_confirmada,
             'estado': reserva.estado,
             'cliente': f"{reserva.cliente.persona.nombre} {reserva.cliente.persona.apellido}" if reserva.cliente_id else None,
             'servicio': reserva.servicio.nombre if reserva.servicio_id else None,

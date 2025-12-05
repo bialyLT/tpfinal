@@ -10,7 +10,11 @@ from apps.emails import EmailService
 import logging
 
 from .models import Genero, TipoDocumento, Localidad, Persona, Cliente, Empleado, Proveedor
-from .services.address_service import geocode_address, get_or_create_localidad
+from .services.address_service import (
+    geocode_address,
+    get_or_create_localidad,
+    suggest_addresses,
+)
 from .serializers import (
     GeneroSerializer, TipoDocumentoSerializer, LocalidadSerializer,
     PersonaSerializer, ClienteSerializer, EmpleadoSerializer, ProveedorSerializer,
@@ -22,6 +26,29 @@ logger = logging.getLogger(__name__)
 
 class AddressLookupView(APIView):
     permission_classes = [AllowAny]
+
+    def get(self, request):
+        query = (
+            request.query_params.get('q') or
+            request.query_params.get('query') or
+            request.query_params.get('address')
+        )
+        if not query:
+            return Response({'error': 'La dirección es requerida', 'results': []}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            limit = int(request.query_params.get('limit', 5))
+        except (TypeError, ValueError):
+            limit = 5
+
+        try:
+            suggestions = suggest_addresses(query.strip(), limit=limit)
+            return Response({'results': suggestions}, status=status.HTTP_200_OK)
+        except ValueError as exc:
+            return Response({'error': str(exc), 'results': []}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:  # pragma: no cover - red externa
+            logger.error('Error inesperado en sugerencias de dirección: %s', exc, exc_info=True)
+            return Response({'error': 'No se pudieron obtener sugerencias', 'results': []}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def post(self, request):
         address_text = request.data.get('address')

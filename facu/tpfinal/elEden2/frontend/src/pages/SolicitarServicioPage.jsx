@@ -5,6 +5,7 @@ import { addressService, serviciosService } from '../services';
 import { success, error, handleApiError } from '../utils/notifications';
 import { useAuth } from '../context/AuthContext';
 import { handlePagarSena } from '../utils/pagoHelpers';
+import useAddressSuggestions from '../hooks/useAddressSuggestions';
 import {
   Calendar,
   MapPin,
@@ -84,6 +85,12 @@ const SolicitarServicioPage = () => {
   const [addressError, setAddressError] = useState('');
   const [isAddressLoading, setIsAddressLoading] = useState(false);
   const [showManualLocalidad, setShowManualLocalidad] = useState(false);
+  const {
+    suggestions: addressSuggestions,
+    isLoading: isAutocompleteLoading,
+    autocompleteError,
+    clearSuggestions,
+  } = useAddressSuggestions(addressSearch);
   const allowedLocalidades = useMemo(
     () => referenceData.localidades.filter((loc) => isLocationWithinOperationalArea(loc.provincia, loc.pais)),
     [referenceData.localidades]
@@ -324,8 +331,9 @@ const SolicitarServicioPage = () => {
     });
   };
 
-  const handleAddressLookup = async () => {
-    if (!addressSearch.trim()) {
+  const handleAddressLookup = async (forcedAddress) => {
+    const targetAddress = (forcedAddress ?? addressSearch).trim();
+    if (!targetAddress) {
       setAddressError('Ingresa una dirección completa para buscar');
       return;
     }
@@ -333,21 +341,23 @@ const SolicitarServicioPage = () => {
     setIsAddressLoading(true);
     setAddressError('');
     try {
-      const data = await addressService.lookup(addressSearch.trim());
+      const data = await addressService.lookup(targetAddress);
       if (!isLocationWithinOperationalArea(data?.provincia, data?.pais)) {
         setAddressInfo(null);
         setFormData(prev => ({ ...prev, localidad_id: '' }));
         setAddressError(`${OPERATIONAL_MESSAGE} La dirección detectada corresponde a ${data?.ciudad || data?.provincia || 'otra ubicación'}.`);
+        clearSuggestions();
         return;
       }
       setAddressInfo(data);
       setShowManualLocalidad(false);
-      setAddressSearch(data.direccion_formateada || addressSearch.trim());
+      setAddressSearch(data.direccion_formateada || targetAddress);
       setFormData(prev => ({
         ...prev,
-        direccion_servicio: data.direccion_formateada || prev.direccion_servicio || addressSearch.trim(),
+        direccion_servicio: data.direccion_formateada || prev.direccion_servicio || targetAddress,
         localidad_id: data.localidad_id ? String(data.localidad_id) : prev.localidad_id,
       }));
+      clearSuggestions();
     } catch (err) {
       console.error('Error al buscar dirección', err);
       setAddressInfo(null);
@@ -355,6 +365,16 @@ const SolicitarServicioPage = () => {
     } finally {
       setIsAddressLoading(false);
     }
+  };
+
+  const handleSuggestionSelect = (suggestion) => {
+    const formatted = suggestion?.direccion_formateada || `${suggestion?.calle || ''} ${suggestion?.numero || ''}`.trim();
+    if (!formatted) {
+      return;
+    }
+    setAddressSearch(formatted);
+    clearSuggestions();
+    handleAddressLookup(formatted);
   };
 
   const handleImageUpload = (e, tipo) => {
@@ -910,13 +930,37 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
                       Busca la dirección completa donde se realizará el servicio
                     </p>
                     <div className="flex flex-col sm:flex-row gap-3 mt-2">
-                      <input
-                        type="text"
-                        value={addressSearch}
-                        onChange={(e) => setAddressSearch(e.target.value)}
-                        placeholder="Ej: Av. Siempre Viva 742, Buenos Aires"
-                        className="flex-1 px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                      />
+                      <div className="flex-1 relative">
+                        <input
+                          type="text"
+                          value={addressSearch}
+                          onChange={(e) => setAddressSearch(e.target.value)}
+                          placeholder="Ej: Av. Siempre Viva 742, Buenos Aires"
+                          className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        />
+                        {addressSuggestions.length > 0 && (
+                          <ul className="absolute z-20 mt-1 w-full bg-gray-900 border border-gray-700 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                            {addressSuggestions.map((suggestion, idx) => (
+                              <li key={`${suggestion.latitud || idx}-${suggestion.longitud || idx}-${idx}`}>
+                                <button
+                                  type="button"
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onClick={() => handleSuggestionSelect(suggestion)}
+                                  className="w-full text-left px-3 py-2 hover:bg-gray-800"
+                                >
+                                  <p className="text-sm text-white">{suggestion.direccion_formateada || `${suggestion.calle || ''} ${suggestion.numero || ''}`}</p>
+                                  <p className="text-xs text-gray-400">
+                                    {[suggestion.ciudad, suggestion.provincia, suggestion.pais].filter(Boolean).join(' • ')}
+                                  </p>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {isAutocompleteLoading && (
+                          <p className="absolute right-3 top-2 text-xs text-gray-400">Buscando...</p>
+                        )}
+                      </div>
                       <button
                         type="button"
                         onClick={handleAddressLookup}
@@ -926,6 +970,9 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
                         {isAddressLoading ? 'Buscando...' : 'Buscar dirección'}
                       </button>
                     </div>
+                    {autocompleteError && !addressError && (
+                      <p className="text-sm text-yellow-400 mt-2">{autocompleteError}</p>
+                    )}
                     {addressError && <p className="text-sm text-red-400 mt-2">{addressError}</p>}
                     {addressInfo?.direccion_formateada && (
                       <p className="text-sm text-emerald-400 mt-2">
