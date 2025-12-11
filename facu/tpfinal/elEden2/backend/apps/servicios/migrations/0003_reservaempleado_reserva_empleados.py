@@ -7,32 +7,67 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('servicios', '0002_diseno_disenoproducto_imagendiseno_and_more'),
-        ('users', '0002_empleado'),
+        ("servicios", "0002_diseno_disenoproducto_imagendiseno_and_more"),
+        ("users", "0002_empleado"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='ReservaEmpleado',
+            name="ReservaEmpleado",
             fields=[
-                ('id_reserva_empleado', models.AutoField(primary_key=True, serialize=False)),
-                ('rol', models.CharField(choices=[('responsable', 'Responsable'), ('operador', 'Operador'), ('diseñador', 'Diseñador'), ('asistente', 'Asistente')], default='asistente', help_text='Rol del empleado en esta reserva', max_length=20)),
-                ('fecha_asignacion', models.DateTimeField(auto_now_add=True)),
-                ('notas', models.TextField(blank=True, null=True)),
-                ('empleado', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='asignaciones_servicios', to='users.empleado')),
-                ('reserva', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='asignaciones', to='servicios.reserva')),
+                (
+                    "id_reserva_empleado",
+                    models.AutoField(primary_key=True, serialize=False),
+                ),
+                (
+                    "rol",
+                    models.CharField(
+                        choices=[
+                            ("responsable", "Responsable"),
+                            ("operador", "Operador"),
+                            ("diseñador", "Diseñador"),
+                            ("asistente", "Asistente"),
+                        ],
+                        default="asistente",
+                        help_text="Rol del empleado en esta reserva",
+                        max_length=20,
+                    ),
+                ),
+                ("fecha_asignacion", models.DateTimeField(auto_now_add=True)),
+                ("notas", models.TextField(blank=True, null=True)),
+                (
+                    "empleado",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="asignaciones_servicios",
+                        to="users.empleado",
+                    ),
+                ),
+                (
+                    "reserva",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="asignaciones",
+                        to="servicios.reserva",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Asignación de Empleado',
-                'verbose_name_plural': 'Asignaciones de Empleados',
-                'db_table': 'reserva_empleado',
-                'ordering': ['-fecha_asignacion'],
-                'unique_together': {('reserva', 'empleado')},
+                "verbose_name": "Asignación de Empleado",
+                "verbose_name_plural": "Asignaciones de Empleados",
+                "db_table": "reserva_empleado",
+                "ordering": ["-fecha_asignacion"],
+                "unique_together": {("reserva", "empleado")},
             },
         ),
         migrations.AddField(
-            model_name='reserva',
-            name='empleados',
-            field=models.ManyToManyField(blank=True, related_name='reservas_asignadas', through='servicios.ReservaEmpleado', to='users.empleado'),
+            model_name="reserva",
+            name="empleados",
+            field=models.ManyToManyField(
+                blank=True,
+                related_name="reservas_asignadas",
+                through="servicios.ReservaEmpleado",
+                to="users.empleado",
+            ),
         ),
     ]

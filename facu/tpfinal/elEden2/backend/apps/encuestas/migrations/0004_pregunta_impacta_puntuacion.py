@@ -6,13 +6,16 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('encuestas', '0003_unique_active_encuesta'),
+        ("encuestas", "0003_unique_active_encuesta"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='pregunta',
-            name='impacta_puntuacion',
-            field=models.BooleanField(default=False, help_text='Indica si la respuesta impacta la puntuación de los empleados asignados'),
+            model_name="pregunta",
+            name="impacta_puntuacion",
+            field=models.BooleanField(
+                default=False,
+                help_text="Indica si la respuesta impacta la puntuación de los empleados asignados",
+            ),
         ),
     ]

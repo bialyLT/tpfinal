@@ -9,83 +9,129 @@ class Migration(migrations.Migration):
 
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='Categoria',
+            name="Categoria",
             fields=[
-                ('id_categoria', models.AutoField(primary_key=True, serialize=False)),
-                ('nombre_categoria', models.CharField(max_length=100, unique=True)),
-                ('descripcion', models.TextField(blank=True, null=True)),
+                ("id_categoria", models.AutoField(primary_key=True, serialize=False)),
+                ("nombre_categoria", models.CharField(max_length=100, unique=True)),
+                ("descripcion", models.TextField(blank=True, null=True)),
             ],
             options={
-                'verbose_name': 'Categoría',
-                'verbose_name_plural': 'Categorías',
-                'db_table': 'categoria',
-                'ordering': ['nombre_categoria'],
+                "verbose_name": "Categoría",
+                "verbose_name_plural": "Categorías",
+                "db_table": "categoria",
+                "ordering": ["nombre_categoria"],
             },
         ),
         migrations.CreateModel(
-            name='Marca',
+            name="Marca",
             fields=[
-                ('id_marca', models.AutoField(primary_key=True, serialize=False)),
-                ('nombre_marca', models.CharField(max_length=100, unique=True)),
-                ('descripcion', models.TextField(blank=True, null=True)),
+                ("id_marca", models.AutoField(primary_key=True, serialize=False)),
+                ("nombre_marca", models.CharField(max_length=100, unique=True)),
+                ("descripcion", models.TextField(blank=True, null=True)),
             ],
             options={
-                'verbose_name': 'Marca',
-                'verbose_name_plural': 'Marcas',
-                'db_table': 'marca',
-                'ordering': ['nombre_marca'],
+                "verbose_name": "Marca",
+                "verbose_name_plural": "Marcas",
+                "db_table": "marca",
+                "ordering": ["nombre_marca"],
             },
         ),
         migrations.CreateModel(
-            name='Producto',
+            name="Producto",
             fields=[
-                ('id_producto', models.AutoField(primary_key=True, serialize=False)),
-                ('nombre', models.CharField(max_length=200)),
-                ('descripcion', models.TextField(blank=True, null=True)),
-                ('precio', models.DecimalField(blank=True, decimal_places=2, help_text='Precio calculado automáticamente desde las compras', max_digits=10, null=True, validators=[django.core.validators.MinValueValidator(0)])),
-                ('imagen', models.ImageField(blank=True, null=True, upload_to='productos/')),
-                ('fecha_creacion', models.DateTimeField(auto_now_add=True)),
-                ('fecha_actualizacion', models.DateTimeField(auto_now=True)),
-                ('categoria', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='productos', to='productos.categoria')),
-                ('marca', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='productos', to='productos.marca')),
+                ("id_producto", models.AutoField(primary_key=True, serialize=False)),
+                ("nombre", models.CharField(max_length=200)),
+                ("descripcion", models.TextField(blank=True, null=True)),
+                (
+                    "precio",
+                    models.DecimalField(
+                        blank=True,
+                        decimal_places=2,
+                        help_text="Precio calculado automáticamente desde las compras",
+                        max_digits=10,
+                        null=True,
+                        validators=[django.core.validators.MinValueValidator(0)],
+                    ),
+                ),
+                (
+                    "imagen",
+                    models.ImageField(blank=True, null=True, upload_to="productos/"),
+                ),
+                ("fecha_creacion", models.DateTimeField(auto_now_add=True)),
+                ("fecha_actualizacion", models.DateTimeField(auto_now=True)),
+                (
+                    "categoria",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="productos",
+                        to="productos.categoria",
+                    ),
+                ),
+                (
+                    "marca",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="productos",
+                        to="productos.marca",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Producto',
-                'verbose_name_plural': 'Productos',
-                'db_table': 'producto',
-                'ordering': ['nombre'],
+                "verbose_name": "Producto",
+                "verbose_name_plural": "Productos",
+                "db_table": "producto",
+                "ordering": ["nombre"],
             },
         ),
         migrations.CreateModel(
-            name='Stock',
+            name="Stock",
             fields=[
-                ('id_stock', models.AutoField(primary_key=True, serialize=False)),
-                ('cantidad', models.IntegerField(default=0, validators=[django.core.validators.MinValueValidator(0)])),
-                ('cantidad_minima', models.IntegerField(default=0, help_text='Stock mínimo para alertas', validators=[django.core.validators.MinValueValidator(0)])),
-                ('fecha_actualizacion', models.DateTimeField(auto_now=True)),
-                ('producto', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='stock', to='productos.producto')),
+                ("id_stock", models.AutoField(primary_key=True, serialize=False)),
+                (
+                    "cantidad",
+                    models.IntegerField(
+                        default=0,
+                        validators=[django.core.validators.MinValueValidator(0)],
+                    ),
+                ),
+                (
+                    "cantidad_minima",
+                    models.IntegerField(
+                        default=0,
+                        help_text="Stock mínimo para alertas",
+                        validators=[django.core.validators.MinValueValidator(0)],
+                    ),
+                ),
+                ("fecha_actualizacion", models.DateTimeField(auto_now=True)),
+                (
+                    "producto",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="stock",
+                        to="productos.producto",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Stock',
-                'verbose_name_plural': 'Stocks',
-                'db_table': 'stock',
+                "verbose_name": "Stock",
+                "verbose_name_plural": "Stocks",
+                "db_table": "stock",
             },
         ),
         migrations.AddIndex(
-            model_name='producto',
-            index=models.Index(fields=['nombre'], name='producto_nombre_38c699_idx'),
+            model_name="producto",
+            index=models.Index(fields=["nombre"], name="producto_nombre_38c699_idx"),
         ),
         migrations.AddIndex(
-            model_name='producto',
-            index=models.Index(fields=['categoria'], name='producto_categor_b30d5c_idx'),
+            model_name="producto",
+            index=models.Index(fields=["categoria"], name="producto_categor_b30d5c_idx"),
         ),
         migrations.AddIndex(
-            model_name='producto',
-            index=models.Index(fields=['marca'], name='producto_marca_i_9432a8_idx'),
+            model_name="producto",
+            index=models.Index(fields=["marca"], name="producto_marca_i_9432a8_idx"),
         ),
     ]

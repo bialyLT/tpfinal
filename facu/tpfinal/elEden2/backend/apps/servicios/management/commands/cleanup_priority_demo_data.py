@@ -2,8 +2,10 @@
 Elimina los registros generados por seed_priority_demo_data cuando se quiere descartar el dataset de prioridad.
 Ejecutar: python manage.py cleanup_priority_demo_data
 """
+
 from django.core.management.base import BaseCommand
 from django.db import transaction
+
 from apps.servicios.models import Reserva
 from apps.users.models import Cliente, Empleado, Localidad
 
@@ -32,7 +34,7 @@ class Command(BaseCommand):
     ]
 
     @transaction.atomic
-    def handle(self, *args, **options):
+    def handle(self, *args, **_options):
         self.stdout.write("🧹 Iniciando limpieza del dataset de prioridad...")
 
         reservas_qs = Reserva.objects.filter(observaciones__startswith="seed-prioridad-")
@@ -57,7 +59,8 @@ class Command(BaseCommand):
             if deleted:
                 queryset.delete()
                 localidades_deleted += deleted
-                self.stdout.write(f"   🗺️  Localidades eliminadas: {deleted} ({filtros['nombre_localidad']} - {filtros['cp']})")
+                self.stdout.write(
+                    f"   🗺️  Localidades eliminadas: {deleted} ({filtros['nombre_localidad']} - {filtros['cp']})"
+                )
         if localidades_deleted == 0:
             self.stdout.write("   🗺️  No se encontraron localidades específicas del seed.")
-

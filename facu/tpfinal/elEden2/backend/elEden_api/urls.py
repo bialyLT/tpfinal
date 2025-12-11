@@ -14,39 +14,39 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-from django.contrib import admin
-from django.urls import path, include
+
 from django.conf import settings
 from django.conf.urls.static import static
-from rest_framework_simplejwt.views import TokenRefreshView, TokenBlacklistView
+from django.contrib import admin
+from django.urls import include, path
+from rest_framework_simplejwt.views import TokenBlacklistView, TokenRefreshView
+
+from apps.users.google_auth import google_callback, google_login
 from core.views import CustomTokenObtainPairView
-from apps.users.google_auth import google_login, google_callback
+
 from .views import AdminStatsAPIView
 
 urlpatterns = [
     # Admin
-    path('admin/', admin.site.urls),
-    
+    path("admin/", admin.site.urls),
     # JWT Authentication (con serializer personalizado que acepta email)
-    path('api/v1/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/v1/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('api/v1/token/blacklist/', TokenBlacklistView.as_view(), name='token_blacklist'),
-    
+    path("api/v1/token/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/v1/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("api/v1/token/blacklist/", TokenBlacklistView.as_view(), name="token_blacklist"),
     # Google OAuth
-    path('api/v1/auth/google/', google_login, name='google_login'),
-    path('api/v1/auth/google/callback/', google_callback, name='google_callback'),
-    
+    path("api/v1/auth/google/", google_login, name="google_login"),
+    path("api/v1/auth/google/callback/", google_callback, name="google_callback"),
     # API
-    path('api/v1/', include('core.urls')),
-    path('api/v1/', include('apps.productos.urls')),
-    path('api/v1/', include('apps.users.urls')),
-    path('api/v1/', include('apps.servicios.urls')),
-    path('api/v1/', include('apps.encuestas.urls')),
-    path('api/v1/', include('apps.ventas.urls')),
-    path('api/v1/mercadopago/', include('apps.mercadopago.urls')),  # Nueva app de MercadoPago
-    path('api/v1/', include('apps.weather.urls')),
-    path('api/v1/', include('apps.audit.urls')),
-    path('api/v1/admin/stats/', AdminStatsAPIView.as_view(), name='admin-stats'),
+    path("api/v1/", include("core.urls")),
+    path("api/v1/", include("apps.productos.urls")),
+    path("api/v1/", include("apps.users.urls")),
+    path("api/v1/", include("apps.servicios.urls")),
+    path("api/v1/", include("apps.encuestas.urls")),
+    path("api/v1/", include("apps.ventas.urls")),
+    path("api/v1/mercadopago/", include("apps.mercadopago.urls")),  # Nueva app de MercadoPago
+    path("api/v1/", include("apps.weather.urls")),
+    path("api/v1/", include("apps.audit.urls")),
+    path("api/v1/admin/stats/", AdminStatsAPIView.as_view(), name="admin-stats"),
 ]
 
 # Serve media files in development

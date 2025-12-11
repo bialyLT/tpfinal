@@ -6,23 +6,58 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('servicios', '0012_remove_reserva_fecha_pago_and_more'),
+        ("servicios", "0012_remove_reserva_fecha_pago_and_more"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='reserva',
-            name='estado_pago',
-            field=models.CharField(choices=[('pendiente', 'Pendiente'), ('pendiente_pago_sena', 'Pendiente de Pago de Seña'), ('sena_pagada', 'Seña Pagada'), ('pagado', 'Pagado Completamente'), ('rechazado', 'Rechazado'), ('cancelado', 'Cancelado')], default='pendiente', max_length=20),
+            model_name="reserva",
+            name="estado_pago",
+            field=models.CharField(
+                choices=[
+                    ("pendiente", "Pendiente"),
+                    ("pendiente_pago_sena", "Pendiente de Pago de Seña"),
+                    ("sena_pagada", "Seña Pagada"),
+                    ("pagado", "Pagado Completamente"),
+                    ("rechazado", "Rechazado"),
+                    ("cancelado", "Cancelado"),
+                ],
+                default="pendiente",
+                max_length=20,
+            ),
         ),
         migrations.AlterField(
-            model_name='reserva',
-            name='estado_pago_final',
-            field=models.CharField(choices=[('pendiente', 'Pendiente'), ('pendiente_pago_sena', 'Pendiente de Pago de Seña'), ('sena_pagada', 'Seña Pagada'), ('pagado', 'Pagado Completamente'), ('rechazado', 'Rechazado'), ('cancelado', 'Cancelado')], default='pendiente', help_text='Estado del pago final', max_length=20),
+            model_name="reserva",
+            name="estado_pago_final",
+            field=models.CharField(
+                choices=[
+                    ("pendiente", "Pendiente"),
+                    ("pendiente_pago_sena", "Pendiente de Pago de Seña"),
+                    ("sena_pagada", "Seña Pagada"),
+                    ("pagado", "Pagado Completamente"),
+                    ("rechazado", "Rechazado"),
+                    ("cancelado", "Cancelado"),
+                ],
+                default="pendiente",
+                help_text="Estado del pago final",
+                max_length=20,
+            ),
         ),
         migrations.AlterField(
-            model_name='reserva',
-            name='estado_pago_sena',
-            field=models.CharField(choices=[('pendiente', 'Pendiente'), ('pendiente_pago_sena', 'Pendiente de Pago de Seña'), ('sena_pagada', 'Seña Pagada'), ('pagado', 'Pagado Completamente'), ('rechazado', 'Rechazado'), ('cancelado', 'Cancelado')], default='pendiente', help_text='Estado del pago de seña', max_length=20),
+            model_name="reserva",
+            name="estado_pago_sena",
+            field=models.CharField(
+                choices=[
+                    ("pendiente", "Pendiente"),
+                    ("pendiente_pago_sena", "Pendiente de Pago de Seña"),
+                    ("sena_pagada", "Seña Pagada"),
+                    ("pagado", "Pagado Completamente"),
+                    ("rechazado", "Rechazado"),
+                    ("cancelado", "Cancelado"),
+                ],
+                default="pendiente",
+                help_text="Estado del pago de seña",
+                max_length=20,
+            ),
         ),
     ]

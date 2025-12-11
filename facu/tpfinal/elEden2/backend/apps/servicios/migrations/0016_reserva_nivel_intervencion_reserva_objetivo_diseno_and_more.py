@@ -6,33 +6,81 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('servicios', '0015_servicio_reprogramable_por_clima_reserva_weather_fields'),
+        ("servicios", "0015_servicio_reprogramable_por_clima_reserva_weather_fields"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='reserva',
-            name='nivel_intervencion',
-            field=models.CharField(blank=True, choices=[('remodelacion', 'Remodelación Parcial'), ('desde_cero', 'Diseño Completo desde Cero')], help_text='Nivel de intervención requerido', max_length=50, null=True),
+            model_name="reserva",
+            name="nivel_intervencion",
+            field=models.CharField(
+                blank=True,
+                choices=[
+                    ("remodelacion", "Remodelación Parcial"),
+                    ("desde_cero", "Diseño Completo desde Cero"),
+                ],
+                help_text="Nivel de intervención requerido",
+                max_length=50,
+                null=True,
+            ),
         ),
         migrations.AddField(
-            model_name='reserva',
-            name='objetivo_diseno',
-            field=models.CharField(blank=True, choices=[('bajo_mantenimiento', 'Bajo Mantenimiento'), ('mucho_color', 'Mucho Color'), ('selvatico', 'Estilo Selvático'), ('minimalista', 'Estilo Minimalista'), ('mascotas', 'Espacio para Mascotas'), ('ninos', 'Espacio para Niños'), ('huerta', 'Huerta'), ('otro', 'Otro')], help_text='Objetivo principal del diseño', max_length=50, null=True),
+            model_name="reserva",
+            name="objetivo_diseno",
+            field=models.CharField(
+                blank=True,
+                choices=[
+                    ("bajo_mantenimiento", "Bajo Mantenimiento"),
+                    ("mucho_color", "Mucho Color"),
+                    ("selvatico", "Estilo Selvático"),
+                    ("minimalista", "Estilo Minimalista"),
+                    ("mascotas", "Espacio para Mascotas"),
+                    ("ninos", "Espacio para Niños"),
+                    ("huerta", "Huerta"),
+                    ("otro", "Otro"),
+                ],
+                help_text="Objetivo principal del diseño",
+                max_length=50,
+                null=True,
+            ),
         ),
         migrations.AddField(
-            model_name='reserva',
-            name='presupuesto_aproximado',
-            field=models.CharField(blank=True, choices=[('bajo', 'Económico / Ajustado'), ('medio', 'Intermedio / Flexible'), ('alto', 'Premium / Sin Restricciones')], help_text='Rango de presupuesto estimado por el cliente', max_length=50, null=True),
+            model_name="reserva",
+            name="presupuesto_aproximado",
+            field=models.CharField(
+                blank=True,
+                choices=[
+                    ("bajo", "Económico / Ajustado"),
+                    ("medio", "Intermedio / Flexible"),
+                    ("alto", "Premium / Sin Restricciones"),
+                ],
+                help_text="Rango de presupuesto estimado por el cliente",
+                max_length=50,
+                null=True,
+            ),
         ),
         migrations.AddField(
-            model_name='reserva',
-            name='superficie_aproximada',
-            field=models.DecimalField(blank=True, decimal_places=2, help_text='Superficie aproximada en m2', max_digits=10, null=True),
+            model_name="reserva",
+            name="superficie_aproximada",
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=2,
+                help_text="Superficie aproximada en m2",
+                max_digits=10,
+                null=True,
+            ),
         ),
         migrations.AddField(
-            model_name='reserva',
-            name='tipo_servicio_solicitado',
-            field=models.CharField(choices=[('diseno_completo', 'Diseño Completo de Jardín'), ('consulta_express', 'Consulta Express / Idea Preliminar')], default='consulta_express', help_text='Tipo de servicio seleccionado por el cliente', max_length=50),
+            model_name="reserva",
+            name="tipo_servicio_solicitado",
+            field=models.CharField(
+                choices=[
+                    ("diseno_completo", "Diseño Completo de Jardín"),
+                    ("consulta_express", "Consulta Express / Idea Preliminar"),
+                ],
+                default="consulta_express",
+                help_text="Tipo de servicio seleccionado por el cliente",
+                max_length=50,
+            ),
         ),
     ]

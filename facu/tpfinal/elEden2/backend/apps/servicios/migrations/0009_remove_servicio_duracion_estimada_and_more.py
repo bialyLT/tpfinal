@@ -6,20 +6,20 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('servicios', '0008_reserva_direccion'),
+        ("servicios", "0008_reserva_direccion"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='servicio',
-            name='duracion_estimada',
+            model_name="servicio",
+            name="duracion_estimada",
         ),
         migrations.RemoveField(
-            model_name='servicio',
-            name='precio',
+            model_name="servicio",
+            name="precio",
         ),
         migrations.RemoveField(
-            model_name='servicio',
-            name='tipo',
+            model_name="servicio",
+            name="tipo",
         ),
     ]

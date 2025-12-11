@@ -7,27 +7,33 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('encuestas', '0001_initial'),
-        ('servicios', '0013_alter_reserva_estado_pago_and_more'),
-        ('users', '0003_persona_user'),
+        ("encuestas", "0001_initial"),
+        ("servicios", "0013_alter_reserva_estado_pago_and_more"),
+        ("users", "0003_persona_user"),
     ]
 
     operations = [
         migrations.AlterUniqueTogether(
-            name='encuestarespuesta',
+            name="encuestarespuesta",
             unique_together=set(),
         ),
         migrations.AddField(
-            model_name='encuestarespuesta',
-            name='reserva',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='encuestas', to='servicios.reserva'),
+            model_name="encuestarespuesta",
+            name="reserva",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="encuestas",
+                to="servicios.reserva",
+            ),
         ),
         migrations.AlterUniqueTogether(
-            name='encuestarespuesta',
-            unique_together={('cliente', 'encuesta', 'reserva')},
+            name="encuestarespuesta",
+            unique_together={("cliente", "encuesta", "reserva")},
         ),
         migrations.AddIndex(
-            model_name='encuestarespuesta',
-            index=models.Index(fields=['reserva'], name='encuesta_re_reserva_9783e6_idx'),
+            model_name="encuestarespuesta",
+            index=models.Index(fields=["reserva"], name="encuesta_re_reserva_9783e6_idx"),
         ),
     ]

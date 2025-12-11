@@ -6,13 +6,17 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('servicios', '0005_imagenreserva'),
+        ("servicios", "0005_imagenreserva"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='diseno',
-            name='fecha_propuesta',
-            field=models.DateField(blank=True, help_text='Fecha propuesta para realizar el servicio', null=True),
+            model_name="diseno",
+            name="fecha_propuesta",
+            field=models.DateField(
+                blank=True,
+                help_text="Fecha propuesta para realizar el servicio",
+                null=True,
+            ),
         ),
     ]

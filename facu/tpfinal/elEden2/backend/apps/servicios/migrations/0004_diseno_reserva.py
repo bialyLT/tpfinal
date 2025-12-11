@@ -7,13 +7,20 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('servicios', '0003_reservaempleado_reserva_empleados'),
+        ("servicios", "0003_reservaempleado_reserva_empleados"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='diseno',
-            name='reserva',
-            field=models.ForeignKey(blank=True, help_text='Reserva a la que pertenece este diseño', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='disenos', to='servicios.reserva'),
+            model_name="diseno",
+            name="reserva",
+            field=models.ForeignKey(
+                blank=True,
+                help_text="Reserva a la que pertenece este diseño",
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="disenos",
+                to="servicios.reserva",
+            ),
         ),
     ]

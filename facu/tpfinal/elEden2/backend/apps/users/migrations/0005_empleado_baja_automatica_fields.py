@@ -6,23 +6,35 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('users', '0004_empleado_fecha_ultima_puntuacion_and_more'),
+        ("users", "0004_empleado_fecha_ultima_puntuacion_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='empleado',
-            name='evaluaciones_bajas_consecutivas',
-            field=models.PositiveIntegerField(default=0, help_text='Cantidad de evaluaciones consecutivas con puntaje menor a 7'),
+            model_name="empleado",
+            name="evaluaciones_bajas_consecutivas",
+            field=models.PositiveIntegerField(
+                default=0,
+                help_text="Cantidad de evaluaciones consecutivas con puntaje menor a 7",
+            ),
         ),
         migrations.AddField(
-            model_name='empleado',
-            name='fecha_baja_automatica',
-            field=models.DateTimeField(blank=True, help_text='Fecha en la que el sistema desactivó automáticamente al empleado', null=True),
+            model_name="empleado",
+            name="fecha_baja_automatica",
+            field=models.DateTimeField(
+                blank=True,
+                help_text="Fecha en la que el sistema desactivó automáticamente al empleado",
+                null=True,
+            ),
         ),
         migrations.AddField(
-            model_name='empleado',
-            name='motivo_baja_automatica',
-            field=models.CharField(blank=True, help_text='Motivo registrado para la baja automática del empleado', max_length=255, null=True),
+            model_name="empleado",
+            name="motivo_baja_automatica",
+            field=models.CharField(
+                blank=True,
+                help_text="Motivo registrado para la baja automática del empleado",
+                max_length=255,
+                null=True,
+            ),
         ),
     ]

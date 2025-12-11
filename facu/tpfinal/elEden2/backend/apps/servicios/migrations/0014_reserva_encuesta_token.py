@@ -6,13 +6,18 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('servicios', '0013_alter_reserva_estado_pago_and_more'),
+        ("servicios", "0013_alter_reserva_estado_pago_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='reserva',
-            name='encuesta_token',
-            field=models.UUIDField(blank=True, help_text='Token público para responder la encuesta de la reserva', null=True, unique=True),
+            model_name="reserva",
+            name="encuesta_token",
+            field=models.UUIDField(
+                blank=True,
+                help_text="Token público para responder la encuesta de la reserva",
+                null=True,
+                unique=True,
+            ),
         ),
     ]

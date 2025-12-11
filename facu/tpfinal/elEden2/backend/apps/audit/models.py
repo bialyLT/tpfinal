@@ -4,11 +4,11 @@ from django.db import models
 
 class AuditLog(models.Model):
     ROLE_CHOICES = (
-        ('administrador', 'Administrador'),
-        ('empleado', 'Empleado'),
-        ('cliente', 'Cliente'),
-        ('anonimo', 'Anónimo'),
-        ('desconocido', 'Desconocido'),
+        ("administrador", "Administrador"),
+        ("empleado", "Empleado"),
+        ("cliente", "Cliente"),
+        ("anonimo", "Anónimo"),
+        ("desconocido", "Desconocido"),
     )
 
     user = models.ForeignKey(
@@ -16,9 +16,9 @@ class AuditLog(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='audit_logs'
+        related_name="audit_logs",
     )
-    role = models.CharField(max_length=32, choices=ROLE_CHOICES, default='desconocido')
+    role = models.CharField(max_length=32, choices=ROLE_CHOICES, default="desconocido")
     method = models.CharField(max_length=10)
     action = models.CharField(max_length=120)
     entity = models.CharField(max_length=120)
@@ -33,17 +33,17 @@ class AuditLog(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = 'Registro de auditoría'
-        verbose_name_plural = 'Registros de auditoría'
-        db_table = 'audit_log'
-        ordering = ['-created_at']
+        verbose_name = "Registro de auditoría"
+        verbose_name_plural = "Registros de auditoría"
+        db_table = "audit_log"
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['created_at']),
-            models.Index(fields=['method']),
-            models.Index(fields=['entity']),
-            models.Index(fields=['role']),
+            models.Index(fields=["created_at"]),
+            models.Index(fields=["method"]),
+            models.Index(fields=["entity"]),
+            models.Index(fields=["role"]),
         ]
 
     def __str__(self):
-        username = self.user.username if self.user else 'Sistema'
+        username = self.user.username if self.user else "Sistema"
         return f"[{self.created_at:%Y-%m-%d %H:%M}] {username} - {self.action}"

@@ -6,13 +6,18 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('servicios', '0007_alter_diseno_fecha_propuesta'),
+        ("servicios", "0007_alter_diseno_fecha_propuesta"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='reserva',
-            name='direccion',
-            field=models.CharField(blank=True, help_text='Dirección donde se realizará el servicio', max_length=500, null=True),
+            model_name="reserva",
+            name="direccion",
+            field=models.CharField(
+                blank=True,
+                help_text="Dirección donde se realizará el servicio",
+                max_length=500,
+                null=True,
+            ),
         ),
     ]

@@ -14,29 +14,29 @@ class AuditLogListAPIView(generics.ListAPIView):
 
     serializer_class = AuditLogSerializer
     permission_classes = [IsAdminUser]
-    queryset = AuditLog.objects.select_related('user').order_by('-created_at')
+    queryset = AuditLog.objects.select_related("user").order_by("-created_at")
 
     def get_queryset(self):
         queryset = super().get_queryset()
         params = self.request.query_params
 
-        metodo = params.get('method')
+        metodo = params.get("method")
         if metodo:
             queryset = queryset.filter(method__iexact=metodo.upper())
 
-        entity = params.get('entity')
+        entity = params.get("entity")
         if entity:
             queryset = queryset.filter(entity__icontains=entity)
 
-        role = params.get('role')
+        role = params.get("role")
         if role:
             queryset = queryset.filter(role=role)
 
-        user_id = params.get('user_id')
+        user_id = params.get("user_id")
         if user_id:
             queryset = queryset.filter(user_id=user_id)
 
-        search = params.get('search')
+        search = params.get("search")
         if search:
             queryset = queryset.filter(
                 models.Q(user__username__icontains=search)
@@ -46,13 +46,13 @@ class AuditLogListAPIView(generics.ListAPIView):
                 | models.Q(object_id__icontains=search)
             )
 
-        start_date = params.get('start_date')
+        start_date = params.get("start_date")
         if start_date:
             start_dt = self._parse_date(start_date, is_start=True)
             if start_dt:
                 queryset = queryset.filter(created_at__gte=start_dt)
 
-        end_date = params.get('end_date')
+        end_date = params.get("end_date")
         if end_date:
             end_dt = self._parse_date(end_date, is_start=False)
             if end_dt:
@@ -62,7 +62,7 @@ class AuditLogListAPIView(generics.ListAPIView):
 
     def _parse_date(self, value: str, *, is_start: bool) -> datetime | None:
         try:
-            parsed_date = datetime.strptime(value, '%Y-%m-%d').date()
+            parsed_date = datetime.strptime(value, "%Y-%m-%d").date()
         except ValueError:
             return None
 

@@ -6,13 +6,17 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('servicios', '0018_formaterreno_jardin_zonajardin_and_more'),
+        ("servicios", "0018_formaterreno_jardin_zonajardin_and_more"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='diseno',
-            name='descripcion',
-            field=models.TextField(blank=True, help_text='Descripción detallada del diseño propuesto', null=True),
+            model_name="diseno",
+            name="descripcion",
+            field=models.TextField(
+                blank=True,
+                help_text="Descripción detallada del diseño propuesto",
+                null=True,
+            ),
         ),
     ]

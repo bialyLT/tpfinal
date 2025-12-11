@@ -6,13 +6,17 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('servicios', '0006_diseno_fecha_propuesta'),
+        ("servicios", "0006_diseno_fecha_propuesta"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='diseno',
-            name='fecha_propuesta',
-            field=models.DateTimeField(blank=True, help_text='Fecha propuesta para realizar el servicio', null=True),
+            model_name="diseno",
+            name="fecha_propuesta",
+            field=models.DateTimeField(
+                blank=True,
+                help_text="Fecha propuesta para realizar el servicio",
+                null=True,
+            ),
         ),
     ]

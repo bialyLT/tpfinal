@@ -1,5 +1,5 @@
-from decimal import Decimal
 from datetime import timedelta
+from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -9,7 +9,14 @@ from rest_framework.test import APITestCase
 
 from apps.servicios.models import Diseno, Reserva, ReservaEmpleado, Servicio
 from apps.servicios.utils import ordenar_empleados_por_puntuacion
-from apps.users.models import Cliente, Empleado, Genero, Localidad, Persona, TipoDocumento
+from apps.users.models import (
+    Cliente,
+    Empleado,
+    Genero,
+    Localidad,
+    Persona,
+    TipoDocumento,
+)
 
 
 class EmpleadoPrioridadTests(APITestCase):
@@ -75,12 +82,14 @@ class EmpleadoPrioridadTests(APITestCase):
         empleado.puntuacion_cantidad = cantidad
         empleado.puntuacion_acumulada = (Decimal(promedio) * cantidad).quantize(Decimal("0.01"))
         empleado.fecha_ultima_puntuacion = timezone.now() - timedelta(days=dias_hace)
-        empleado.save(update_fields=[
-            "puntuacion_promedio",
-            "puntuacion_cantidad",
-            "puntuacion_acumulada",
-            "fecha_ultima_puntuacion",
-        ])
+        empleado.save(
+            update_fields=[
+                "puntuacion_promedio",
+                "puntuacion_cantidad",
+                "puntuacion_acumulada",
+                "fecha_ultima_puntuacion",
+            ]
+        )
         return empleado
 
     def test_empleados_disponibles_prioridad(self):
@@ -99,11 +108,14 @@ class EmpleadoPrioridadTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         empleados = response.data.get("empleados_disponibles", [])
         self.assertEqual(len(empleados), 3)
-        self.assertEqual([empleado["id"] for empleado in empleados], [
-            mejor.id_empleado,
-            segundo.id_empleado,
-            tercero.id_empleado,
-        ])
+        self.assertEqual(
+            [empleado["id"] for empleado in empleados],
+            [
+                mejor.id_empleado,
+                segundo.id_empleado,
+                tercero.id_empleado,
+            ],
+        )
         self.assertEqual([empleado["prioridad"] for empleado in empleados], [1, 2, 3])
 
     def test_aceptar_diseno_asigna_mejores_empleados(self):
@@ -138,8 +150,7 @@ class EmpleadoPrioridadTests(APITestCase):
         self.assertEqual(asignaciones.count(), 2)
 
         empleados_prioritarios = [
-            empleado.id_empleado
-            for empleado in ordenar_empleados_por_puntuacion([mejor, segundo, tercero])[:2]
+            empleado.id_empleado for empleado in ordenar_empleados_por_puntuacion([mejor, segundo, tercero])[:2]
         ]
         self.assertCountEqual(
             [asignacion.empleado_id for asignacion in asignaciones],

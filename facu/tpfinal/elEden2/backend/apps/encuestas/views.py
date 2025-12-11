@@ -1,27 +1,29 @@
-﻿from datetime import datetime, time
+﻿import logging
+from datetime import datetime, time
+from decimal import Decimal
 
-from rest_framework import viewsets, filters, status
-from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
-from rest_framework.views import APIView
-from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.decorators import action
-from rest_framework.response import Response
+from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_date
-from django.db import transaction
-from decimal import Decimal
-from .models import Encuesta, Pregunta, EncuestaRespuesta, Respuesta
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
 from apps.users.models import Cliente, Empleado
+
+from .models import Encuesta, EncuestaRespuesta, Pregunta, Respuesta
 from .serializers import (
-    EncuestaSerializer,
-    EncuestaDetalleSerializer,
     EncuestaCreateUpdateSerializer,
-    PreguntaSerializer,
+    EncuestaDetalleSerializer,
     EncuestaRespuestaSerializer,
-    RespuestaSerializer,
+    EncuestaSerializer,
+    PreguntaSerializer,
     RespuestaImpactoSerializer,
+    RespuestaSerializer,
 )
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -31,23 +33,28 @@ class EncuestaViewSet(viewsets.ModelViewSet):
     ViewSet para gestión de encuestas.
     Solo administradores pueden gestionar encuestas.
     """
-    queryset = Encuesta.objects.prefetch_related('preguntas').all()
+
+    queryset = Encuesta.objects.prefetch_related("preguntas").all()
     permission_classes = [IsAuthenticated, IsAdminUser]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['activa']
-    search_fields = ['titulo', 'descripcion']
-    ordering_fields = ['fecha_creacion', 'titulo']
-    ordering = ['-fecha_creacion']
+    filter_backends = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter,
+    ]
+    filterset_fields = ["activa"]
+    search_fields = ["titulo", "descripcion"]
+    ordering_fields = ["fecha_creacion", "titulo"]
+    ordering = ["-fecha_creacion"]
 
     def get_serializer_class(self):
         """Usar diferentes serializers según la acción"""
-        if self.action == 'retrieve':
+        if self.action == "retrieve":
             return EncuestaDetalleSerializer
-        elif self.action in ['create', 'update', 'partial_update']:
+        elif self.action in ["create", "update", "partial_update"]:
             return EncuestaCreateUpdateSerializer
         return EncuestaSerializer
 
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, IsAdminUser])
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsAdminUser])
     def toggle_activa(self, request, pk=None):
         """Activar/desactivar una encuesta"""
         encuesta = self.get_object()
@@ -56,43 +63,44 @@ class EncuestaViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(encuesta)
         return Response(serializer.data)
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=["get"])
     def estadisticas(self, request, pk=None):
         """Obtener estadísticas de una encuesta"""
         encuesta = self.get_object()
         total_respuestas = encuesta.respuestas_clientes.count()
-        completadas = encuesta.respuestas_clientes.filter(estado='completada').count()
-        iniciadas = encuesta.respuestas_clientes.filter(estado='iniciada').count()
-        
-        return Response({
-            'total_respuestas': total_respuestas,
-            'completadas': completadas,
-            'iniciadas': iniciadas,
-            'total_preguntas': encuesta.preguntas.count()
-        })
+        completadas = encuesta.respuestas_clientes.filter(estado="completada").count()
+        iniciadas = encuesta.respuestas_clientes.filter(estado="iniciada").count()
 
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+        return Response(
+            {
+                "total_respuestas": total_respuestas,
+                "completadas": completadas,
+                "iniciadas": iniciadas,
+                "total_preguntas": encuesta.preguntas.count(),
+            }
+        )
+
+    @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
     def activa(self, request):
         """Obtener la encuesta activa con sus preguntas"""
         try:
             encuesta_activa = Encuesta.obtener_activa()
             if not encuesta_activa:
                 return Response(
-                    {'error': 'No hay ninguna encuesta activa en este momento.'},
-                    status=status.HTTP_404_NOT_FOUND
+                    {"error": "No hay ninguna encuesta activa en este momento."},
+                    status=status.HTTP_404_NOT_FOUND,
                 )
-            
+
             serializer = EncuestaDetalleSerializer(encuesta_activa)
             return Response(serializer.data)
         except Exception as e:
             logger.error(f"Error al obtener encuesta activa: {str(e)}")
             return Response(
-                {'error': 'Error al obtener la encuesta activa'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Error al obtener la encuesta activa"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-    
 
-    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated])
     def responder(self, request):
         """
         Permite a un cliente responder una encuesta.
@@ -107,86 +115,87 @@ class EncuestaViewSet(viewsets.ModelViewSet):
         """
         try:
             # Obtener datos de la request
-            reserva_id = request.data.get('reserva_id')
-            respuestas_data = request.data.get('respuestas', [])
-            
+            reserva_id = request.data.get("reserva_id")
+            respuestas_data = request.data.get("respuestas", [])
+
             if not reserva_id:
                 return Response(
-                    {'error': 'El ID de la reserva es requerido'},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"error": "El ID de la reserva es requerido"},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
-            
+
             # Verificar que el usuario es un cliente
             try:
                 # El cliente se identifica por el email del usuario autenticado
                 cliente = Cliente.objects.get(persona__email=request.user.email)
             except Cliente.DoesNotExist:
                 return Response(
-                    {'error': 'Solo los clientes pueden responder encuestas'},
-                    status=status.HTTP_403_FORBIDDEN
+                    {"error": "Solo los clientes pueden responder encuestas"},
+                    status=status.HTTP_403_FORBIDDEN,
                 )
-            
+
             # Obtener la encuesta activa
             encuesta_activa = Encuesta.obtener_activa()
             if not encuesta_activa:
                 return Response(
-                    {'error': 'No hay ninguna encuesta activa en este momento'},
-                    status=status.HTTP_404_NOT_FOUND
+                    {"error": "No hay ninguna encuesta activa en este momento"},
+                    status=status.HTTP_404_NOT_FOUND,
                 )
-            
+
             # Verificar que la reserva pertenece al cliente
             from apps.servicios.models import Reserva
+
             try:
                 reserva = Reserva.objects.get(id_reserva=reserva_id, cliente=cliente)
             except Reserva.DoesNotExist:
                 return Response(
-                    {'error': 'Reserva no encontrada o no pertenece al cliente'},
-                    status=status.HTTP_404_NOT_FOUND
+                    {"error": "Reserva no encontrada o no pertenece al cliente"},
+                    status=status.HTTP_404_NOT_FOUND,
                 )
-            
+
             # Verificar si ya respondió esta encuesta para esta reserva
             respuesta_existente = EncuestaRespuesta.objects.filter(
                 encuesta=encuesta_activa,
                 cliente=cliente,
                 reserva=reserva,
-                estado='completada'
+                estado="completada",
             ).exists()
-            
+
             if respuesta_existente:
                 return Response(
-                    {'error': 'Ya has respondido esta encuesta para esta reserva'},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"error": "Ya has respondido esta encuesta para esta reserva"},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
-            
+
             # Crear o actualizar la EncuestaRespuesta con transacción
             with transaction.atomic():
                 encuesta_respuesta, created = EncuestaRespuesta.objects.get_or_create(
                     encuesta=encuesta_activa,
                     cliente=cliente,
                     reserva=reserva,
-                    defaults={'fecha_inicio': timezone.now()}
+                    defaults={"fecha_inicio": timezone.now()},
                 )
-                
+
                 # Eliminar respuestas anteriores si existe (por si quedó incompleta)
                 encuesta_respuesta.respuestas.all().delete()
-                
+
                 # Validar que todas las preguntas obligatorias estén respondidas
                 preguntas_obligatorias = encuesta_activa.preguntas.filter(obligatoria=True)
-                preguntas_respondidas = [r.get('pregunta_id') for r in respuestas_data]
-                
+                preguntas_respondidas = [r.get("pregunta_id") for r in respuestas_data]
+
                 for pregunta in preguntas_obligatorias:
                     # Usar el PK correcto del modelo Pregunta
                     if pregunta.id_pregunta not in preguntas_respondidas:
                         return Response(
-                            {'error': f'La pregunta "{pregunta.texto}" es obligatoria'},
-                            status=status.HTTP_400_BAD_REQUEST
+                            {"error": f'La pregunta "{pregunta.texto}" es obligatoria'},
+                            status=status.HTTP_400_BAD_REQUEST,
                         )
-                
+
                 # Crear las respuestas
                 for respuesta_data in respuestas_data:
-                    pregunta_id = respuesta_data.get('pregunta_id')
+                    pregunta_id = respuesta_data.get("pregunta_id")
                     if pregunta_id is None:
-                        pregunta_id = respuesta_data.get('id')
+                        pregunta_id = respuesta_data.get("id")
                     if pregunta_id is None:
                         continue
                     try:
@@ -195,50 +204,55 @@ class EncuestaViewSet(viewsets.ModelViewSet):
                         continue
 
                     # Solo se permiten preguntas de tipo escala
-                    if pregunta.tipo != 'escala':
+                    if pregunta.tipo != "escala":
                         return Response(
-                            {'error': f'La pregunta "{pregunta.texto}" no es de tipo escala y no se puede responder.'},
-                            status=status.HTTP_400_BAD_REQUEST
+                            {"error": f'La pregunta "{pregunta.texto}" no es de tipo escala y no se puede responder.'},
+                            status=status.HTTP_400_BAD_REQUEST,
                         )
 
                     # Mapear valores a los campos reales del modelo Respuesta
-                    valor_texto = respuesta_data.get('valor_texto')
+                    valor_texto = respuesta_data.get("valor_texto")
                     # Aceptar varias claves numéricas y normalizarlas a valor_numerico
-                    valor_numerico = respuesta_data.get('valor_numerico')
+                    valor_numerico = respuesta_data.get("valor_numerico")
                     if valor_numerico is None:
-                        valor_numerico = respuesta_data.get('valor_numero')
+                        valor_numerico = respuesta_data.get("valor_numero")
                     if valor_numerico is None:
-                        valor_numerico = respuesta_data.get('valor_escala')
+                        valor_numerico = respuesta_data.get("valor_escala")
 
                     if valor_numerico is None:
                         return Response(
-                            {'error': f'Debes proporcionar un valor de escala para "{pregunta.texto}".'},
-                            status=status.HTTP_400_BAD_REQUEST
+                            {"error": f'Debes proporcionar un valor de escala para "{pregunta.texto}".'},
+                            status=status.HTTP_400_BAD_REQUEST,
                         )
 
                     try:
                         valor_numerico_int = int(valor_numerico)
                     except (TypeError, ValueError):
                         return Response(
-                            {'error': f'El valor de escala para "{pregunta.texto}" debe ser numérico entre 1 y 10.'},
-                            status=status.HTTP_400_BAD_REQUEST
+                            {"error": f'El valor de escala para "{pregunta.texto}" debe ser numérico entre 1 y 10.'},
+                            status=status.HTTP_400_BAD_REQUEST,
                         )
 
                     if valor_numerico_int < 1 or valor_numerico_int > 10:
                         return Response(
-                            {'error': f'El valor de escala para "{pregunta.texto}" debe estar entre 1 y 10.'},
-                            status=status.HTTP_400_BAD_REQUEST
+                            {"error": f'El valor de escala para "{pregunta.texto}" debe estar entre 1 y 10.'},
+                            status=status.HTTP_400_BAD_REQUEST,
                         )
 
                     # Feedback obligatorio si la escala es menor al máximo (10)
                     if valor_numerico_int < 10:
-                        feedback = (valor_texto or '').strip()
+                        feedback = (valor_texto or "").strip()
                         if not feedback:
                             return Response(
-                                {'error': f'Por favor agrega un feedback para la pregunta "{pregunta.texto}" al seleccionar una puntuación menor a 10.'},
-                                status=status.HTTP_400_BAD_REQUEST
+                                {
+                                    "error": (
+                                        f'Por favor agrega un feedback para la pregunta "{pregunta.texto}" '
+                                        "al seleccionar una puntuación menor a 10."
+                                    )
+                                },
+                                status=status.HTTP_400_BAD_REQUEST,
                             )
-                    
+
                     Respuesta.objects.create(
                         encuesta_respuesta=encuesta_respuesta,
                         pregunta=pregunta,
@@ -246,16 +260,15 @@ class EncuestaViewSet(viewsets.ModelViewSet):
                         valor_numerico=valor_numerico_int,
                         valor_boolean=None,
                     )
-                
+
                 # Marcar como completada
-                encuesta_respuesta.estado = 'completada'
+                encuesta_respuesta.estado = "completada"
                 encuesta_respuesta.fecha_completada = timezone.now()
                 encuesta_respuesta.save()
 
                 try:
                     respuestas_relevantes = encuesta_respuesta.respuestas.filter(
-                        pregunta__impacta_puntuacion=True,
-                        pregunta__tipo='escala'
+                        pregunta__impacta_puntuacion=True, pregunta__tipo="escala"
                     )
                     valores_puntuacion = [
                         Decimal(respuesta.valor_numerico)
@@ -264,7 +277,7 @@ class EncuestaViewSet(viewsets.ModelViewSet):
                     ]
 
                     if valores_puntuacion:
-                        total_puntuacion = sum(valores_puntuacion, Decimal('0'))
+                        total_puntuacion = sum(valores_puntuacion, Decimal("0"))
                         cantidad_puntuacion = len(valores_puntuacion)
                         timestamp = encuesta_respuesta.fecha_completada
                         empleados_asignados = list(reserva.empleados.all())
@@ -273,7 +286,7 @@ class EncuestaViewSet(viewsets.ModelViewSet):
                             empleado.registrar_resultado_encuesta(
                                 puntuacion_total=total_puntuacion,
                                 cantidad_items=cantidad_puntuacion,
-                                timestamp=timestamp
+                                timestamp=timestamp,
                             )
                 except Exception as scoring_error:
                     logger.error(
@@ -281,26 +294,25 @@ class EncuestaViewSet(viewsets.ModelViewSet):
                         encuesta_respuesta.pk,
                         reserva.id_reserva,
                         scoring_error,
-                        exc_info=True
+                        exc_info=True,
                     )
-                
+
                 logger.info(f"Cliente {cliente.pk} completó encuesta {encuesta_activa.pk} para reserva {reserva_id}")
-                
+
                 return Response(
                     {
-                        'mensaje': '¡Gracias por completar la encuesta!',
-                        'encuesta_respuesta_id': encuesta_respuesta.pk
+                        "mensaje": "¡Gracias por completar la encuesta!",
+                        "encuesta_respuesta_id": encuesta_respuesta.pk,
                     },
-                    status=status.HTTP_201_CREATED
+                    status=status.HTTP_201_CREATED,
                 )
-                
+
         except Exception as e:
             logger.error(f"Error al procesar respuesta de encuesta: {str(e)}")
             return Response(
-                {'error': 'Error al procesar la encuesta'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Error al procesar la encuesta"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-    
 
 
 class PreguntaViewSet(viewsets.ModelViewSet):
@@ -308,25 +320,38 @@ class PreguntaViewSet(viewsets.ModelViewSet):
     ViewSet para gestión de preguntas.
     Las preguntas se gestionan principalmente a través de EncuestaViewSet (nested).
     """
-    queryset = Pregunta.objects.select_related('encuesta').all()
+
+    queryset = Pregunta.objects.select_related("encuesta").all()
     serializer_class = PreguntaSerializer
     permission_classes = [IsAuthenticated, IsAdminUser]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['encuesta', 'tipo', 'obligatoria']
-    search_fields = ['texto']
-    ordering_fields = ['orden', 'texto']
-    ordering = ['orden']
+    filter_backends = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter,
+    ]
+    filterset_fields = ["encuesta", "tipo", "obligatoria"]
+    search_fields = ["texto"]
+    ordering_fields = ["orden", "texto"]
+    ordering = ["orden"]
 
 
 class EncuestaRespuestaViewSet(viewsets.ModelViewSet):
-    queryset = EncuestaRespuesta.objects.select_related('cliente', 'encuesta').all()
+    queryset = EncuestaRespuesta.objects.select_related("cliente", "encuesta").all()
     serializer_class = EncuestaRespuestaSerializer
     permission_classes = [IsAuthenticated]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['estado', 'cliente', 'encuesta', 'reserva']
-    search_fields = ['cliente__persona__nombre', 'cliente__persona__apellido', 'encuesta__titulo']
-    ordering_fields = ['fecha_inicio', 'fecha_completada']
-    ordering = ['-fecha_inicio']
+    filter_backends = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter,
+    ]
+    filterset_fields = ["estado", "cliente", "encuesta", "reserva"]
+    search_fields = [
+        "cliente__persona__nombre",
+        "cliente__persona__apellido",
+        "encuesta__titulo",
+    ]
+    ordering_fields = ["fecha_inicio", "fecha_completada"]
+    ordering = ["-fecha_inicio"]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -343,16 +368,20 @@ class EncuestaRespuestaViewSet(viewsets.ModelViewSet):
 
 
 class RespuestaViewSet(viewsets.ModelViewSet):
-    queryset = Respuesta.objects.select_related('encuesta_respuesta', 'pregunta').all()
+    queryset = Respuesta.objects.select_related("encuesta_respuesta", "pregunta").all()
     serializer_class = RespuestaSerializer
     permission_classes = [IsAuthenticated]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['encuesta_respuesta', 'pregunta']
-    search_fields = ['valor_texto']
-    ordering_fields = ['pregunta__orden']
-    ordering = ['pregunta__orden']
+    filter_backends = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter,
+    ]
+    filterset_fields = ["encuesta_respuesta", "pregunta"]
+    search_fields = ["valor_texto"]
+    ordering_fields = ["pregunta__orden"]
+    ordering = ["pregunta__orden"]
 
-    ordering = ['pregunta__orden']
+    ordering = ["pregunta__orden"]
 
 
 class EmpleadoImpactoEncuestaAPIView(APIView):
@@ -361,37 +390,44 @@ class EmpleadoImpactoEncuestaAPIView(APIView):
     def get(self, request):
         empleado = self._get_empleado(request.user)
         if not empleado:
-            return Response({'detail': 'Solo los empleados pueden acceder a esta información.'}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": "Solo los empleados pueden acceder a esta información."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
-        queryset = Respuesta.objects.select_related(
-            'pregunta',
-            'encuesta_respuesta__encuesta',
-            'encuesta_respuesta__cliente__persona',
-            'encuesta_respuesta__reserva__servicio'
-        ).filter(
-            pregunta__impacta_puntuacion=True,
-            pregunta__tipo='escala',
-            encuesta_respuesta__estado='completada',
-            encuesta_respuesta__reserva__empleados=empleado,
-            encuesta_respuesta__reserva__isnull=False,
-        ).distinct()
+        queryset = (
+            Respuesta.objects.select_related(
+                "pregunta",
+                "encuesta_respuesta__encuesta",
+                "encuesta_respuesta__cliente__persona",
+                "encuesta_respuesta__reserva__servicio",
+            )
+            .filter(
+                pregunta__impacta_puntuacion=True,
+                pregunta__tipo="escala",
+                encuesta_respuesta__estado="completada",
+                encuesta_respuesta__reserva__empleados=empleado,
+                encuesta_respuesta__reserva__isnull=False,
+            )
+            .distinct()
+        )
 
         queryset = self._apply_date_filters(request, queryset)
 
         total = queryset.count()
 
-        queryset = queryset.order_by('-encuesta_respuesta__fecha_completada', 'pregunta__orden')
+        queryset = queryset.order_by("-encuesta_respuesta__fecha_completada", "pregunta__orden")
 
-        limit = self._resolve_limit(request.query_params.get('limit'))
+        limit = self._resolve_limit(request.query_params.get("limit"))
         if limit is not None:
             queryset = queryset[:limit]
 
         serializer = RespuestaImpactoSerializer(queryset, many=True)
-        return Response({'count': total, 'results': serializer.data})
+        return Response({"count": total, "results": serializer.data})
 
     def _apply_date_filters(self, request, queryset):
-        start_date_str = request.query_params.get('start_date')
-        end_date_str = request.query_params.get('end_date')
+        start_date_str = request.query_params.get("start_date")
+        end_date_str = request.query_params.get("end_date")
 
         if start_date_str:
             parsed = parse_date(start_date_str)
@@ -412,13 +448,13 @@ class EmpleadoImpactoEncuestaAPIView(APIView):
         return queryset
 
     def _get_empleado(self, user):
-        persona = getattr(user, 'persona', None)
-        if persona and hasattr(persona, 'empleado'):
+        persona = getattr(user, "persona", None)
+        if persona and hasattr(persona, "empleado"):
             return persona.empleado
         return Empleado.objects.filter(persona__email=user.email).first()
 
     def _resolve_limit(self, limit_param):
-        if limit_param in (None, '', 'all', 'todos', '*'):
+        if limit_param in (None, "", "all", "todos", "*"):
             return None
         try:
             limit_value = int(limit_param)

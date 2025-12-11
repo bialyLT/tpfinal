@@ -7,26 +7,64 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('servicios', '0004_diseno_reserva'),
+        ("servicios", "0004_diseno_reserva"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='ImagenReserva',
+            name="ImagenReserva",
             fields=[
-                ('id_imagen_reserva', models.AutoField(primary_key=True, serialize=False)),
-                ('imagen', models.ImageField(help_text='Imagen del jardín o idea de referencia', upload_to='reservas/%Y/%m/')),
-                ('tipo_imagen', models.CharField(choices=[('jardin', 'Jardín Actual'), ('ideas', 'Ideas y Referencias')], default='jardin', help_text='Tipo de imagen: jardín actual o ideas', max_length=20)),
-                ('descripcion', models.CharField(blank=True, help_text='Descripción de la imagen', max_length=200, null=True)),
-                ('fecha_subida', models.DateTimeField(auto_now_add=True)),
-                ('reserva', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='imagenes', to='servicios.reserva')),
+                (
+                    "id_imagen_reserva",
+                    models.AutoField(primary_key=True, serialize=False),
+                ),
+                (
+                    "imagen",
+                    models.ImageField(
+                        help_text="Imagen del jardín o idea de referencia",
+                        upload_to="reservas/%Y/%m/",
+                    ),
+                ),
+                (
+                    "tipo_imagen",
+                    models.CharField(
+                        choices=[
+                            ("jardin", "Jardín Actual"),
+                            ("ideas", "Ideas y Referencias"),
+                        ],
+                        default="jardin",
+                        help_text="Tipo de imagen: jardín actual o ideas",
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "descripcion",
+                    models.CharField(
+                        blank=True,
+                        help_text="Descripción de la imagen",
+                        max_length=200,
+                        null=True,
+                    ),
+                ),
+                ("fecha_subida", models.DateTimeField(auto_now_add=True)),
+                (
+                    "reserva",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="imagenes",
+                        to="servicios.reserva",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Imagen de Reserva',
-                'verbose_name_plural': 'Imágenes de Reserva',
-                'db_table': 'imagen_reserva',
-                'ordering': ['fecha_subida'],
-                'indexes': [models.Index(fields=['reserva'], name='imagen_rese_reserva_63390d_idx'), models.Index(fields=['tipo_imagen'], name='imagen_rese_tipo_im_d1ae0d_idx')],
+                "verbose_name": "Imagen de Reserva",
+                "verbose_name_plural": "Imágenes de Reserva",
+                "db_table": "imagen_reserva",
+                "ordering": ["fecha_subida"],
+                "indexes": [
+                    models.Index(fields=["reserva"], name="imagen_rese_reserva_63390d_idx"),
+                    models.Index(fields=["tipo_imagen"], name="imagen_rese_tipo_im_d1ae0d_idx"),
+                ],
             },
         ),
     ]

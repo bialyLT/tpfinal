@@ -6,13 +6,20 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('servicios', '0016_reserva_nivel_intervencion_reserva_objetivo_diseno_and_more'),
+        (
+            "servicios",
+            "0016_reserva_nivel_intervencion_reserva_objetivo_diseno_and_more",
+        ),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='reserva',
-            name='fecha_realizacion',
-            field=models.DateTimeField(blank=True, help_text='Fecha y hora real en que se completó el servicio', null=True),
+            model_name="reserva",
+            name="fecha_realizacion",
+            field=models.DateTimeField(
+                blank=True,
+                help_text="Fecha y hora real en que se completó el servicio",
+                null=True,
+            ),
         ),
     ]

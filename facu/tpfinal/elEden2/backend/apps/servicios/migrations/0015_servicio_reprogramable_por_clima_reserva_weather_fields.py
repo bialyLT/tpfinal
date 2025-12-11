@@ -7,49 +7,58 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('weather', '0001_initial'),
-        ('servicios', '0014_reserva_encuesta_token'),
+        ("weather", "0001_initial"),
+        ("servicios", "0014_reserva_encuesta_token"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='servicio',
-            name='reprogramable_por_clima',
-            field=models.BooleanField(default=True, help_text='Indica si este servicio puede reagendarse automáticamente ante mal clima'),
+            model_name="servicio",
+            name="reprogramable_por_clima",
+            field=models.BooleanField(
+                default=True,
+                help_text="Indica si este servicio puede reagendarse automáticamente ante mal clima",
+            ),
         ),
         migrations.AddField(
-            model_name='reserva',
-            name='alerta_clima_payload',
+            model_name="reserva",
+            name="alerta_clima_payload",
             field=models.JSONField(blank=True, default=dict),
         ),
         migrations.AddField(
-            model_name='reserva',
-            name='fecha_reprogramada_confirmada',
+            model_name="reserva",
+            name="fecha_reprogramada_confirmada",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='reserva',
-            name='fecha_reprogramada_sugerida',
+            model_name="reserva",
+            name="fecha_reprogramada_sugerida",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='reserva',
-            name='motivo_reprogramacion',
+            model_name="reserva",
+            name="motivo_reprogramacion",
             field=models.CharField(blank=True, max_length=255, null=True),
         ),
         migrations.AddField(
-            model_name='reserva',
-            name='reprogramacion_fuente',
+            model_name="reserva",
+            name="reprogramacion_fuente",
             field=models.CharField(blank=True, max_length=50, null=True),
         ),
         migrations.AddField(
-            model_name='reserva',
-            name='requiere_reprogramacion',
+            model_name="reserva",
+            name="requiere_reprogramacion",
             field=models.BooleanField(default=False),
         ),
         migrations.AddField(
-            model_name='reserva',
-            name='weather_alert',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='reservas_afectadas', to='weather.weatheralert'),
+            model_name="reserva",
+            name="weather_alert",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="reservas_afectadas",
+                to="weather.weatheralert",
+            ),
         ),
     ]

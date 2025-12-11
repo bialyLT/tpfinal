@@ -3,70 +3,68 @@ Vistas para la integración con MercadoPago.
 Maneja la creación de preferencias de pago y la confirmación de pagos.
 """
 
-import mercadopago
-import uuid
 import logging
+import uuid
+
+import mercadopago
 from django.conf import settings
 from django.utils import timezone
-from django.core.mail import send_mail
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
 
-from apps.servicios.models import Reserva, Servicio, ImagenReserva, ConfiguracionPago
+from apps.emails.services import EmailService
+from apps.servicios.models import ConfiguracionPago, ImagenReserva, Reserva, Servicio
 from apps.servicios.serializers import ReservaSerializer
 from apps.users.models import Cliente, Persona
-from apps.emails.services import EmailService
 
 logger = logging.getLogger(__name__)
 
 
 # ==================== VISTAS DE PAGO PARA RESERVAS EXISTENTES ====================
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def crear_preferencia_pago_sena(request, reserva_id):
     """
     Crear preferencia de pago de MercadoPago para la SEÑA de una reserva
     POST /api/v1/mercadopago/reservas/{reserva_id}/crear-pago-sena/
-    
+
     Este es el PRIMER PAGO que se realiza al crear la solicitud de servicio.
     El monto de la seña se configura en el admin.
     """
     try:
         # Obtener la reserva
-        reserva = Reserva.objects.select_related(
-            'cliente__persona', 
-            'servicio'
-        ).get(id_reserva=reserva_id)
-        
+        reserva = Reserva.objects.select_related("cliente__persona", "servicio").get(id_reserva=reserva_id)
+
         # Verificar que el usuario sea el dueño de la reserva
         try:
             cliente = Cliente.objects.get(persona__email=request.user.email)
             if reserva.cliente != cliente:
                 return Response(
-                    {'error': 'No tienes permiso para pagar esta reserva'},
-                    status=status.HTTP_403_FORBIDDEN
+                    {"error": "No tienes permiso para pagar esta reserva"},
+                    status=status.HTTP_403_FORBIDDEN,
                 )
         except Cliente.DoesNotExist:
             return Response(
-                {'error': 'Usuario no registrado como cliente'},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Usuario no registrado como cliente"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         # Verificar que la seña no esté ya pagada
-        if reserva.estado_pago_sena == 'aprobado':
+        if reserva.estado_pago_sena == "aprobado":
             return Response(
-                {'error': 'La seña de esta reserva ya ha sido pagada'},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "La seña de esta reserva ya ha sido pagada"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         # Asignar monto de seña si no está asignado
         if reserva.monto_sena <= 0:
             reserva.asignar_sena()
             reserva.save()
-        
+
         # Crear preferencia de pago de seña usando SDK de MercadoPago
         try:
             sdk = mercadopago.SDK(settings.MERCADOPAGO_ACCESS_TOKEN)
@@ -80,26 +78,26 @@ def crear_preferencia_pago_sena(request, reserva_id):
                         "quantity": 1,
                         "unit_price": float(reserva.monto_sena),
                         "currency_id": "ARS",
-                        "category_id": "services"
+                        "category_id": "services",
                     }
                 ],
                 "payer": {
                     "name": reserva.cliente.persona.nombre,
                     "surname": reserva.cliente.persona.apellido,
-                    "email": reserva.cliente.persona.email
+                    "email": reserva.cliente.persona.email,
                 },
                 "back_urls": {
-                    "success": f"{settings.FRONTEND_URL}/reservas/pago-exitoso?tipo=sena&reserva_id={reserva.id_reserva}",
+                    "success": (
+                        f"{settings.FRONTEND_URL}/reservas/pago-exitoso"
+                        f"?tipo=sena&reserva_id={reserva.id_reserva}"
+                    ),
                     "failure": f"{settings.FRONTEND_URL}/mis-reservas?error=pago_rechazado",
-                    "pending": f"{settings.FRONTEND_URL}/mis-reservas?info=pago_pendiente"
+                    "pending": f"{settings.FRONTEND_URL}/mis-reservas?info=pago_pendiente",
                 },
                 "auto_return": "approved",
                 "external_reference": f"SENA-{reserva.id_reserva}",
                 "statement_descriptor": "El Eden",
-                "payment_methods": {
-                    "excluded_payment_types": [],
-                    "installments": 12
-                }
+                "payment_methods": {"excluded_payment_types": [], "installments": 12},
             }
 
             preference_response = sdk.preference().create(preference_data)
@@ -109,90 +107,86 @@ def crear_preferencia_pago_sena(request, reserva_id):
                 preference = preference_response
 
             preferencia = {
-                'preference_id': preference.get('id'),
-                'init_point': preference.get('init_point'),
-                'sandbox_init_point': preference.get('sandbox_init_point')
+                "preference_id": preference.get("id"),
+                "init_point": preference.get("init_point"),
+                "sandbox_init_point": preference.get("sandbox_init_point"),
             }
 
             # Guardar el ID de preferencia en la reserva
-            reserva.mercadopago_preference_id_sena = preferencia['preference_id']
+            reserva.mercadopago_preference_id_sena = preferencia["preference_id"]
             reserva.save()
 
             logger.info(f"Preferencia de SEÑA creada para reserva {reserva_id}: {preferencia['preference_id']}")
 
-            return Response({
-                'preference_id': preferencia['preference_id'],
-                'init_point': preferencia['init_point'],
-                'sandbox_init_point': preferencia.get('sandbox_init_point'),
-                'reserva_id': reserva.id_reserva,
-                'monto_sena': float(reserva.monto_sena),
-                'tipo_pago': 'sena'
-            })
+            return Response(
+                {
+                    "preference_id": preferencia["preference_id"],
+                    "init_point": preferencia["init_point"],
+                    "sandbox_init_point": preferencia.get("sandbox_init_point"),
+                    "reserva_id": reserva.id_reserva,
+                    "monto_sena": float(reserva.monto_sena),
+                    "tipo_pago": "sena",
+                }
+            )
         except Exception as e:
             logger.error(f"Error al crear preferencia de seña: {str(e)}")
             return Response(
-                {'error': 'No se pudo crear la preferencia de pago', 'detalle': str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "No se pudo crear la preferencia de pago", "detalle": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-        
+
     except Reserva.DoesNotExist:
-        return Response(
-            {'error': 'Reserva no encontrada'},
-            status=status.HTTP_404_NOT_FOUND
-        )
+        return Response({"error": "Reserva no encontrada"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         logger.error(f"Error al crear preferencia de pago de seña: {str(e)}")
         return Response(
-            {'error': 'Error al crear preferencia de pago', 'detail': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "Error al crear preferencia de pago", "detail": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def crear_preferencia_pago_final(request, reserva_id):
     """
     Crear preferencia de pago de MercadoPago para el PAGO FINAL de una reserva
     POST /api/v1/mercadopago/reservas/{reserva_id}/crear-pago-final/
-    
+
     Este es el SEGUNDO PAGO que se realiza cuando el cliente acepta la propuesta de diseño.
     El monto es: total - seña ya pagada.
     """
     try:
         # Obtener la reserva
-        reserva = Reserva.objects.select_related(
-            'cliente__persona',
-            'servicio'
-        ).get(id_reserva=reserva_id)
-        
+        reserva = Reserva.objects.select_related("cliente__persona", "servicio").get(id_reserva=reserva_id)
+
         # Verificar que el pago final no esté ya pagado
-        if reserva.estado_pago_final == 'aprobado':
+        if reserva.estado_pago_final == "aprobado":
             return Response(
-                {'error': 'El pago final de esta reserva ya ha sido realizado'},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "El pago final de esta reserva ya ha sido realizado"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         # Verificar que tenga un diseño aceptado
         try:
-            diseno = reserva.disenos.filter(estado='aceptado').first()
+            diseno = reserva.disenos.filter(estado="aceptado").first()
             if not diseno:
                 return Response(
-                    {'error': 'Primero debe aceptar una propuesta de diseño'},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"error": "Primero debe aceptar una propuesta de diseño"},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
-        except:
+        except Exception:
             return Response(
-                {'error': 'No hay un diseño aceptado para esta reserva'},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "No hay un diseño aceptado para esta reserva"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         # Verificar que tenga un monto final
         if reserva.monto_final <= 0:
             return Response(
-                {'error': 'La reserva no tiene un monto final asignado. Contacte al administrador.'},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "La reserva no tiene un monto final asignado. Contacte al administrador."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         # Crear preferencia de pago final usando SDK de MercadoPago
         try:
             sdk = mercadopago.SDK(settings.MERCADOPAGO_ACCESS_TOKEN)
@@ -206,26 +200,26 @@ def crear_preferencia_pago_final(request, reserva_id):
                         "quantity": 1,
                         "unit_price": float(reserva.monto_final),
                         "currency_id": "ARS",
-                        "category_id": "services"
+                        "category_id": "services",
                     }
                 ],
                 "payer": {
                     "name": reserva.cliente.persona.nombre,
                     "surname": reserva.cliente.persona.apellido,
-                    "email": reserva.cliente.persona.email
+                    "email": reserva.cliente.persona.email,
                 },
                 "back_urls": {
-                    "success": f"{settings.FRONTEND_URL}/reservas/pago-exitoso?tipo=final&reserva_id={reserva.id_reserva}",
+                    "success": (
+                        f"{settings.FRONTEND_URL}/reservas/pago-exitoso"
+                        f"?tipo=final&reserva_id={reserva.id_reserva}"
+                    ),
                     "failure": f"{settings.FRONTEND_URL}/mis-reservas?error=pago_rechazado",
-                    "pending": f"{settings.FRONTEND_URL}/mis-reservas?info=pago_pendiente"
+                    "pending": f"{settings.FRONTEND_URL}/mis-reservas?info=pago_pendiente",
                 },
                 "auto_return": "approved",
                 "external_reference": f"FINAL-{reserva.id_reserva}",
                 "statement_descriptor": "El Eden",
-                "payment_methods": {
-                    "excluded_payment_types": [],
-                    "installments": 12
-                }
+                "payment_methods": {"excluded_payment_types": [], "installments": 12},
             }
 
             preference_response = sdk.preference().create(preference_data)
@@ -235,48 +229,47 @@ def crear_preferencia_pago_final(request, reserva_id):
                 preference = preference_response
 
             preferencia = {
-                'preference_id': preference.get('id'),
-                'init_point': preference.get('init_point'),
-                'sandbox_init_point': preference.get('sandbox_init_point')
+                "preference_id": preference.get("id"),
+                "init_point": preference.get("init_point"),
+                "sandbox_init_point": preference.get("sandbox_init_point"),
             }
 
             # Guardar el ID de preferencia en la reserva
-            reserva.mercadopago_preference_id_final = preferencia['preference_id']
+            reserva.mercadopago_preference_id_final = preferencia["preference_id"]
             reserva.save()
 
             logger.info(f"Preferencia de PAGO FINAL creada para reserva {reserva_id}: {preferencia['preference_id']}")
 
-            return Response({
-                'preference_id': preferencia['preference_id'],
-                'init_point': preferencia['init_point'],
-                'sandbox_init_point': preferencia.get('sandbox_init_point'),
-                'reserva_id': reserva.id_reserva,
-                'monto_total': float(reserva.monto_total),
-                'monto_sena_pagada': float(reserva.monto_sena),
-                'monto_final': float(reserva.monto_final),
-                'tipo_pago': 'final'
-            })
+            return Response(
+                {
+                    "preference_id": preferencia["preference_id"],
+                    "init_point": preferencia["init_point"],
+                    "sandbox_init_point": preferencia.get("sandbox_init_point"),
+                    "reserva_id": reserva.id_reserva,
+                    "monto_total": float(reserva.monto_total),
+                    "monto_sena_pagada": float(reserva.monto_sena),
+                    "monto_final": float(reserva.monto_final),
+                    "tipo_pago": "final",
+                }
+            )
         except Exception as e:
             logger.error(f"Error al crear preferencia de pago final: {str(e)}")
             return Response(
-                {'error': 'No se pudo crear la preferencia de pago', 'detalle': str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "No se pudo crear la preferencia de pago", "detalle": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-        
+
     except Reserva.DoesNotExist:
-        return Response(
-            {'error': 'Reserva no encontrada'},
-            status=status.HTTP_404_NOT_FOUND
-        )
+        return Response({"error": "Reserva no encontrada"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         logger.error(f"Error al crear preferencia de pago final: {str(e)}")
         return Response(
-            {'error': 'Error al crear preferencia de pago', 'detail': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "Error al crear preferencia de pago", "detail": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def verificar_pago(request, reserva_id):
     """
@@ -285,115 +278,123 @@ def verificar_pago(request, reserva_id):
     """
     try:
         reserva = Reserva.objects.get(id_reserva=reserva_id)
-        
+
         # Verificar que el usuario sea el dueño de la reserva
         try:
             cliente = Cliente.objects.get(persona__email=request.user.email)
             if reserva.cliente != cliente and not request.user.is_staff:
                 return Response(
-                    {'error': 'No tienes permiso para ver esta reserva'},
-                    status=status.HTTP_403_FORBIDDEN
+                    {"error": "No tienes permiso para ver esta reserva"},
+                    status=status.HTTP_403_FORBIDDEN,
                 )
         except Cliente.DoesNotExist:
             if not request.user.is_staff:
                 return Response(
-                    {'error': 'No tienes permiso para ver esta reserva'},
-                    status=status.HTTP_403_FORBIDDEN
+                    {"error": "No tienes permiso para ver esta reserva"},
+                    status=status.HTTP_403_FORBIDDEN,
                 )
-        
-        return Response({
-            'reserva_id': reserva.id_reserva,
-            'estado_pago_sena': reserva.estado_pago_sena,
-            'estado_pago_final': reserva.estado_pago_final,
-            'estado_reserva': reserva.estado,
-            'monto_sena': float(reserva.monto_sena),
-            'monto_total': float(reserva.monto_total),
-            'monto_final': float(reserva.monto_final),
-            'fecha_pago_sena': reserva.fecha_pago_sena,
-            'fecha_pago_final': reserva.fecha_pago_final,
-            'payment_id_sena': reserva.payment_id_sena,
-            'payment_id_final': reserva.payment_id_final
-        })
-        
-    except Reserva.DoesNotExist:
+
         return Response(
-            {'error': 'Reserva no encontrada'},
-            status=status.HTTP_404_NOT_FOUND
+            {
+                "reserva_id": reserva.id_reserva,
+                "estado_pago_sena": reserva.estado_pago_sena,
+                "estado_pago_final": reserva.estado_pago_final,
+                "estado_reserva": reserva.estado,
+                "monto_sena": float(reserva.monto_sena),
+                "monto_total": float(reserva.monto_total),
+                "monto_final": float(reserva.monto_final),
+                "fecha_pago_sena": reserva.fecha_pago_sena,
+                "fecha_pago_final": reserva.fecha_pago_final,
+                "payment_id_sena": reserva.payment_id_sena,
+                "payment_id_final": reserva.payment_id_final,
+            }
         )
 
+    except Reserva.DoesNotExist:
+        return Response({"error": "Reserva no encontrada"}, status=status.HTTP_404_NOT_FOUND)
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def confirmar_pago_sena(request, reserva_id):
     """
     Confirmar el pago de seña de una reserva
     POST /api/v1/mercadopago/reservas/{reserva_id}/confirmar-pago-sena/
-    
+
     Body: { "payment_id": "123456789" }
     """
     try:
         reserva = Reserva.objects.get(id_reserva=reserva_id)
-        payment_id = request.data.get('payment_id')
-        
+        payment_id = request.data.get("payment_id")
+
         if not payment_id:
             return Response(
-                {'error': 'Se requiere el payment_id'},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Se requiere el payment_id"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         logger.info(f"🔍 Confirmando pago de seña para reserva {reserva_id} con payment_id: {payment_id}")
-        
+
         # Verificar el pago con MercadoPago (con reintentos por delay de sandbox)
         sdk = mercadopago.SDK(settings.MERCADOPAGO_ACCESS_TOKEN)
         payment_data = None
         max_retries = 6  # Reintentos para sandbox que tiene delays
         retry_delay = 3  # segundos entre reintentos
-        
+
         for attempt in range(max_retries):
             try:
                 if attempt > 0:
                     logger.info(f"⏳ Reintento {attempt + 1}/{max_retries} después de {retry_delay}s...")
                     import time
+
                     time.sleep(retry_delay)
-                
+
                 payment_info = sdk.payment().get(payment_id)
                 payment_data = payment_info["response"] if "response" in payment_info else payment_info
-                
+
                 # Verificar si el pago existe (no es 404)
-                if isinstance(payment_data, dict) and payment_data.get('status') != 404:
-                    logger.info(f"📄 Información del pago encontrada: ID={payment_data.get('id')}, Status={payment_data.get('status')}")
+                if isinstance(payment_data, dict) and payment_data.get("status") != 404:
+                    logger.info(
+                        "📄 Información del pago encontrada: "
+                        f"ID={payment_data.get('id')}, Status={payment_data.get('status')}"
+                    )
                     break  # Pago encontrado, salir del loop
                 else:
                     logger.warning(f"⚠️ Intento {attempt + 1}: Pago aún no disponible en API (404)")
                     if attempt == max_retries - 1:
                         return Response(
-                            {'error': 'El pago aún está siendo procesado. Por favor, espera unos segundos y recarga la página.'},
-                            status=status.HTTP_400_BAD_REQUEST
+                            {
+                                "error": (
+                                    "El pago aún está siendo procesado. Por favor, espera unos segundos "
+                                    "y recarga la página."
+                                )
+                            },
+                            status=status.HTTP_400_BAD_REQUEST,
                         )
-                    
+
             except Exception as e:
                 if attempt == max_retries - 1:
                     logger.error(f"❌ Error al validar pago después de {max_retries} intentos: {str(e)}")
                     return Response(
-                        {'error': 'No se pudo validar el pago con MercadoPago. Por favor, contacta con soporte.'},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                        {"error": "No se pudo validar el pago con MercadoPago. Por favor, contacta con soporte."},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     )
-        
+
         # Verificar que el pago esté aprobado
-        if payment_data.get('status') == 'approved':
+        if payment_data.get("status") == "approved":
             # Actualizar la reserva
-            reserva.estado_pago_sena = 'aprobado'
+            reserva.estado_pago_sena = "aprobado"
             reserva.payment_id_sena = payment_id
             reserva.fecha_pago_sena = timezone.now()
-            
+
             # Actualizar el estado de la reserva si aún está pendiente
-            if reserva.estado == 'pendiente_pago_sena':
-                reserva.estado = 'en_revision'
-            
+            if reserva.estado == "pendiente_pago_sena":
+                reserva.estado = "en_revision"
+
             reserva.save()
-            
+
             logger.info(f"✅ Pago de seña confirmado para reserva {reserva_id}")
-            
+
             # Enviar email de confirmación al cliente
             try:
                 cliente = reserva.cliente
@@ -404,12 +405,12 @@ def confirmar_pago_sena(request, reserva_id):
                     servicio_nombre=reserva.servicio.nombre,
                     monto=reserva.monto_sena,
                     payment_id=payment_id,
-                    tipo_pago='seña'
+                    tipo_pago="seña",
                 )
                 logger.info(f"✅ Email de confirmación enviado a {cliente.persona.email}")
             except Exception as e:
                 logger.error(f"Error al enviar email de confirmación al cliente: {str(e)}")
-            
+
             # Enviar notificación a los administradores
             try:
                 EmailService.send_payment_notification_to_admin(
@@ -421,90 +422,89 @@ def confirmar_pago_sena(request, reserva_id):
                     fecha_reserva=reserva.fecha_reserva,
                     direccion=reserva.direccion,
                     observaciones=reserva.observaciones,
-                    tipo_pago='seña'
+                    tipo_pago="seña",
                 )
-                logger.info(f"✅ Notificación a administradores enviada")
+                logger.info("✅ Notificación a administradores enviada")
             except Exception as e:
                 logger.error(f"Error al enviar notificación a administradores: {str(e)}")
-            
-            return Response({
-                'success': True,
-                'message': 'Pago de seña confirmado exitosamente',
-                'reserva_id': reserva.id_reserva,
-                'estado_pago': reserva.estado_pago_sena,
-                'estado_reserva': reserva.estado
-            })
+
+            return Response(
+                {
+                    "success": True,
+                    "message": "Pago de seña confirmado exitosamente",
+                    "reserva_id": reserva.id_reserva,
+                    "estado_pago": reserva.estado_pago_sena,
+                    "estado_reserva": reserva.estado,
+                }
+            )
         else:
             return Response(
-                {'error': f'El pago no está aprobado. Estado: {payment_data.get("status")}'},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": f'El pago no está aprobado. Estado: {payment_data.get("status")}'},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
     except Reserva.DoesNotExist:
-        return Response(
-            {'error': 'Reserva no encontrada'},
-            status=status.HTTP_404_NOT_FOUND
-        )
+        return Response({"error": "Reserva no encontrada"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         logger.error(f"Error al confirmar pago de seña: {str(e)}")
         return Response(
-            {'error': 'Error al confirmar el pago', 'detalle': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "Error al confirmar el pago", "detalle": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def confirmar_pago_final(request, reserva_id):
     """
     Confirmar el pago final de una reserva
     POST /api/v1/mercadopago/reservas/{reserva_id}/confirmar-pago-final/
-    
+
     Body: { "payment_id": "123456789" }
     """
     try:
         reserva = Reserva.objects.get(id_reserva=reserva_id)
-        payment_id = request.data.get('payment_id')
-        
+        payment_id = request.data.get("payment_id")
+
         if not payment_id:
             return Response(
-                {'error': 'Se requiere el payment_id'},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Se requiere el payment_id"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         logger.info(f"🔍 Confirmando pago final para reserva {reserva_id} con payment_id: {payment_id}")
-        
+
         # Verificar el pago con MercadoPago
         try:
             sdk = mercadopago.SDK(settings.MERCADOPAGO_ACCESS_TOKEN)
             payment_info = sdk.payment().get(payment_id)
-            
+
             if "response" in payment_info:
                 payment_data = payment_info["response"]
             else:
                 payment_data = payment_info
-            
+
             logger.info(f"📄 Información del pago: {payment_data}")
-            
+
             # Verificar que el pago esté aprobado
-            if payment_data.get('status') == 'approved':
+            if payment_data.get("status") == "approved":
                 # Actualizar la reserva
-                reserva.estado_pago_final = 'aprobado'
+                reserva.estado_pago_final = "aprobado"
                 reserva.payment_id_final = payment_id
                 reserva.fecha_pago_final = timezone.now()
-                
+
                 # Actualizar el estado de la reserva
-                if reserva.estado == 'aprobado':  # Si estaba en aprobado (diseño aceptado)
-                    reserva.estado = 'en_curso'  # Pasar a en curso
-                
+                if reserva.estado == "aprobado":  # Si estaba en aprobado (diseño aceptado)
+                    reserva.estado = "en_curso"  # Pasar a en curso
+
                 reserva.save()
-                
+
                 logger.info(f"✅ Pago final confirmado para reserva {reserva_id}")
-                
+
                 # Enviar emails de confirmación
                 try:
                     cliente = reserva.cliente
-                    
+
                     # 1. Email al cliente confirmando el pago
                     EmailService.send_payment_confirmation_email(
                         user_email=cliente.persona.email,
@@ -513,18 +513,23 @@ def confirmar_pago_final(request, reserva_id):
                         servicio_nombre=reserva.servicio.nombre,
                         monto=reserva.monto_final,
                         payment_id=payment_id,
-                        tipo_pago='final'
+                        tipo_pago="final",
                     )
                     logger.info(f"✅ Email de confirmación de pago final enviado a {cliente.persona.email}")
-                    
+
                     # 2. Emails a los empleados asignados
                     from apps.servicios.models import ReservaEmpleado
-                    empleados_asignados = ReservaEmpleado.objects.filter(reserva=reserva).select_related('empleado__persona')
-                    
+
+                    empleados_asignados = ReservaEmpleado.objects.filter(reserva=reserva).select_related(
+                        "empleado__persona"
+                    )
+
                     for asignacion in empleados_asignados:
                         empleado = asignacion.empleado
-                        hora_servicio = reserva.fecha_reserva.strftime('%H:%M') if reserva.fecha_reserva else 'A confirmar'
-                        
+                        hora_servicio = (
+                            reserva.fecha_reserva.strftime("%H:%M") if reserva.fecha_reserva else "A confirmar"
+                        )
+
                         EmailService.send_employee_work_assignment_notification(
                             empleado_email=empleado.persona.email,
                             empleado_nombre=f"{empleado.persona.nombre} {empleado.persona.apellido}",
@@ -533,136 +538,137 @@ def confirmar_pago_final(request, reserva_id):
                             servicio_nombre=reserva.servicio.nombre,
                             fecha_servicio=reserva.fecha_reserva,
                             hora_servicio=hora_servicio,
-                            direccion=reserva.direccion or 'No especificada',
+                            direccion=reserva.direccion or "No especificada",
                             observaciones=reserva.observaciones,
-                            rol=asignacion.rol
+                            rol=asignacion.rol,
                         )
                         logger.info(f"✅ Email de asignación de trabajo enviado a {empleado.persona.email}")
-                    
+
                     if empleados_asignados.count() > 0:
                         logger.info(f"✅ Se enviaron {empleados_asignados.count()} email(s) a empleados asignados")
                     else:
                         logger.warning(f"⚠️ No hay empleados asignados a la reserva {reserva_id}")
-                        
+
                 except Exception as e:
                     logger.error(f"❌ Error al enviar emails de confirmación: {str(e)}")
                     import traceback
+
                     logger.error(traceback.format_exc())
-                
-                return Response({
-                    'success': True,
-                    'message': 'Pago final confirmado exitosamente',
-                    'reserva_id': reserva.id_reserva,
-                    'estado_pago': reserva.estado_pago_final,
-                    'estado_reserva': reserva.estado
-                })
+
+                return Response(
+                    {
+                        "success": True,
+                        "message": "Pago final confirmado exitosamente",
+                        "reserva_id": reserva.id_reserva,
+                        "estado_pago": reserva.estado_pago_final,
+                        "estado_reserva": reserva.estado,
+                    }
+                )
             else:
                 return Response(
-                    {'error': f'El pago no está aprobado. Estado: {payment_data.get("status")}'},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"error": f'El pago no está aprobado. Estado: {payment_data.get("status")}'},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
-                
+
         except Exception as e:
             logger.error(f"Error al verificar el pago con MercadoPago: {str(e)}")
             return Response(
-                {'error': 'No se pudo verificar el pago con MercadoPago', 'detalle': str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {
+                    "error": "No se pudo verificar el pago con MercadoPago",
+                    "detalle": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-        
+
     except Reserva.DoesNotExist:
-        return Response(
-            {'error': 'Reserva no encontrada'},
-            status=status.HTTP_404_NOT_FOUND
-        )
+        return Response({"error": "Reserva no encontrada"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         logger.error(f"Error al confirmar pago final: {str(e)}")
         return Response(
-            {'error': 'Error al confirmar el pago', 'detalle': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "Error al confirmar el pago", "detalle": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def buscar_pago_por_preferencia(request, reserva_id):
     """
     Buscar y confirmar un pago usando el preference_id
     POST /api/v1/mercadopago/reservas/{reserva_id}/buscar-pago-por-preferencia/
-    
+
     Body: { "preference_id": "xxx", "tipo_pago": "sena" }
     """
     try:
         reserva = Reserva.objects.get(id_reserva=reserva_id)
-        preference_id = request.data.get('preference_id')
-        tipo_pago = request.data.get('tipo_pago', 'sena')
-        
+        preference_id = request.data.get("preference_id")
+        tipo_pago = request.data.get("tipo_pago", "sena")
+
         if not preference_id:
             # Intentar obtener del modelo
-            if tipo_pago == 'sena':
+            if tipo_pago == "sena":
                 preference_id = reserva.mercadopago_preference_id_sena
             else:
                 preference_id = reserva.mercadopago_preference_id_final
-        
+
         if not preference_id:
             return Response(
-                {'error': 'No se encontró el preference_id'},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "No se encontró el preference_id"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         logger.info(f"🔍 Buscando pago para preferencia: {preference_id}")
-        
+
         # Buscar pagos asociados a esta preferencia
         try:
             sdk = mercadopago.SDK(settings.MERCADOPAGO_ACCESS_TOKEN)
-            
+
             # Buscar pagos por preference_id
-            filters = {
-                "preference_id": preference_id
-            }
-            
+            filters = {"preference_id": preference_id}
+
             search_result = sdk.payment().search(filters=filters)
-            
+
             if "response" in search_result:
                 payments = search_result["response"].get("results", [])
             else:
                 payments = search_result.get("results", [])
-            
+
             logger.info(f"📄 Pagos encontrados: {len(payments)}")
-            
+
             # Buscar el pago aprobado más reciente
             approved_payment = None
             for payment in payments:
-                if payment.get('status') == 'approved':
+                if payment.get("status") == "approved":
                     approved_payment = payment
                     break
-            
+
             if approved_payment:
-                payment_id = str(approved_payment.get('id'))
+                payment_id = str(approved_payment.get("id"))
                 logger.info(f"✅ Pago aprobado encontrado: {payment_id}")
-                
+
                 # Confirmar el pago
-                if tipo_pago == 'sena':
-                    reserva.estado_pago_sena = 'aprobado'
+                if tipo_pago == "sena":
+                    reserva.estado_pago_sena = "aprobado"
                     reserva.payment_id_sena = payment_id
                     reserva.fecha_pago_sena = timezone.now()
-                    
-                    if reserva.estado == 'pendiente_pago_sena':
-                        reserva.estado = 'en_revision'
+
+                    if reserva.estado == "pendiente_pago_sena":
+                        reserva.estado = "en_revision"
                 else:
-                    reserva.estado_pago_final = 'aprobado'
+                    reserva.estado_pago_final = "aprobado"
                     reserva.payment_id_final = payment_id
                     reserva.fecha_pago_final = timezone.now()
-                    
-                    if reserva.estado == 'aprobado':
-                        reserva.estado = 'en_curso'
-                
+
+                    if reserva.estado == "aprobado":
+                        reserva.estado = "en_curso"
+
                 reserva.save()
-                
+
                 # Enviar emails de confirmación
                 try:
                     cliente = reserva.cliente
-                    
-                    if tipo_pago == 'sena':
+
+                    if tipo_pago == "sena":
                         # Email al cliente
                         EmailService.send_payment_confirmation_email(
                             user_email=cliente.persona.email,
@@ -671,7 +677,7 @@ def buscar_pago_por_preferencia(request, reserva_id):
                             servicio_nombre=reserva.servicio.nombre,
                             monto=reserva.monto_sena,
                             payment_id=payment_id,
-                            tipo_pago='seña'
+                            tipo_pago="seña",
                         )
                         # Email a administradores
                         EmailService.send_payment_notification_to_admin(
@@ -683,7 +689,7 @@ def buscar_pago_por_preferencia(request, reserva_id):
                             fecha_reserva=reserva.fecha_reserva,
                             direccion=reserva.direccion,
                             observaciones=reserva.observaciones,
-                            tipo_pago='seña'
+                            tipo_pago="seña",
                         )
                     else:
                         # Email al cliente para pago final
@@ -694,7 +700,7 @@ def buscar_pago_por_preferencia(request, reserva_id):
                             servicio_nombre=reserva.servicio.nombre,
                             monto=reserva.monto_final,
                             payment_id=payment_id,
-                            tipo_pago='final'
+                            tipo_pago="final",
                         )
                         # Email a administradores para pago final
                         EmailService.send_payment_notification_to_admin(
@@ -706,55 +712,58 @@ def buscar_pago_por_preferencia(request, reserva_id):
                             fecha_reserva=reserva.fecha_reserva,
                             direccion=reserva.direccion,
                             observaciones=reserva.observaciones,
-                            tipo_pago='final'
+                            tipo_pago="final",
                         )
-                    
-                    logger.info(f"✅ Emails enviados exitosamente")
+
+                    logger.info("✅ Emails enviados exitosamente")
                 except Exception as e:
                     logger.error(f"Error al enviar emails: {str(e)}")
-                
-                return Response({
-                    'success': True,
-                    'payment_id': payment_id,
-                    'message': f'Pago de {tipo_pago} confirmado exitosamente'
-                })
+
+                return Response(
+                    {
+                        "success": True,
+                        "payment_id": payment_id,
+                        "message": f"Pago de {tipo_pago} confirmado exitosamente",
+                    }
+                )
             else:
                 return Response(
-                    {'error': 'No se encontró un pago aprobado para esta preferencia'},
-                    status=status.HTTP_404_NOT_FOUND
+                    {"error": "No se encontró un pago aprobado para esta preferencia"},
+                    status=status.HTTP_404_NOT_FOUND,
                 )
-                
+
         except Exception as e:
             logger.error(f"Error al buscar pagos en MercadoPago: {str(e)}")
             return Response(
-                {'error': 'No se pudo buscar el pago en MercadoPago', 'detalle': str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {
+                    "error": "No se pudo buscar el pago en MercadoPago",
+                    "detalle": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-        
+
     except Reserva.DoesNotExist:
-        return Response(
-            {'error': 'Reserva no encontrada'},
-            status=status.HTTP_404_NOT_FOUND
-        )
+        return Response({"error": "Reserva no encontrada"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         logger.error(f"Error al buscar pago: {str(e)}")
         return Response(
-            {'error': 'Error al buscar el pago', 'detalle': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "Error al buscar el pago", "detalle": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 
 # ==================== NUEVO FLUJO: PAGO PRIMERO, RESERVA DESPUÉS ====================
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def crear_preferencia_prereserva(request):
     """
     Crea UNA RESERVA con estado 'pendiente_pago_sena' y luego genera la preferencia de pago.
     Cuando el pago sea exitoso, solo se actualizará el estado de la reserva.
-    
+
     POST /api/v1/mercadopago/crear-preferencia-prereserva/
-    
+
     Este endpoint:
     1. Crea la reserva con estado 'pendiente_pago_sena'
     2. Genera la preferencia de pago de MercadoPago
@@ -767,35 +776,35 @@ def crear_preferencia_prereserva(request):
             cliente = Cliente.objects.get(persona=persona)
         except (Persona.DoesNotExist, Cliente.DoesNotExist):
             return Response(
-                {'error': 'Solo los clientes pueden solicitar servicios'},
-                status=status.HTTP_403_FORBIDDEN
+                {"error": "Solo los clientes pueden solicitar servicios"},
+                status=status.HTTP_403_FORBIDDEN,
             )
-        
+
         # Obtener datos del request
-        servicio_id = request.data.get('servicio')
-        descripcion = request.data.get('descripcion', '')
-        fecha_preferida = request.data.get('fecha_preferida')
-        direccion_servicio = request.data.get('direccion_servicio', '')
-        notas_adicionales = request.data.get('notas_adicionales', '')
-        
+        servicio_id = request.data.get("servicio")
+        descripcion = request.data.get("descripcion", "")
+        fecha_preferida = request.data.get("fecha_preferida")
+        direccion_servicio = request.data.get("direccion_servicio", "")
+        notas_adicionales = request.data.get("notas_adicionales", "")
+
         # Validar servicio
         try:
             servicio = Servicio.objects.get(id_servicio=servicio_id, activo=True)
         except Servicio.DoesNotExist:
             return Response(
-                {'error': 'El servicio seleccionado no existe o no está disponible'},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "El servicio seleccionado no existe o no está disponible"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         # Obtener monto de seña configurado
         config = ConfiguracionPago.obtener_configuracion()
         monto_sena = config.monto_sena
-        
-        logger.info(f"🔵 PASO 1: Creando reserva con estado 'pendiente_pago_sena'")
+
+        logger.info("🔵 PASO 1: Creando reserva con estado 'pendiente_pago_sena'")
         logger.info(f"👤 Cliente: {cliente.persona.email}")
         logger.info(f"🌿 Servicio: {servicio.nombre}")
         logger.info(f"💰 Monto seña: ${monto_sena}")
-        
+
         # PASO 1: Crear la reserva con estado pendiente de pago
         reserva = Reserva.objects.create(
             cliente=cliente,
@@ -803,117 +812,111 @@ def crear_preferencia_prereserva(request):
             fecha_reserva=fecha_preferida if fecha_preferida else timezone.now(),
             observaciones=f"{descripcion}\n\nNotas: {notas_adicionales}",
             direccion=direccion_servicio,
-            estado_pago_sena='pendiente_pago_sena',  # Estado especial
-            monto_sena=monto_sena
+            estado_pago_sena="pendiente_pago_sena",  # Estado especial
+            monto_sena=monto_sena,
         )
-        
+
         logger.info(f"✅ Reserva #{reserva.id_reserva} creada (pendiente de pago)")
-        
+
         # Procesar imágenes si las hay
-        imagenes_jardin = request.FILES.getlist('imagenes_jardin[]')
-        imagenes_ideas = request.FILES.getlist('imagenes_ideas[]')
-        
+        imagenes_jardin = request.FILES.getlist("imagenes_jardin[]")
+        imagenes_ideas = request.FILES.getlist("imagenes_ideas[]")
+
         for imagen in imagenes_jardin:
-            ImagenReserva.objects.create(
-                reserva=reserva,
-                imagen=imagen,
-                tipo_imagen='jardin'
-            )
-        
+            ImagenReserva.objects.create(reserva=reserva, imagen=imagen, tipo_imagen="jardin")
+
         for imagen in imagenes_ideas:
-            ImagenReserva.objects.create(
-                reserva=reserva,
-                imagen=imagen,
-                tipo_imagen='ideas'
-            )
-        
+            ImagenReserva.objects.create(reserva=reserva, imagen=imagen, tipo_imagen="ideas")
+
         logger.info(f"📸 {len(imagenes_jardin)} imágenes de jardín y {len(imagenes_ideas)} imágenes de ideas guardadas")
-        
+
         # PASO 2: Crear preferencia de pago en MercadoPago
         sdk = mercadopago.SDK(settings.MERCADOPAGO_ACCESS_TOKEN)
-        
+
         preference_data = {
             "items": [
                 {
                     "id": f"RESERVA-{reserva.id_reserva}",
                     "title": f"Seña - Reserva #{reserva.id_reserva} - {servicio.nombre}",
-                    "description": descripcion[:100] if descripcion else f"Pago de seña para {servicio.nombre}",
+                    "description": (descripcion[:100] if descripcion else f"Pago de seña para {servicio.nombre}"),
                     "quantity": 1,
                     "unit_price": float(monto_sena),
                     "currency_id": "ARS",
-                    "category_id": "services"
+                    "category_id": "services",
                 }
             ],
             "payer": {
                 "name": cliente.persona.nombre,
                 "surname": cliente.persona.apellido,
-                "email": cliente.persona.email
+                "email": cliente.persona.email,
             },
             "back_urls": {
                 "success": f"{settings.FRONTEND_URL}/reservas/confirmar-prereserva?reserva_id={reserva.id_reserva}",
                 "failure": f"{settings.FRONTEND_URL}/servicios",
-                "pending": f"{settings.FRONTEND_URL}/servicios"
+                "pending": f"{settings.FRONTEND_URL}/servicios",
             },
             "auto_return": "approved",
             "external_reference": f"RESERVA-{reserva.id_reserva}",
             "statement_descriptor": "El Eden",
-            "payment_methods": {
-                "excluded_payment_types": [],
-                "installments": 12
-            },
+            "payment_methods": {"excluded_payment_types": [], "installments": 12},
             "metadata": {
                 "reserva_id": reserva.id_reserva,
                 "cliente_id": cliente.id_cliente,
-                "servicio_id": servicio.id_servicio
-            }
+                "servicio_id": servicio.id_servicio,
+            },
         }
-        
-        logger.info(f"🔵 PASO 2: Creando preferencia de pago MercadoPago")
+
+        logger.info("🔵 PASO 2: Creando preferencia de pago MercadoPago")
         logger.info(f"📋 Preference data: {preference_data}")
-        logger.info(f"📤 Enviando preferencia a MercadoPago...")
-        
+        logger.info("📤 Enviando preferencia a MercadoPago...")
+
         try:
             preference_response = sdk.preference().create(preference_data)
-            logger.info(f"✅ SDK llamado exitosamente (sin excepciones)")
+            logger.info("✅ SDK llamado exitosamente (sin excepciones)")
         except Exception as sdk_error:
             logger.error(f"❌ Error al llamar SDK de MercadoPago: {str(sdk_error)}")
             logger.error(f"❌ Tipo de error: {type(sdk_error).__name__}")
             import traceback
+
             logger.error(f"❌ Traceback: {traceback.format_exc()}")
-            return Response({
-                'error': f'Error de MercadoPago: {str(sdk_error)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+            return Response(
+                {"error": f"Error de MercadoPago: {str(sdk_error)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
         # Log de la respuesta completa para debugging
         logger.info(f"📥 Respuesta completa de MercadoPago: {preference_response}")
         logger.info(f"📥 Tipo de respuesta: {type(preference_response)}")
-        
+
         # Verificar si la respuesta tiene 'status' de error
         if isinstance(preference_response, dict):
-            if preference_response.get('status') in [400, 401, 403, 404, 500]:
+            if preference_response.get("status") in [400, 401, 403, 404, 500]:
                 logger.error(f"❌ MercadoPago retornó status de error: {preference_response.get('status')}")
-                if 'message' in preference_response:
+                if "message" in preference_response:
                     logger.error(f"❌ Mensaje: {preference_response.get('message')}")
-                if 'error' in preference_response:
+                if "error" in preference_response:
                     logger.error(f"❌ Error: {preference_response.get('error')}")
-                if 'cause' in preference_response:
+                if "cause" in preference_response:
                     logger.error(f"❌ Causa: {preference_response.get('cause')}")
-                return Response({
-                    'error': 'Error al crear la preferencia de pago',
-                    'details': preference_response
-                }, status=status.HTTP_400_BAD_REQUEST)
-        
+                return Response(
+                    {
+                        "error": "Error al crear la preferencia de pago",
+                        "details": preference_response,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         # Manejar diferentes formatos de respuesta del SDK
         if "response" in preference_response:
             preference = preference_response["response"]
-            logger.info(f"📦 Usando preference_response['response']")
+            logger.info("📦 Usando preference_response['response']")
         else:
             preference = preference_response
-            logger.info(f"📦 Usando preference_response directamente")
-        
+            logger.info("📦 Usando preference_response directamente")
+
         # Verificar si preference es un dict o None
         if preference is None:
-            logger.error(f"❌ La preferencia es None!")
+            logger.error("❌ La preferencia es None!")
             # Intentar obtener el error
             if "error" in preference_response:
                 logger.error(f"❌ Error de MercadoPago: {preference_response['error']}")
@@ -922,42 +925,48 @@ def crear_preferencia_prereserva(request):
             if "status" in preference_response:
                 logger.error(f"❌ Status de MercadoPago: {preference_response['status']}")
             raise Exception("MercadoPago retornó una preferencia vacía")
-        
+
         logger.info(f"✅ Preferencia de pre-reserva creada: {preference.get('id')}")
         logger.info(f"🔗 Sandbox: {preference.get('sandbox_init_point')}")
-        logger.info(f"🔙 Success URL: {settings.FRONTEND_URL}/reservas/confirmar-prereserva?reserva_id={reserva.id_reserva}")
-        
-        return Response({
-            'preference_id': preference.get('id'),
-            'init_point': preference.get('init_point'),
-            'sandbox_init_point': preference.get('sandbox_init_point'),
-            'reserva_id': reserva.id_reserva  # Retornar ID de reserva en lugar de temp_id
-        }, status=status.HTTP_201_CREATED)
-        
+        logger.info(
+            f"🔙 Success URL: {settings.FRONTEND_URL}/reservas/confirmar-prereserva?reserva_id={reserva.id_reserva}"
+        )
+
+        return Response(
+            {
+                "preference_id": preference.get("id"),
+                "init_point": preference.get("init_point"),
+                "sandbox_init_point": preference.get("sandbox_init_point"),
+                "reserva_id": reserva.id_reserva,  # Retornar ID de reserva en lugar de temp_id
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
     except Exception as e:
         logger.error(f"❌ Error al crear preferencia de pre-reserva: {str(e)}")
         import traceback
+
         logger.error(traceback.format_exc())
-        
+
         # Si falló, eliminar la reserva creada
-        if 'reserva' in locals():
+        if "reserva" in locals():
             logger.info(f"🗑️ Eliminando reserva #{reserva.id_reserva} por error en MercadoPago")
             reserva.delete()
-        
+
         return Response(
-            {'error': 'No se pudo crear la preferencia de pago', 'detalle': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "No se pudo crear la preferencia de pago", "detalle": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def crear_reserva_con_pago(request):
     """
     ACTUALIZA una reserva existente después de que el pago fue exitoso.
     Recibe el payment_id y el reserva_id.
     Cambia el estado de 'pendiente_pago_sena' a 'sena_pagada'.
-    
+
     POST /api/v1/mercadopago/crear-reserva-con-pago/
     Body: { "payment_id": "...", "reserva_id": 123 }
     """
@@ -968,68 +977,63 @@ def crear_reserva_con_pago(request):
             cliente = Cliente.objects.get(persona=persona)
         except (Persona.DoesNotExist, Cliente.DoesNotExist):
             return Response(
-                {'error': 'Solo los clientes pueden solicitar servicios'},
-                status=status.HTTP_403_FORBIDDEN
+                {"error": "Solo los clientes pueden solicitar servicios"},
+                status=status.HTTP_403_FORBIDDEN,
             )
-        
-        logger.info(f"🔄 CONFIRMANDO PAGO DE RESERVA")
+
+        logger.info("🔄 CONFIRMANDO PAGO DE RESERVA")
         logger.info(f"👤 Cliente: {cliente.persona.email}")
-        
+
         # Obtener IDs
-        payment_id = request.data.get('payment_id')
-        reserva_id = request.data.get('reserva_id')
-        
+        payment_id = request.data.get("payment_id")
+        reserva_id = request.data.get("reserva_id")
+
         if not payment_id:
-            logger.error(f"❌ No se recibió payment_id")
-            return Response(
-                {'error': 'payment_id es requerido'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            logger.error("❌ No se recibió payment_id")
+            return Response({"error": "payment_id es requerido"}, status=status.HTTP_400_BAD_REQUEST)
+
         if not reserva_id:
-            logger.error(f"❌ No se recibió reserva_id")
-            return Response(
-                {'error': 'reserva_id es requerido'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            logger.error("❌ No se recibió reserva_id")
+            return Response({"error": "reserva_id es requerido"}, status=status.HTTP_400_BAD_REQUEST)
+
         logger.info(f"💳 Payment ID: {payment_id}")
         logger.info(f"📋 Reserva ID: {reserva_id}")
-        
+
         # Buscar la reserva
         try:
             reserva = Reserva.objects.get(
                 id_reserva=reserva_id,
                 cliente=cliente,
-                estado_pago_sena='pendiente_pago_sena'
+                estado_pago_sena="pendiente_pago_sena",
             )
         except Reserva.DoesNotExist:
             logger.error(f"❌ No se encontró reserva #{reserva_id} pendiente de pago para este cliente")
             return Response(
-                {'error': 'No se encontró la reserva o ya fue procesada'},
-                status=status.HTTP_404_NOT_FOUND
+                {"error": "No se encontró la reserva o ya fue procesada"},
+                status=status.HTTP_404_NOT_FOUND,
             )
-        
+
         logger.info(f"✅ Reserva encontrada: #{reserva.id_reserva}")
-        
+
         # Validar el pago con MercadoPago (con reintentos por delay de sandbox)
         sdk = mercadopago.SDK(settings.MERCADOPAGO_ACCESS_TOKEN)
         payment_data = None
         max_retries = 10  # Sandbox puede tardar hasta 30+ segundos
         retry_delay = 4  # segundos - total hasta 40 segundos de espera
-        
+
         for attempt in range(max_retries):
             try:
                 if attempt > 0:
                     logger.info(f"⏳ Reintento {attempt + 1}/{max_retries} después de {retry_delay}s...")
                     import time
+
                     time.sleep(retry_delay)
-                
+
                 payment_info = sdk.payment().get(payment_id)
                 payment_data = payment_info["response"] if "response" in payment_info else payment_info
-                
+
                 # Verificar si el pago existe (no es 404)
-                if isinstance(payment_data, dict) and payment_data.get('status') != 404:
+                if isinstance(payment_data, dict) and payment_data.get("status") != 404:
                     logger.info(f"📊 Estado del pago: {payment_data.get('status')}")
                     logger.info(f"💵 Monto: ${payment_data.get('transaction_amount')}")
                     break  # Pago encontrado, salir del loop
@@ -1037,48 +1041,53 @@ def crear_reserva_con_pago(request):
                     logger.warning(f"⚠️ Intento {attempt + 1}: Pago aún no disponible en API (404)")
                     if attempt == max_retries - 1:
                         raise Exception("Pago no encontrado después de múltiples reintentos")
-                    
+
             except Exception as e:
                 if attempt == max_retries - 1:
                     logger.error(f"❌ Error al validar pago después de {max_retries} intentos: {str(e)}")
-                    
+
                     # Eliminar la reserva si el pago no se pudo validar
                     logger.info(f"🗑️ Eliminando reserva #{reserva.id_reserva} por fallo en validación de pago")
                     reserva.delete()
-                    
+
                     return Response(
-                        {'error': 'No se pudo validar el pago con MercadoPago. La reserva fue cancelada. Por favor, intenta nuevamente.'},
-                        status=status.HTTP_400_BAD_REQUEST
+                        {
+                            "error": (
+                                "No se pudo validar el pago con MercadoPago. La reserva fue cancelada. "
+                                "Por favor, intenta nuevamente."
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
                     )
-        
+
         # Verificar que el pago esté aprobado
         if payment_data.get("status") != "approved":
             logger.warning(f"⚠️ Pago NO aprobado. Estado: {payment_data.get('status')}")
             return Response(
-                {'error': 'El pago no está aprobado'},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "El pago no está aprobado"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         monto_pagado = payment_data.get("transaction_amount")
-        
+
         # ACTUALIZAR la reserva existente
         reserva.payment_id_sena = payment_id
-        reserva.estado_pago_sena = 'sena_pagada'
+        reserva.estado_pago_sena = "sena_pagada"
         reserva.fecha_pago_sena = timezone.now()
-        reserva.estado = 'confirmada'  # Ahora sí está confirmada
+        reserva.estado = "confirmada"  # Ahora sí está confirmada
         reserva.save()
-        
+
         logger.info(f"✅ Reserva #{reserva.id_reserva} ACTUALIZADA con pago confirmado")
         logger.info(f"💳 Payment ID: {payment_id}")
         logger.info(f"💰 Monto pagado: ${monto_pagado}")
-        logger.info(f"📊 Estado anterior: pendiente_pago_sena → Estado nuevo: sena_pagada")
-        
+        logger.info("📊 Estado anterior: pendiente_pago_sena → Estado nuevo: sena_pagada")
+
         # Enviar email de confirmación
-        logger.info(f"📧 Preparando email de confirmación de pago...")
+        logger.info("📧 Preparando email de confirmación de pago...")
         logger.info(f"   📮 Destinatario: {cliente.persona.email}")
         logger.info(f"   💰 Monto: ${reserva.monto_sena}")
         logger.info(f"   🔢 Reserva: #{reserva.id_reserva}")
-        
+
         try:
             email_sent = EmailService.send_payment_confirmation_email(
                 user_email=cliente.persona.email,
@@ -1087,42 +1096,48 @@ def crear_reserva_con_pago(request):
                 servicio_nombre=reserva.servicio.nombre,
                 monto=reserva.monto_sena,
                 payment_id=payment_id,
-                tipo_pago='seña'
+                tipo_pago="seña",
             )
-            
+
             if email_sent:
                 logger.info(f"✅ Email de confirmación enviado exitosamente a {cliente.persona.email}")
             else:
-                logger.warning(f"⚠️ El email no pudo ser enviado (sin excepción)")
-                
+                logger.warning("⚠️ El email no pudo ser enviado (sin excepción)")
+
         except Exception as e:
             logger.error(f"❌ Error al enviar email: {str(e)}")
             logger.error(f"   Tipo de error: {type(e).__name__}")
             import traceback
+
             logger.error(f"   Traceback: {traceback.format_exc()}")
-        
+
         # Serializar y retornar la reserva
         serializer = ReservaSerializer(reserva)
-        
-        return Response({
-            'success': True,
-            'mensaje': '¡Reserva creada y pago confirmado exitosamente!',
-            'reserva': serializer.data
-        }, status=status.HTTP_201_CREATED)
-        
+
+        return Response(
+            {
+                "success": True,
+                "mensaje": "¡Reserva creada y pago confirmado exitosamente!",
+                "reserva": serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
     except Exception as e:
         logger.error(f"❌ Error al crear reserva con pago: {str(e)}")
         import traceback
+
         logger.error(traceback.format_exc())
         return Response(
-            {'error': 'No se pudo crear la reserva', 'detalle': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "No se pudo crear la reserva", "detalle": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 
 # ==================== ENDPOINTS DEPRECADOS ====================
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def crear_preferencia_pago(request, reserva_id):
     """
@@ -1130,34 +1145,35 @@ def crear_preferencia_pago(request, reserva_id):
     """
     return Response(
         {
-            'error': 'Endpoint deprecado',
-            'mensaje': 'Use /crear-pago-sena/ para el pago inicial o /crear-pago-final/ para el pago al aceptar diseño'
+            "error": "Endpoint deprecado",
+            "mensaje": "Use /crear-pago-sena/ para el pago inicial o /crear-pago-final/ para el pago al aceptar diseño",
         },
-        status=status.HTTP_410_GONE
+        status=status.HTTP_410_GONE,
     )
 
 
 # ==================== ENDPOINTS DE PRUEBA (DESARROLLO) ====================
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def crear_pago_prueba(request):
     """
     Crear un pago de prueba en MercadoPago para testing.
     POST /api/v1/mercadopago/pago-prueba/
-    
+
     Solo para desarrollo y testing.
     """
     try:
-        monto = request.data.get('monto', 100)
-        descripcion = request.data.get('descripcion', 'Pago de prueba')
-        
+        monto = request.data.get("monto", 100)
+        descripcion = request.data.get("descripcion", "Pago de prueba")
+
         # Crear SDK de MercadoPago
         sdk = mercadopago.SDK(settings.MERCADOPAGO_ACCESS_TOKEN)
-        
+
         # Generar un ID único para la prueba
         test_id = str(uuid.uuid4())[:8]
-        
+
         preference_data = {
             "items": [
                 {
@@ -1167,52 +1183,53 @@ def crear_pago_prueba(request):
                     "quantity": 1,
                     "unit_price": float(monto),
                     "currency_id": "ARS",
-                    "category_id": "services"
+                    "category_id": "services",
                 }
             ],
             "payer": {
                 "name": request.user.first_name or "Usuario",
                 "surname": request.user.last_name or "Prueba",
-                "email": request.user.email
+                "email": request.user.email,
             },
             "back_urls": {
                 "success": f"{settings.FRONTEND_URL}/",
                 "failure": f"{settings.FRONTEND_URL}/",
-                "pending": f"{settings.FRONTEND_URL}/"
+                "pending": f"{settings.FRONTEND_URL}/",
             },
             "external_reference": f"TEST-{test_id}",
             "statement_descriptor": "El Eden Test",
-            "payment_methods": {
-                "excluded_payment_types": [],
-                "installments": 12
-            }
+            "payment_methods": {"excluded_payment_types": [], "installments": 12},
         }
-        
+
         logger.info(f"🧪 Creando pago de prueba para {request.user.email}")
         logger.info(f"💰 Monto: ${monto}")
-        
+
         preference_response = sdk.preference().create(preference_data)
-        
+
         # Manejar diferentes formatos de respuesta del SDK
         if "response" in preference_response:
             preference = preference_response["response"]
         else:
             preference = preference_response
-        
+
         logger.info(f"✅ Preferencia de prueba creada: {preference.get('id')}")
-        
-        return Response({
-            'preference_id': preference.get('id'),
-            'init_point': preference.get('init_point'),
-            'sandbox_init_point': preference.get('sandbox_init_point'),
-            'mensaje': 'Preferencia de pago de prueba creada exitosamente'
-        }, status=status.HTTP_201_CREATED)
-        
+
+        return Response(
+            {
+                "preference_id": preference.get("id"),
+                "init_point": preference.get("init_point"),
+                "sandbox_init_point": preference.get("sandbox_init_point"),
+                "mensaje": "Preferencia de pago de prueba creada exitosamente",
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
     except Exception as e:
         logger.error(f"❌ Error al crear pago de prueba: {str(e)}")
         import traceback
+
         logger.error(traceback.format_exc())
         return Response(
-            {'error': 'No se pudo crear el pago de prueba', 'detalle': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "No se pudo crear el pago de prueba", "detalle": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )

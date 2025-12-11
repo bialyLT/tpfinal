@@ -10,50 +10,108 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('users', '0001_initial'),
+        ("users", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Servicio',
+            name="Servicio",
             fields=[
-                ('id_servicio', models.AutoField(primary_key=True, serialize=False)),
-                ('nombre', models.CharField(max_length=200)),
-                ('tipo', models.CharField(choices=[('diseno', 'Diseño de jardines'), ('mantenimiento', 'Mantenimiento')], default='diseno', help_text='Tipo de servicio ofrecido', max_length=20)),
-                ('descripcion', models.TextField(blank=True, null=True)),
-                ('duracion_estimada', models.IntegerField(help_text='Duración estimada en horas', validators=[django.core.validators.MinValueValidator(1)])),
-                ('precio', models.DecimalField(decimal_places=2, max_digits=10, validators=[django.core.validators.MinValueValidator(0)])),
-                ('activo', models.BooleanField(default=True)),
-                ('fecha_creacion', models.DateTimeField(auto_now_add=True)),
-                ('fecha_actualizacion', models.DateTimeField(auto_now=True)),
+                ("id_servicio", models.AutoField(primary_key=True, serialize=False)),
+                ("nombre", models.CharField(max_length=200)),
+                (
+                    "tipo",
+                    models.CharField(
+                        choices=[
+                            ("diseno", "Diseño de jardines"),
+                            ("mantenimiento", "Mantenimiento"),
+                        ],
+                        default="diseno",
+                        help_text="Tipo de servicio ofrecido",
+                        max_length=20,
+                    ),
+                ),
+                ("descripcion", models.TextField(blank=True, null=True)),
+                (
+                    "duracion_estimada",
+                    models.IntegerField(
+                        help_text="Duración estimada en horas",
+                        validators=[django.core.validators.MinValueValidator(1)],
+                    ),
+                ),
+                (
+                    "precio",
+                    models.DecimalField(
+                        decimal_places=2,
+                        max_digits=10,
+                        validators=[django.core.validators.MinValueValidator(0)],
+                    ),
+                ),
+                ("activo", models.BooleanField(default=True)),
+                ("fecha_creacion", models.DateTimeField(auto_now_add=True)),
+                ("fecha_actualizacion", models.DateTimeField(auto_now=True)),
             ],
             options={
-                'verbose_name': 'Servicio',
-                'verbose_name_plural': 'Servicios',
-                'db_table': 'servicio',
-                'ordering': ['nombre'],
-                'indexes': [models.Index(fields=['nombre'], name='servicio_nombre_9b1175_idx'), models.Index(fields=['activo'], name='servicio_activo_a83d28_idx')],
+                "verbose_name": "Servicio",
+                "verbose_name_plural": "Servicios",
+                "db_table": "servicio",
+                "ordering": ["nombre"],
+                "indexes": [
+                    models.Index(fields=["nombre"], name="servicio_nombre_9b1175_idx"),
+                    models.Index(fields=["activo"], name="servicio_activo_a83d28_idx"),
+                ],
             },
         ),
         migrations.CreateModel(
-            name='Reserva',
+            name="Reserva",
             fields=[
-                ('id_reserva', models.AutoField(primary_key=True, serialize=False)),
-                ('fecha_reserva', models.DateTimeField()),
-                ('fecha_solicitud', models.DateTimeField(auto_now_add=True)),
-                ('estado', models.CharField(choices=[('pendiente', 'Pendiente'), ('confirmada', 'Confirmada'), ('en_curso', 'En Curso'), ('completada', 'Completada'), ('cancelada', 'Cancelada')], default='pendiente', max_length=20)),
-                ('observaciones', models.TextField(blank=True, null=True)),
-                ('fecha_creacion', models.DateTimeField(auto_now_add=True)),
-                ('fecha_actualizacion', models.DateTimeField(auto_now=True)),
-                ('cliente', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='reservas', to='users.cliente')),
-                ('servicio', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='reservas', to='servicios.servicio')),
+                ("id_reserva", models.AutoField(primary_key=True, serialize=False)),
+                ("fecha_reserva", models.DateTimeField()),
+                ("fecha_solicitud", models.DateTimeField(auto_now_add=True)),
+                (
+                    "estado",
+                    models.CharField(
+                        choices=[
+                            ("pendiente", "Pendiente"),
+                            ("confirmada", "Confirmada"),
+                            ("en_curso", "En Curso"),
+                            ("completada", "Completada"),
+                            ("cancelada", "Cancelada"),
+                        ],
+                        default="pendiente",
+                        max_length=20,
+                    ),
+                ),
+                ("observaciones", models.TextField(blank=True, null=True)),
+                ("fecha_creacion", models.DateTimeField(auto_now_add=True)),
+                ("fecha_actualizacion", models.DateTimeField(auto_now=True)),
+                (
+                    "cliente",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="reservas",
+                        to="users.cliente",
+                    ),
+                ),
+                (
+                    "servicio",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="reservas",
+                        to="servicios.servicio",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Reserva',
-                'verbose_name_plural': 'Reservas',
-                'db_table': 'reserva',
-                'ordering': ['-fecha_reserva'],
-                'indexes': [models.Index(fields=['fecha_reserva'], name='reserva_fecha_r_710b66_idx'), models.Index(fields=['estado'], name='reserva_estado_eda95c_idx'), models.Index(fields=['cliente'], name='reserva_cliente_77b066_idx')],
+                "verbose_name": "Reserva",
+                "verbose_name_plural": "Reservas",
+                "db_table": "reserva",
+                "ordering": ["-fecha_reserva"],
+                "indexes": [
+                    models.Index(fields=["fecha_reserva"], name="reserva_fecha_r_710b66_idx"),
+                    models.Index(fields=["estado"], name="reserva_estado_eda95c_idx"),
+                    models.Index(fields=["cliente"], name="reserva_cliente_77b066_idx"),
+                ],
             },
         ),
     ]

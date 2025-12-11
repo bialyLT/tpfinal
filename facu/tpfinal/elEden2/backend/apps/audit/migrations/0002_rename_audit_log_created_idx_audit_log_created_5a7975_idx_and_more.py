@@ -6,28 +6,28 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('audit', '0001_initial'),
+        ("audit", "0001_initial"),
     ]
 
     operations = [
         migrations.RenameIndex(
-            model_name='auditlog',
-            new_name='audit_log_created_5a7975_idx',
-            old_name='audit_log_created_Idx',
+            model_name="auditlog",
+            new_name="audit_log_created_5a7975_idx",
+            old_name="audit_log_created_Idx",
         ),
         migrations.RenameIndex(
-            model_name='auditlog',
-            new_name='audit_log_method_8fed6f_idx',
-            old_name='audit_log_method_Idx',
+            model_name="auditlog",
+            new_name="audit_log_method_8fed6f_idx",
+            old_name="audit_log_method_Idx",
         ),
         migrations.RenameIndex(
-            model_name='auditlog',
-            new_name='audit_log_entity_9fdba9_idx',
-            old_name='audit_log_entity_Idx',
+            model_name="auditlog",
+            new_name="audit_log_entity_9fdba9_idx",
+            old_name="audit_log_entity_Idx",
         ),
         migrations.RenameIndex(
-            model_name='auditlog',
-            new_name='audit_log_role_186789_idx',
-            old_name='audit_log_role_Idx',
+            model_name="auditlog",
+            new_name="audit_log_role_186789_idx",
+            old_name="audit_log_role_Idx",
         ),
     ]

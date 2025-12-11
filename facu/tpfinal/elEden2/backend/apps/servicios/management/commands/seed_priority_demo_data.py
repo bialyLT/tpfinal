@@ -2,6 +2,7 @@
 Genera datos de prueba para priorización de empleados.
 Ejecutar: python manage.py seed_priority_demo_data
 """
+
 from datetime import timedelta
 from decimal import Decimal
 
@@ -23,7 +24,7 @@ from apps.users.models import (
 class Command(BaseCommand):
     help = "Crea empleados, clientes y reservas completadas listos para probar la prioridad de asignacion"
 
-    def handle(self, *args, **options):
+    def handle(self, *args, **_options):
         try:
             with transaction.atomic():
                 generos = self._ensure_generos()
@@ -73,9 +74,18 @@ class Command(BaseCommand):
     def _ensure_servicios(self):
         servicios = {}
         dataset = [
-            ("Mantenimiento Integral de Jardines", "Plan completo de mantenimiento, poda y abonado"),
-            ("Diseño Paisajistico Premium", "Proyecto personalizado con renders y ejecución"),
-            ("Restauracion de Espacios Verdes", "Recuperacion de parques, control de plagas y riego"),
+            (
+                "Mantenimiento Integral de Jardines",
+                "Plan completo de mantenimiento, poda y abonado",
+            ),
+            (
+                "Diseño Paisajistico Premium",
+                "Proyecto personalizado con renders y ejecución",
+            ),
+            (
+                "Restauracion de Espacios Verdes",
+                "Recuperacion de parques, control de plagas y riego",
+            ),
         ]
         for nombre, descripcion in dataset:
             servicio, _ = Servicio.objects.get_or_create(
@@ -198,7 +208,9 @@ class Command(BaseCommand):
 
             empleado.puntuacion_promedio = item["puntuacion_promedio"]
             empleado.puntuacion_cantidad = item["puntuacion_cantidad"]
-            empleado.puntuacion_acumulada = (item["puntuacion_promedio"] * Decimal(item["puntuacion_cantidad"])).quantize(Decimal("0.01"))
+            empleado.puntuacion_acumulada = (
+                item["puntuacion_promedio"] * Decimal(item["puntuacion_cantidad"])
+            ).quantize(Decimal("0.01"))
             empleado.fecha_ultima_puntuacion = item["fecha_ultima_puntuacion"]
             empleado.activo = True
             empleado.save()
@@ -379,7 +391,10 @@ class Command(BaseCommand):
                     "estado_pago_final": "pagado",
                     "fecha_pago_sena": fecha_reserva - timedelta(days=5),
                     "fecha_pago_final": fecha_reserva - timedelta(days=1),
-                    "direccion": f"{cliente.persona.calle} {cliente.persona.numero}, {cliente.persona.localidad.nombre_localidad}",
+                    "direccion": (
+                        f"{cliente.persona.calle} {cliente.persona.numero}, "
+                        f"{cliente.persona.localidad.nombre_localidad}"
+                    ),
                 },
             )
 

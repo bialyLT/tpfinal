@@ -9,24 +9,24 @@ class AuditLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = AuditLog
         fields = [
-            'id',
-            'created_at',
-            'user_display',
-            'role',
-            'method',
-            'action',
-            'entity',
-            'object_id',
-            'endpoint',
-            'ip_address',
-            'payload',
-            'response_code',
-            'response_body',
-            'metadata',
+            "id",
+            "created_at",
+            "user_display",
+            "role",
+            "method",
+            "action",
+            "entity",
+            "object_id",
+            "endpoint",
+            "ip_address",
+            "payload",
+            "response_code",
+            "response_body",
+            "metadata",
         ]
 
     def get_user_display(self, obj):
         if not obj.user:
-            return 'Sistema'
+            return "Sistema"
         full_name = obj.user.get_full_name().strip()
         return full_name or obj.user.username

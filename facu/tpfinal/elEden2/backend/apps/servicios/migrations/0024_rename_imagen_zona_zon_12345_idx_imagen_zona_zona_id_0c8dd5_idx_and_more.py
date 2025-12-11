@@ -6,18 +6,18 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('servicios', '0023_reserva_localidad_servicio'),
+        ("servicios", "0023_reserva_localidad_servicio"),
     ]
 
     operations = [
         migrations.RenameIndex(
-            model_name='imagenzona',
-            new_name='imagen_zona_zona_id_0c8dd5_idx',
-            old_name='imagen_zona_zon_12345_idx',
+            model_name="imagenzona",
+            new_name="imagen_zona_zona_id_0c8dd5_idx",
+            old_name="imagen_zona_zon_12345_idx",
         ),
         migrations.RenameIndex(
-            model_name='imagenzona',
-            new_name='imagen_zona_orden_449c99_idx',
-            old_name='imagen_zona_orden_12345_idx',
+            model_name="imagenzona",
+            new_name="imagen_zona_orden_449c99_idx",
+            old_name="imagen_zona_orden_12345_idx",
         ),
     ]

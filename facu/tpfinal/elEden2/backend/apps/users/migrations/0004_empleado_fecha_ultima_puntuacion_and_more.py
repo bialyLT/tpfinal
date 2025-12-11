@@ -7,28 +7,45 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('users', '0003_persona_user'),
+        ("users", "0003_persona_user"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='empleado',
-            name='fecha_ultima_puntuacion',
-            field=models.DateTimeField(blank=True, help_text='Última vez que se actualizó la puntuación desde una encuesta', null=True),
+            model_name="empleado",
+            name="fecha_ultima_puntuacion",
+            field=models.DateTimeField(
+                blank=True,
+                help_text="Última vez que se actualizó la puntuación desde una encuesta",
+                null=True,
+            ),
         ),
         migrations.AddField(
-            model_name='empleado',
-            name='puntuacion_acumulada',
-            field=models.DecimalField(decimal_places=2, default=Decimal('0.00'), help_text='Suma de todas las puntuaciones recibidas de encuestas', max_digits=8),
+            model_name="empleado",
+            name="puntuacion_acumulada",
+            field=models.DecimalField(
+                decimal_places=2,
+                default=Decimal("0.00"),
+                help_text="Suma de todas las puntuaciones recibidas de encuestas",
+                max_digits=8,
+            ),
         ),
         migrations.AddField(
-            model_name='empleado',
-            name='puntuacion_cantidad',
-            field=models.PositiveIntegerField(default=0, help_text='Cantidad de respuestas de encuesta consideradas para la puntuación'),
+            model_name="empleado",
+            name="puntuacion_cantidad",
+            field=models.PositiveIntegerField(
+                default=0,
+                help_text="Cantidad de respuestas de encuesta consideradas para la puntuación",
+            ),
         ),
         migrations.AddField(
-            model_name='empleado',
-            name='puntuacion_promedio',
-            field=models.DecimalField(decimal_places=2, default=Decimal('0.00'), help_text='Promedio de puntuación acumulada (formato 0.00)', max_digits=4),
+            model_name="empleado",
+            name="puntuacion_promedio",
+            field=models.DecimalField(
+                decimal_places=2,
+                default=Decimal("0.00"),
+                help_text="Promedio de puntuación acumulada (formato 0.00)",
+                max_digits=4,
+            ),
         ),
     ]

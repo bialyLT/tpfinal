@@ -9,98 +9,166 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('users', '0003_persona_user'),
+        ("users", "0003_persona_user"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Encuesta',
+            name="Encuesta",
             fields=[
-                ('id_encuesta', models.AutoField(primary_key=True, serialize=False)),
-                ('titulo', models.CharField(max_length=200)),
-                ('descripcion', models.TextField(blank=True, null=True)),
-                ('fecha_creacion', models.DateTimeField(auto_now_add=True)),
-                ('fecha_actualizacion', models.DateTimeField(auto_now=True)),
-                ('activa', models.BooleanField(default=True)),
+                ("id_encuesta", models.AutoField(primary_key=True, serialize=False)),
+                ("titulo", models.CharField(max_length=200)),
+                ("descripcion", models.TextField(blank=True, null=True)),
+                ("fecha_creacion", models.DateTimeField(auto_now_add=True)),
+                ("fecha_actualizacion", models.DateTimeField(auto_now=True)),
+                ("activa", models.BooleanField(default=True)),
             ],
             options={
-                'verbose_name': 'Encuesta',
-                'verbose_name_plural': 'Encuestas',
-                'db_table': 'encuesta',
-                'ordering': ['-fecha_creacion'],
+                "verbose_name": "Encuesta",
+                "verbose_name_plural": "Encuestas",
+                "db_table": "encuesta",
+                "ordering": ["-fecha_creacion"],
             },
         ),
         migrations.CreateModel(
-            name='EncuestaRespuesta',
+            name="EncuestaRespuesta",
             fields=[
-                ('id_encuesta_respuesta', models.AutoField(primary_key=True, serialize=False)),
-                ('estado', models.CharField(choices=[('iniciada', 'Iniciada'), ('completada', 'Completada')], default='iniciada', max_length=20)),
-                ('fecha_inicio', models.DateTimeField(auto_now_add=True)),
-                ('fecha_completada', models.DateTimeField(blank=True, null=True)),
-                ('cliente', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='encuestas_respondidas', to='users.cliente')),
-                ('encuesta', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='respuestas_clientes', to='encuestas.encuesta')),
+                (
+                    "id_encuesta_respuesta",
+                    models.AutoField(primary_key=True, serialize=False),
+                ),
+                (
+                    "estado",
+                    models.CharField(
+                        choices=[
+                            ("iniciada", "Iniciada"),
+                            ("completada", "Completada"),
+                        ],
+                        default="iniciada",
+                        max_length=20,
+                    ),
+                ),
+                ("fecha_inicio", models.DateTimeField(auto_now_add=True)),
+                ("fecha_completada", models.DateTimeField(blank=True, null=True)),
+                (
+                    "cliente",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="encuestas_respondidas",
+                        to="users.cliente",
+                    ),
+                ),
+                (
+                    "encuesta",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="respuestas_clientes",
+                        to="encuestas.encuesta",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Encuesta Respondida',
-                'verbose_name_plural': 'Encuestas Respondidas',
-                'db_table': 'encuesta_respuesta',
-                'ordering': ['-fecha_inicio'],
+                "verbose_name": "Encuesta Respondida",
+                "verbose_name_plural": "Encuestas Respondidas",
+                "db_table": "encuesta_respuesta",
+                "ordering": ["-fecha_inicio"],
             },
         ),
         migrations.CreateModel(
-            name='Pregunta',
+            name="Pregunta",
             fields=[
-                ('id_pregunta', models.AutoField(primary_key=True, serialize=False)),
-                ('texto', models.TextField()),
-                ('tipo', models.CharField(choices=[('texto', 'Texto Libre'), ('numero', 'Número'), ('escala', 'Escala (1-5)'), ('si_no', 'Sí/No'), ('multiple', 'Opción Múltiple')], default='texto', max_length=20)),
-                ('orden', models.IntegerField(default=0)),
-                ('obligatoria', models.BooleanField(default=True)),
-                ('opciones', models.JSONField(blank=True, help_text='Opciones para preguntas de tipo múltiple (formato JSON)', null=True)),
-                ('encuesta', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='preguntas', to='encuestas.encuesta')),
+                ("id_pregunta", models.AutoField(primary_key=True, serialize=False)),
+                ("texto", models.TextField()),
+                (
+                    "tipo",
+                    models.CharField(
+                        choices=[
+                            ("texto", "Texto Libre"),
+                            ("numero", "Número"),
+                            ("escala", "Escala (1-5)"),
+                            ("si_no", "Sí/No"),
+                            ("multiple", "Opción Múltiple"),
+                        ],
+                        default="texto",
+                        max_length=20,
+                    ),
+                ),
+                ("orden", models.IntegerField(default=0)),
+                ("obligatoria", models.BooleanField(default=True)),
+                (
+                    "opciones",
+                    models.JSONField(
+                        blank=True,
+                        help_text="Opciones para preguntas de tipo múltiple (formato JSON)",
+                        null=True,
+                    ),
+                ),
+                (
+                    "encuesta",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="preguntas",
+                        to="encuestas.encuesta",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Pregunta',
-                'verbose_name_plural': 'Preguntas',
-                'db_table': 'pregunta',
-                'ordering': ['encuesta', 'orden'],
+                "verbose_name": "Pregunta",
+                "verbose_name_plural": "Preguntas",
+                "db_table": "pregunta",
+                "ordering": ["encuesta", "orden"],
             },
         ),
         migrations.CreateModel(
-            name='Respuesta',
+            name="Respuesta",
             fields=[
-                ('id_respuesta', models.AutoField(primary_key=True, serialize=False)),
-                ('valor_texto', models.TextField(blank=True, null=True)),
-                ('valor_numerico', models.IntegerField(blank=True, null=True)),
-                ('valor_boolean', models.BooleanField(blank=True, null=True)),
-                ('fecha_creacion', models.DateTimeField(auto_now_add=True)),
-                ('encuesta_respuesta', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='respuestas', to='encuestas.encuestarespuesta')),
-                ('pregunta', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='respuestas', to='encuestas.pregunta')),
+                ("id_respuesta", models.AutoField(primary_key=True, serialize=False)),
+                ("valor_texto", models.TextField(blank=True, null=True)),
+                ("valor_numerico", models.IntegerField(blank=True, null=True)),
+                ("valor_boolean", models.BooleanField(blank=True, null=True)),
+                ("fecha_creacion", models.DateTimeField(auto_now_add=True)),
+                (
+                    "encuesta_respuesta",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="respuestas",
+                        to="encuestas.encuestarespuesta",
+                    ),
+                ),
+                (
+                    "pregunta",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="respuestas",
+                        to="encuestas.pregunta",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Respuesta',
-                'verbose_name_plural': 'Respuestas',
-                'db_table': 'respuesta',
-                'ordering': ['encuesta_respuesta', 'pregunta__orden'],
+                "verbose_name": "Respuesta",
+                "verbose_name_plural": "Respuestas",
+                "db_table": "respuesta",
+                "ordering": ["encuesta_respuesta", "pregunta__orden"],
             },
         ),
         migrations.AddIndex(
-            model_name='encuestarespuesta',
-            index=models.Index(fields=['cliente', 'encuesta'], name='encuesta_re_cliente_647560_idx'),
+            model_name="encuestarespuesta",
+            index=models.Index(fields=["cliente", "encuesta"], name="encuesta_re_cliente_647560_idx"),
         ),
         migrations.AddIndex(
-            model_name='encuestarespuesta',
-            index=models.Index(fields=['estado'], name='encuesta_re_estado_edcf80_idx'),
+            model_name="encuestarespuesta",
+            index=models.Index(fields=["estado"], name="encuesta_re_estado_edcf80_idx"),
         ),
         migrations.AlterUniqueTogether(
-            name='encuestarespuesta',
-            unique_together={('cliente', 'encuesta')},
+            name="encuestarespuesta",
+            unique_together={("cliente", "encuesta")},
         ),
         migrations.AddIndex(
-            model_name='pregunta',
-            index=models.Index(fields=['encuesta', 'orden'], name='pregunta_encuest_006361_idx'),
+            model_name="pregunta",
+            index=models.Index(fields=["encuesta", "orden"], name="pregunta_encuest_006361_idx"),
         ),
         migrations.AlterUniqueTogether(
-            name='respuesta',
-            unique_together={('encuesta_respuesta', 'pregunta')},
+            name="respuesta",
+            unique_together={("encuesta_respuesta", "pregunta")},
         ),
     ]

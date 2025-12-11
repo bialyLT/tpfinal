@@ -11,8 +11,9 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
-from pathlib import Path
 from datetime import timedelta
+from pathlib import Path
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -24,126 +25,126 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-r_x*=no2ebbsa-kyxm-brhrxv6d89#z(etl2gva61ar2v_2erx')
+SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-r_x*=no2ebbsa-kyxm-brhrxv6d89#z(etl2gva61ar2v_2erx")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
+DEBUG = os.getenv("DEBUG", "True").lower() == "true"
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0'] + os.getenv('ALLOWED_HOSTS', '').split(',')
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "0.0.0.0"] + os.getenv("ALLOWED_HOSTS", "").split(",")
 
 
 # Application definition
 
 DJANGO_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'django.contrib.sites',  # Required by allauth
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "django.contrib.sites",  # Required by allauth
 ]
 
 THIRD_PARTY_APPS = [
-    'rest_framework',
-    'rest_framework.authtoken',  # Required by dj-rest-auth
-    'rest_framework_simplejwt',
-    'rest_framework_simplejwt.token_blacklist',
-    'corsheaders',
-    'django_filters',
+    "rest_framework",
+    "rest_framework.authtoken",  # Required by dj-rest-auth
+    "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
+    "corsheaders",
+    "django_filters",
     # Django-allauth
-    'allauth',
-    'allauth.account',
-    'allauth.socialaccount',
-    'allauth.socialaccount.providers.google',
+    "allauth",
+    "allauth.account",
+    "allauth.socialaccount",
+    "allauth.socialaccount.providers.google",
     # dj-rest-auth
-    'dj_rest_auth',
-    'dj_rest_auth.registration',
+    "dj_rest_auth",
+    "dj_rest_auth.registration",
 ]
 
 LOCAL_APPS = [
-    'core',
-    'apps.productos',
-    'apps.users',
-    'apps.servicios',
-    'apps.encuestas',
-    'apps.ventas',
-    'apps.emails',
-    'apps.mercadopago',  # Nueva app para gestión de pagos
-    'apps.weather',
-    'apps.audit',
+    "core",
+    "apps.productos",
+    "apps.users",
+    "apps.servicios",
+    "apps.encuestas",
+    "apps.ventas",
+    "apps.emails",
+    "apps.mercadopago",  # Nueva app para gestión de pagos
+    "apps.weather",
+    "apps.audit",
 ]
 
 # --------------------------------------------------
 # Logging (console output for development debugging)
 # --------------------------------------------------
 # Cambiar a WARNING para reducir los logs de debug
-LOG_LEVEL = 'WARNING' if DEBUG else 'ERROR'
+LOG_LEVEL = "WARNING" if DEBUG else "ERROR"
 
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'verbose': {
-            'format': '[{levelname}] {asctime} {name}: {message}',
-            'style': '{',
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "[{levelname}] {asctime} {name}: {message}",
+            "style": "{",
         },
-        'simple': {
-            'format': '[{levelname}] {name}: {message}',
-            'style': '{',
-        },
-    },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'simple',
+        "simple": {
+            "format": "[{levelname}] {name}: {message}",
+            "style": "{",
         },
     },
-    'loggers': {
-        'django': {
-            'handlers': ['console'],
-            'level': LOG_LEVEL,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "simple",
         },
-        'django.db.backends': {
-            'handlers': ['console'],
-            'level': 'WARNING',  # No mostrar queries SQL
-            'propagate': False,
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": LOG_LEVEL,
         },
-        'django.request': {
-            'handlers': ['console'],
-            'level': 'WARNING',  # Solo errores de request
-            'propagate': False,
+        "django.db.backends": {
+            "handlers": ["console"],
+            "level": "WARNING",  # No mostrar queries SQL
+            "propagate": False,
         },
-        'django.server': {
-            'handlers': ['console'],
-            'level': 'INFO',  # Mantener INFO para ver requests HTTP
-            'propagate': False,
+        "django.request": {
+            "handlers": ["console"],
+            "level": "WARNING",  # Solo errores de request
+            "propagate": False,
+        },
+        "django.server": {
+            "handlers": ["console"],
+            "level": "INFO",  # Mantener INFO para ver requests HTTP
+            "propagate": False,
         },
         # Project loggers
-        'apps.users': {
-            'handlers': ['console'],
-            'level': 'ERROR',  # Solo errores
-            'propagate': False,
+        "apps.users": {
+            "handlers": ["console"],
+            "level": "ERROR",  # Solo errores
+            "propagate": False,
         },
-        'apps.servicios': {
-            'handlers': ['console'],
-            'level': 'ERROR',  # Solo errores
-            'propagate': False,
+        "apps.servicios": {
+            "handlers": ["console"],
+            "level": "ERROR",  # Solo errores
+            "propagate": False,
         },
-        'apps.mercadopago': {
-            'handlers': ['console'],
-            'level': 'INFO',  # Ver todos los logs de MercadoPago
-            'propagate': False,
+        "apps.mercadopago": {
+            "handlers": ["console"],
+            "level": "INFO",  # Ver todos los logs de MercadoPago
+            "propagate": False,
         },
-        'apps.emails': {
-            'handlers': ['console'],
-            'level': 'INFO',  # Ver todos los logs de emails
-            'propagate': False,
+        "apps.emails": {
+            "handlers": ["console"],
+            "level": "INFO",  # Ver todos los logs de emails
+            "propagate": False,
         },
-        'core': {
-            'handlers': ['console'],
-            'level': 'ERROR',  # Solo errores
-            'propagate': False,
+        "core": {
+            "handlers": ["console"],
+            "level": "ERROR",  # Solo errores
+            "propagate": False,
         },
     },
 }
@@ -151,116 +152,112 @@ LOGGING = {
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
-    'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'allauth.account.middleware.AccountMiddleware',  # Required by django-allauth
-    'apps.audit.middleware.AuditLogMiddleware',
+    "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "allauth.account.middleware.AccountMiddleware",  # Required by django-allauth
+    "apps.audit.middleware.AuditLogMiddleware",
 ]
 
-ROOT_URLCONF = 'elEden_api.urls'
+ROOT_URLCONF = "elEden_api.urls"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'elEden_api.wsgi.application'
+WSGI_APPLICATION = "elEden_api.wsgi.application"
 
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 # Configuración de base de datos con soporte para PostgreSQL y SQLite
-DATABASE_URL = os.getenv('DATABASE_URL', '')
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 if DATABASE_URL:
     # Si existe DATABASE_URL, usar PostgreSQL
     # Formato esperado: postgresql://usuario:contraseña@host:puerto/nombre_db
     # Ejemplo: postgresql://postgres:password@localhost:5432/eleden_db
     import dj_database_url
-    DATABASES = {
-        'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600)
-    }
+
+    DATABASES = {"default": dj_database_url.parse(DATABASE_URL, conn_max_age=600)}
 else:
     # Si no existe DATABASE_URL, usar SQLite (desarrollo local)
     DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
         }
     }
 
 # Django REST Framework Configuration
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
     ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
     ],
-    'DEFAULT_RENDERER_CLASSES': [
-        'rest_framework.renderers.JSONRenderer',
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
     ],
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20,
-    'DEFAULT_FILTER_BACKENDS': [
-        'django_filters.rest_framework.DjangoFilterBackend',
-        'rest_framework.filters.SearchFilter',
-        'rest_framework.filters.OrderingFilter',
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
     ],
-    'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle'
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
     ],
-    'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/hour',
-        'user': '1000/hour'
-    }
+    "DEFAULT_THROTTLE_RATES": {"anon": "100/hour", "user": "1000/hour"},
 }
 
 # JWT Configuration
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
-    'UPDATE_LAST_LOGIN': True,
-    'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
-    'VERIFYING_KEY': None,
-    'AUTH_HEADER_TYPES': ('Bearer',),
-    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
-    'USER_ID_FIELD': 'id',
-    'USER_ID_CLAIM': 'user_id',
-    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
-    'TOKEN_TYPE_CLAIM': 'token_type',
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "VERIFYING_KEY": None,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
+    "TOKEN_TYPE_CLAIM": "token_type",
 }
 
 # API Documentation
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'El Eden API',
-    'DESCRIPTION': 'API documentation for El Eden application',
-    'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
-    'COMPONENT_SPLIT_REQUEST': True,
+    "TITLE": "El Eden API",
+    "DESCRIPTION": "API documentation for El Eden application",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
 }
 
 # CORS Configuration
@@ -281,16 +278,16 @@ CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only allow all origins in development
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
 
@@ -298,9 +295,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'es-ar'
+LANGUAGE_CODE = "es-ar"
 
-TIME_ZONE = 'America/Argentina/Buenos_Aires'
+TIME_ZONE = "America/Argentina/Buenos_Aires"
 
 USE_I18N = True
 
@@ -310,24 +307,24 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 STATICFILES_DIRS = [
-    BASE_DIR / 'static',
+    BASE_DIR / "static",
 ]
 
 # Media files
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
 
 # WhiteNoise configuration
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Security Settings
 if not DEBUG:
@@ -343,9 +340,9 @@ if not DEBUG:
 
 # Cache Configuration
 CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'unique-snowflake',
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "unique-snowflake",
     }
 }
 
@@ -354,32 +351,32 @@ CACHES = {
 # Para producción, configura SMTP real en las variables de entorno
 if DEBUG:
     # Mailpit en Docker
-    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    EMAIL_HOST = os.getenv('EMAIL_HOST', 'mailpit')  # Nombre del servicio en docker-compose
-    EMAIL_PORT = int(os.getenv('EMAIL_PORT', '1025'))
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    EMAIL_HOST = os.getenv("EMAIL_HOST", "mailpit")  # Nombre del servicio en docker-compose
+    EMAIL_PORT = int(os.getenv("EMAIL_PORT", "1025"))
     EMAIL_USE_TLS = False
     EMAIL_USE_SSL = False
-    EMAIL_HOST_USER = ''
-    EMAIL_HOST_PASSWORD = ''
+    EMAIL_HOST_USER = ""
+    EMAIL_HOST_PASSWORD = ""
 else:
     # Producción: SMTP real (Gmail, SendGrid, etc.)
-    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
-    EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
-    EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true'
-    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
-    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+    EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+    EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() == "true"
+    EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+    EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@eleden.com')
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@eleden.com")
 
 # Frontend URL for email links
-FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 # Weather configuration
-WEATHER_API_URL = os.getenv('WEATHER_API_URL', 'https://api.open-meteo.com/v1/forecast')
-WEATHER_DEFAULT_LAT = float(os.getenv('WEATHER_DEFAULT_LAT', '-27.3667'))
-WEATHER_DEFAULT_LON = float(os.getenv('WEATHER_DEFAULT_LON', '-55.9000'))
-WEATHER_ALERT_THRESHOLD_MM = float(os.getenv('WEATHER_ALERT_THRESHOLD_MM', '1.0'))
+WEATHER_API_URL = os.getenv("WEATHER_API_URL", "https://api.open-meteo.com/v1/forecast")
+WEATHER_DEFAULT_LAT = float(os.getenv("WEATHER_DEFAULT_LAT", "-27.3667"))
+WEATHER_DEFAULT_LON = float(os.getenv("WEATHER_DEFAULT_LON", "-55.9000"))
+WEATHER_ALERT_THRESHOLD_MM = float(os.getenv("WEATHER_ALERT_THRESHOLD_MM", "1.0"))
 
 # CORS Configuration
 CORS_ALLOWED_ORIGINS = [
@@ -390,7 +387,7 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 # Agregar la URL del frontend si es de ngrok
-if FRONTEND_URL and 'ngrok' in FRONTEND_URL:
+if FRONTEND_URL and "ngrok" in FRONTEND_URL:
     CORS_ALLOWED_ORIGINS.append(FRONTEND_URL)
     print(f"CORS: Permitiendo requests desde {FRONTEND_URL}")
 
@@ -403,15 +400,15 @@ if DEBUG:
 
 # Headers permitidos para CORS
 CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
 ]
 
 # =============================================
@@ -422,15 +419,15 @@ SITE_ID = 1
 
 # Authentication backends
 AUTHENTICATION_BACKENDS = [
-    'django.contrib.auth.backends.ModelBackend',  # Default
-    'allauth.account.auth_backends.AuthenticationBackend',  # Allauth
+    "django.contrib.auth.backends.ModelBackend",  # Default
+    "allauth.account.auth_backends.AuthenticationBackend",  # Allauth
 ]
 
 # Allauth settings
 ACCOUNT_EMAIL_REQUIRED = True
 ACCOUNT_USERNAME_REQUIRED = False
-ACCOUNT_AUTHENTICATION_METHOD = 'email'
-ACCOUNT_EMAIL_VERIFICATION = 'optional'
+ACCOUNT_AUTHENTICATION_METHOD = "email"
+ACCOUNT_EMAIL_VERIFICATION = "optional"
 ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
 
@@ -441,38 +438,38 @@ SOCIALACCOUNT_QUERY_EMAIL = True
 
 # Google OAuth2 settings
 SOCIALACCOUNT_PROVIDERS = {
-    'google': {
-        'SCOPE': [
-            'profile',
-            'email',
+    "google": {
+        "SCOPE": [
+            "profile",
+            "email",
         ],
-        'AUTH_PARAMS': {
-            'access_type': 'online',
+        "AUTH_PARAMS": {
+            "access_type": "online",
         },
-        'APP': {
-            'client_id': os.getenv('GOOGLE_CLIENT_ID', ''),
-            'secret': os.getenv('GOOGLE_CLIENT_SECRET', ''),
-            'key': ''
-        }
+        "APP": {
+            "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
+            "secret": os.getenv("GOOGLE_CLIENT_SECRET", ""),
+            "key": "",
+        },
     }
 }
 
 # dj-rest-auth settings
 REST_AUTH = {
-    'USE_JWT': True,
-    'JWT_AUTH_HTTPONLY': False,
-    'JWT_AUTH_COOKIE': 'my-app-auth',
-    'JWT_AUTH_REFRESH_COOKIE': 'my-refresh-token',
-    'REGISTER_SERIALIZER': 'core.serializers.CustomRegisterSerializer',
+    "USE_JWT": True,
+    "JWT_AUTH_HTTPONLY": False,
+    "JWT_AUTH_COOKIE": "my-app-auth",
+    "JWT_AUTH_REFRESH_COOKIE": "my-refresh-token",
+    "REGISTER_SERIALIZER": "core.serializers.CustomRegisterSerializer",
 }
 
 # Frontend URL for redirects
-FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 # Backend URL for webhooks
-BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:8000')
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 # ==================== MERCADOPAGO CONFIGURATION ====================
-MERCADOPAGO_ACCESS_TOKEN = os.getenv('MERCADOPAGO_ACCESS_TOKEN', '')
-MERCADOPAGO_PUBLIC_KEY = os.getenv('MERCADOPAGO_PUBLIC_KEY', '')
-MERCADOPAGO_WEBHOOK_SECRET = os.getenv('MERCADOPAGO_WEBHOOK_SECRET', '')  # Para validar webhooks
+MERCADOPAGO_ACCESS_TOKEN = os.getenv("MERCADOPAGO_ACCESS_TOKEN", "")
+MERCADOPAGO_PUBLIC_KEY = os.getenv("MERCADOPAGO_PUBLIC_KEY", "")
+MERCADOPAGO_WEBHOOK_SECRET = os.getenv("MERCADOPAGO_WEBHOOK_SECRET", "")  # Para validar webhooks

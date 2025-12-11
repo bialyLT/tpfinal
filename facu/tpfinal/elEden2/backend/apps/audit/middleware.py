@@ -9,13 +9,13 @@ from .services import AuditService, sanitize_payload
 
 
 class AuditLogMiddleware(MiddlewareMixin):
-    TRACKED_METHODS = {'POST', 'PUT', 'PATCH', 'DELETE'}
-    API_PREFIX = '/api/'
+    TRACKED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+    API_PREFIX = "/api/"
     EXCLUDED_PATHS = (
-        '/api/v1/audit/logs/',
-        '/api/v1/token/',
-        '/api/v1/token/refresh/',
-        '/api/v1/token/blacklist/',
+        "/api/v1/audit/logs/",
+        "/api/v1/token/",
+        "/api/v1/token/refresh/",
+        "/api/v1/token/blacklist/",
     )
 
     def process_response(self, request, response):
@@ -34,12 +34,12 @@ class AuditLogMiddleware(MiddlewareMixin):
         if not path.startswith(self.API_PREFIX) or any(path.startswith(prefix) for prefix in self.EXCLUDED_PATHS):
             return
 
-        user = getattr(request, 'user', None)
-        if not getattr(user, 'is_authenticated', False):
+        user = getattr(request, "user", None)
+        if not getattr(user, "is_authenticated", False):
             return
 
         role = self._resolve_role(user)
-        if role not in {'administrador', 'empleado'}:
+        if role not in {"administrador", "empleado"}:
             return
 
         entity, object_id = self._extract_entity(path)
@@ -55,11 +55,11 @@ class AuditLogMiddleware(MiddlewareMixin):
             object_id=object_id,
             endpoint=path,
             ip_address=self._get_ip(request),
-            user_agent=request.META.get('HTTP_USER_AGENT', ''),
+            user_agent=request.META.get("HTTP_USER_AGENT", ""),
             payload=payload,
-            response_code=getattr(response, 'status_code', None),
+            response_code=getattr(response, "status_code", None),
             response_body=response_body,
-            metadata=self._build_metadata(request, response)
+            metadata=self._build_metadata(request, response),
         )
 
     def _extract_request_payload(self, request) -> Optional[Any]:
@@ -71,19 +71,19 @@ class AuditLogMiddleware(MiddlewareMixin):
         if not body:
             return None
 
-        content_type = request.META.get('CONTENT_TYPE', '')
-        if 'application/json' in content_type:
+        content_type = request.META.get("CONTENT_TYPE", "")
+        if "application/json" in content_type:
             try:
-                data = json.loads(body.decode('utf-8'))
+                data = json.loads(body.decode("utf-8"))
             except (ValueError, UnicodeDecodeError):
                 data = body[:1024]
         else:
-            data = {'_raw': f'{len(body)} bytes', 'content_type': content_type}
+            data = {"_raw": f"{len(body)} bytes", "content_type": content_type}
 
         return sanitize_payload(data)
 
     def _extract_response_body(self, response) -> Optional[Any]:
-        if not hasattr(response, 'content'):
+        if not hasattr(response, "content"):
             return None
         try:
             content = response.content
@@ -93,28 +93,28 @@ class AuditLogMiddleware(MiddlewareMixin):
         if not content:
             return None
 
-        content_type = response.get('Content-Type', '')
-        if 'application/json' in content_type:
+        content_type = response.get("Content-Type", "")
+        if "application/json" in content_type:
             try:
-                data = json.loads(content.decode('utf-8'))
+                data = json.loads(content.decode("utf-8"))
             except (ValueError, UnicodeDecodeError):
                 data = content[:1024]
         else:
-            data = {'_raw': f'{len(content)} bytes', 'content_type': content_type}
+            data = {"_raw": f"{len(content)} bytes", "content_type": content_type}
 
         return sanitize_payload(data)
 
     def _extract_entity(self, path: str) -> Tuple[str, Optional[str]]:
-        segments = [segment for segment in path.rstrip('/').split('/') if segment]
+        segments = [segment for segment in path.rstrip("/").split("/") if segment]
         if not segments:
-            return 'root', None
+            return "root", None
 
         entity = segments[-1]
         object_id = None
         if entity.isdigit() and len(segments) >= 2:
             object_id = entity
             entity = segments[-2]
-        elif '-' in entity and entity.replace('-', '').isdigit():
+        elif "-" in entity and entity.replace("-", "").isdigit():
             object_id = entity
             entity = segments[-2] if len(segments) >= 2 else entity
 
@@ -122,43 +122,43 @@ class AuditLogMiddleware(MiddlewareMixin):
 
     def _build_action(self, method: str, entity: str) -> str:
         action_map = {
-            'POST': 'Creación',
-            'PUT': 'Actualización total',
-            'PATCH': 'Actualización parcial',
-            'DELETE': 'Eliminación'
+            "POST": "Creación",
+            "PUT": "Actualización total",
+            "PATCH": "Actualización parcial",
+            "DELETE": "Eliminación",
         }
         verb = action_map.get(method.upper(), method)
         return f"{verb} de {entity}"
 
     def _get_ip(self, request) -> Optional[str]:
-        forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+        forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
         if forwarded:
-            return forwarded.split(',')[0].strip()
-        return request.META.get('REMOTE_ADDR')
+            return forwarded.split(",")[0].strip()
+        return request.META.get("REMOTE_ADDR")
 
     def _resolve_role(self, user) -> str:
-        if not getattr(user, 'is_authenticated', False):
-            return 'anonimo'
+        if not getattr(user, "is_authenticated", False):
+            return "anonimo"
 
         if user.is_superuser or user.is_staff:
-            return 'administrador'
+            return "administrador"
 
-        perfil = getattr(user, 'perfil', None)
-        if perfil and getattr(perfil, 'tipo_usuario', None):
+        perfil = getattr(user, "perfil", None)
+        if perfil and getattr(perfil, "tipo_usuario", None):
             tipo = perfil.tipo_usuario.lower()
-            if tipo in {'administrador', 'empleado', 'diseñador', 'cliente'}:
-                return 'empleado' if tipo == 'diseñador' else tipo
+            if tipo in {"administrador", "empleado", "diseñador", "cliente"}:
+                return "empleado" if tipo == "diseñador" else tipo
 
-        group_names = set(user.groups.values_list('name', flat=True))
-        if 'Administradores' in group_names:
-            return 'administrador'
-        if 'Empleados' in group_names:
-            return 'empleado'
+        group_names = set(user.groups.values_list("name", flat=True))
+        if "Administradores" in group_names:
+            return "administrador"
+        if "Empleados" in group_names:
+            return "empleado"
 
-        return 'cliente'
+        return "cliente"
 
     def _build_metadata(self, request, response):
         return {
-            'query_params': request.GET.dict(),
-            'response_reason': getattr(response, 'reason_phrase', ''),
+            "query_params": request.GET.dict(),
+            "response_reason": getattr(response, "reason_phrase", ""),
         }

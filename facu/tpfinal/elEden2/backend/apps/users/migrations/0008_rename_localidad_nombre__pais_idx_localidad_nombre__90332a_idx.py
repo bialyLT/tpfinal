@@ -6,13 +6,13 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('users', '0007_localidad_coordinates'),
+        ("users", "0007_localidad_coordinates"),
     ]
 
     operations = [
         migrations.RenameIndex(
-            model_name='localidad',
-            new_name='localidad_nombre__90332a_idx',
-            old_name='localidad_nombre__pais_idx',
+            model_name="localidad",
+            new_name="localidad_nombre__90332a_idx",
+            old_name="localidad_nombre__pais_idx",
         ),
     ]

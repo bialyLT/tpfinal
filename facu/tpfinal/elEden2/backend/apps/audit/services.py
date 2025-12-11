@@ -4,10 +4,16 @@ from typing import Any, Dict
 
 from .models import AuditLog
 
-
 SENSITIVE_KEYS = {
-    'password', 'new_password', 'old_password', 'token', 'access', 'refresh',
-    'authorization', 'secret', 'api_key'
+    "password",
+    "new_password",
+    "old_password",
+    "token",
+    "access",
+    "refresh",
+    "authorization",
+    "secret",
+    "api_key",
 }
 
 
@@ -21,7 +27,7 @@ def sanitize_payload(data: Any, max_length: int = 2000) -> Any:
         for key, value in data.items():
             key_lower = key.lower()
             if key_lower in SENSITIVE_KEYS:
-                sanitized[key] = '***'
+                sanitized[key] = "***"
             else:
                 sanitized[key] = sanitize_payload(value, max_length)
         return sanitized
@@ -30,7 +36,7 @@ def sanitize_payload(data: Any, max_length: int = 2000) -> Any:
         return [sanitize_payload(item, max_length) for item in data][:100]
 
     if isinstance(data, (str, bytes)):
-        text = data.decode('utf-8', errors='ignore') if isinstance(data, bytes) else data
+        text = data.decode("utf-8", errors="ignore") if isinstance(data, bytes) else data
         return text[:max_length]
 
     return data
