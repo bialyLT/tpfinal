@@ -395,6 +395,10 @@ class DisenoSerializer(serializers.ModelSerializer):
             "fecha_presentacion",
             "fecha_respuesta",
             "fecha_propuesta",
+            "fecha_inicio",
+            "hora_inicio",
+            "fecha_fin",
+            "hora_fin",
         ]
         read_only_fields = [
             "id_diseno",
@@ -453,6 +457,10 @@ class DisenoDetalleSerializer(serializers.ModelSerializer):
             "fecha_presentacion",
             "fecha_respuesta",
             "fecha_propuesta",
+            "fecha_inicio",
+            "hora_inicio",
+            "fecha_fin",
+            "hora_fin",
             "fecha_actualizacion",
         ]
         read_only_fields = [

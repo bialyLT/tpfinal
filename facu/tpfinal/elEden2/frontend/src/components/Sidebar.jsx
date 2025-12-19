@@ -61,6 +61,8 @@ const Sidebar = () => {
             { name: 'Productos', href: '/productos', icon: ShoppingCart },
             { name: 'Categorías', href: '/categorias', icon: Tag },
             { name: 'Marcas', href: '/marcas', icon: Tag },
+            { name: 'Especies', href: '/especies', icon: Leaf },
+            { name: 'Tareas', href: '/tareas', icon: ListChecks },
           ]
         },
         { 
@@ -88,6 +90,8 @@ const Sidebar = () => {
             { name: 'Productos', href: '/productos', icon: ShoppingCart },
             { name: 'Categorías', href: '/categorias', icon: Tag },
             { name: 'Marcas', href: '/marcas', icon: Tag },
+            { name: 'Especies', href: '/especies', icon: Leaf },
+            { name: 'Tareas', href: '/tareas', icon: ListChecks },
           ]
         },
         { 

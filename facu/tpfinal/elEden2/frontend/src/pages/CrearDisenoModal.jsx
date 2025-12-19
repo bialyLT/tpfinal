@@ -1,17 +1,96 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import flatpickr from 'flatpickr';
 // No localization imports for now
 import { X, Upload, Plus, Trash2, Palette, DollarSign, Calendar, Image as ImageIcon, Package, Search } from 'lucide-react';
-import { serviciosService, productosService } from '../services';
+import { serviciosService, productosService, tareasService } from '../services';
 import { useAuth } from '../context/AuthContext';
 import ProductSelector from '../components/ProductSelector';
 import { success, error as showError } from '../utils/notifications';
 
 const isSameDateTime = (a, b) => Boolean(a && b && a.getTime() === b.getTime());
 
+const pad2 = (n) => String(n).padStart(2, '0');
+
+const formatLocalDateTime = (d) => {
+  if (!d || Number.isNaN(d.getTime())) return '';
+  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+};
+
+// Work windows: 08:00-12:00 and 16:00-20:00 (hours only)
+const normalizeStartToWorkingWindow = (dateObj) => {
+  if (!dateObj || Number.isNaN(dateObj.getTime())) return null;
+  const d = new Date(dateObj);
+  d.setSeconds(0, 0);
+  d.setMinutes(0);
+
+  const h = d.getHours();
+
+  if (h < 8) {
+    d.setHours(8, 0, 0, 0);
+    return d;
+  }
+  if (h >= 12 && h < 16) {
+    d.setHours(16, 0, 0, 0);
+    return d;
+  }
+  if (h >= 20) {
+    d.setDate(d.getDate() + 1);
+    d.setHours(8, 0, 0, 0);
+    return d;
+  }
+  return d;
+};
+
+const addWorkingHours = (startDate, hoursToAdd) => {
+  if (!startDate || Number.isNaN(startDate.getTime())) return null;
+  let remaining = Number(hoursToAdd) || 0;
+  const cursor = normalizeStartToWorkingWindow(startDate);
+  if (!cursor) return null;
+  if (remaining <= 0) return cursor;
+
+  while (remaining > 0) {
+    const hour = cursor.getHours();
+
+    // ensure cursor at the start of a work window
+    if (hour < 8) {
+      cursor.setHours(8, 0, 0, 0);
+      continue;
+    }
+    if (hour >= 12 && hour < 16) {
+      cursor.setHours(16, 0, 0, 0);
+      continue;
+    }
+    if (hour >= 20) {
+      cursor.setDate(cursor.getDate() + 1);
+      cursor.setHours(8, 0, 0, 0);
+      continue;
+    }
+
+    const windowEnd = hour >= 16 ? 20 : 12;
+    const available = windowEnd - hour;
+    const chunk = Math.min(remaining, available);
+
+    cursor.setHours(cursor.getHours() + chunk);
+    remaining -= chunk;
+
+    if (remaining <= 0) break;
+
+    // move to next window
+    if (cursor.getHours() === 12) {
+      cursor.setHours(16, 0, 0, 0);
+    } else if (cursor.getHours() === 20) {
+      cursor.setDate(cursor.getDate() + 1);
+      cursor.setHours(8, 0, 0, 0);
+    }
+  }
+
+  return cursor;
+};
+
 const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDisenoCreado, mode = 'diseno', onCargarJardin }) => {
   const [loading, setLoading] = useState(false);
   const [productos, setProductos] = useState([]);
+  const [tareasById, setTareasById] = useState({});
   const [disenoCompleto, setDisenoCompleto] = useState(null);
   const [fechaPropuesta, setFechaPropuesta] = useState(null);
   const [fechaPropuestaDatePart, setFechaPropuestaDatePart] = useState(null); // selected date (day)
@@ -191,7 +270,10 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
     let isMounted = true;
 
     const initializeModal = async () => {
-      const productosDisponibles = await fetchProductos();
+      const [productosDisponibles] = await Promise.all([
+        fetchProductos(),
+        fetchTareas(),
+      ]);
       if (!isMounted) return;
 
       if (modoEdicion && diseno) {
@@ -319,19 +401,39 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       noCalendar: true,
       dateFormat: "H:i",
       time_24hr: true,
-      minuteIncrement: 15,
+      minuteIncrement: 60,
       defaultDate: fechaPropuestaTimePart || null,
       minTime: "08:00",
       maxTime: "20:00",
       onChange: (selectedDates, dateStr) => {
-        setFechaPropuestaTimePart(dateStr);
-        
+        const [hhRaw] = String(dateStr || '').split(':');
+        const hh = Number(hhRaw);
+        if (!Number.isFinite(hh)) return;
+
+        // Ventanas válidas: 08-12 y 16-20 (hora entera)
+        let nextH = hh;
+        let addDay = 0;
+        if (nextH >= 12 && nextH < 16) nextH = 16;
+        if (nextH >= 20) {
+          nextH = 8;
+          addDay = 1;
+        }
+        if (nextH < 8) nextH = 8;
+
+        const snapped = `${pad2(nextH)}:00`;
+        setFechaPropuestaTimePart(snapped);
+
         if (fechaPropuestaDatePart) {
-          const [hh, mm] = dateStr.split(':').map(Number);
           const newDate = new Date(fechaPropuestaDatePart);
-          newDate.setHours(hh, mm);
+          if (addDay) newDate.setDate(newDate.getDate() + addDay);
+          newDate.setHours(nextH, 0, 0, 0);
           setFechaPropuesta(newDate);
         }
+
+        if (fpTimeInstanceRef.current && snapped !== dateStr) {
+          fpTimeInstanceRef.current.setDate(snapped, true, 'H:i');
+        }
+
         setFechaError('');
       }
     };
@@ -386,6 +488,25 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       showError('Error al cargar productos');
       console.error(error);
       return [];
+    }
+  };
+
+  const fetchTareas = async () => {
+    try {
+      const data = await tareasService.getAll({ page_size: 1000 });
+      const list = Array.isArray(data) ? data : data?.results || [];
+      const index = {};
+      list.forEach((t) => {
+        if (t && typeof t.id_tarea !== 'undefined') {
+          index[Number(t.id_tarea)] = t;
+        }
+      });
+      setTareasById(index);
+      return index;
+    } catch (err) {
+      console.error('Error al cargar tareas:', err);
+      setTareasById({});
+      return {};
     }
   };
 
@@ -541,6 +662,42 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
     const costoManoObra = parseFloat(formData.presupuesto) || 0;
     return costoProductos + costoManoObra;
   };
+
+  const totalMinutesTrabajo = useMemo(() => {
+    // Cada producto seleccionado aporta sus tareas escaladas por cantidad
+    return productosSeleccionados.reduce((sum, line) => {
+      const productId = Number(line.producto_id);
+      if (!productId) return sum;
+
+      const qty = Math.max(0, Number(line.cantidad) || 0);
+      if (qty <= 0) return sum;
+
+      const prod = productos.find((p) => Number(p.id_producto || p.id) === productId);
+      const taskIds = Array.isArray(prod?.tareas) ? prod.tareas : [];
+      const minutes = taskIds.reduce((acc, tid) => {
+        const tarea = tareasById[Number(tid)];
+        const dur = Number(tarea?.duracion_base);
+        return acc + (Number.isFinite(dur) ? dur : 0);
+      }, 0);
+
+      return sum + (minutes * qty);
+    }, 0);
+  }, [productosSeleccionados, productos, tareasById]);
+
+  const totalHorasTrabajo = useMemo(() => {
+    if (!totalMinutesTrabajo || totalMinutesTrabajo <= 0) return 0;
+    return Math.ceil(totalMinutesTrabajo / 60);
+  }, [totalMinutesTrabajo]);
+
+  const fechaInicioNormalizada = useMemo(() => {
+    if (!fechaPropuesta) return null;
+    return normalizeStartToWorkingWindow(fechaPropuesta);
+  }, [fechaPropuesta]);
+
+  const fechaFinCalculada = useMemo(() => {
+    if (!fechaInicioNormalizada) return null;
+    return addWorkingHours(fechaInicioNormalizada, totalHorasTrabajo);
+  }, [fechaInicioNormalizada, totalHorasTrabajo]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1103,6 +1260,18 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                       className={`w-full px-3 py-2 bg-gray-700 rounded-md text-white focus:outline-none focus:ring-2 ${fechaError ? 'focus:ring-red-500' : 'focus:ring-green-500'}`}
                     />
                   </div>
+                </div>
+
+                <div className="mt-2 text-xs text-gray-400">
+                  <div>Duración estimada (por tareas de productos): <span className="text-white font-semibold">{totalHorasTrabajo}h</span></div>
+                  {fechaInicioNormalizada && (
+                    <div>
+                      Finaliza: <span className="text-white font-semibold">{formatLocalDateTime(fechaFinCalculada || fechaInicioNormalizada)}</span>
+                    </div>
+                  )}
+                  {!fechaInicioNormalizada && (
+                    <div>Finaliza: <span className="text-gray-500">seleccioná fecha y hora</span></div>
+                  )}
                 </div>
               </div>
             </div>

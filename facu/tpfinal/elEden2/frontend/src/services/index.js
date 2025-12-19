@@ -567,6 +567,60 @@ export const marcasService = {
   }
 };
 
+// Especies Services
+export const especiesService = {
+  getAll: async (params = {}) => {
+    const response = await api.get('/productos/especies/', { params });
+    return response.data;
+  },
+
+  getById: async (id) => {
+    const response = await api.get(`/productos/especies/${id}/`);
+    return response.data;
+  },
+
+  create: async (data) => {
+    const response = await api.post('/productos/especies/', data);
+    return response.data;
+  },
+
+  update: async (id, data) => {
+    const response = await api.put(`/productos/especies/${id}/`, data);
+    return response.data;
+  },
+
+  delete: async (id) => {
+    await api.delete(`/productos/especies/${id}/`);
+  },
+};
+
+// Tareas Services
+export const tareasService = {
+  getAll: async (params = {}) => {
+    const response = await api.get('/productos/tareas/', { params });
+    return response.data;
+  },
+
+  getById: async (id) => {
+    const response = await api.get(`/productos/tareas/${id}/`);
+    return response.data;
+  },
+
+  create: async (data) => {
+    const response = await api.post('/productos/tareas/', data);
+    return response.data;
+  },
+
+  update: async (id, data) => {
+    const response = await api.put(`/productos/tareas/${id}/`, data);
+    return response.data;
+  },
+
+  delete: async (id) => {
+    await api.delete(`/productos/tareas/${id}/`);
+  },
+};
+
 // Compras Services
 export const comprasService = {
   getAll: async (params = {}) => {

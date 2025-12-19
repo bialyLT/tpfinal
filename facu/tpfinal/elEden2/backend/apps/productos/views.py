@@ -1,4 +1,5 @@
 from django.db.models import F
+import json
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -6,13 +7,15 @@ from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import Categoria, Marca, Producto, Stock
+from .models import Categoria, Especie, Marca, Producto, Stock, Tarea
 from .serializers import (
     CategoriaSerializer,
+    EspecieSerializer,
     MarcaSerializer,
     ProductoListSerializer,
     ProductoSerializer,
     StockSerializer,
+    TareaSerializer,
 )
 
 
@@ -36,6 +39,26 @@ class MarcaViewSet(viewsets.ModelViewSet):
     ordering = ["nombre_marca"]
 
 
+class EspecieViewSet(viewsets.ModelViewSet):
+    queryset = Especie.objects.all()
+    serializer_class = EspecieSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    search_fields = ["nombre_especie", "descripcion"]
+    ordering_fields = ["nombre_especie", "id_especie"]
+    ordering = ["nombre_especie"]
+
+
+class TareaViewSet(viewsets.ModelViewSet):
+    queryset = Tarea.objects.all()
+    serializer_class = TareaSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    search_fields = ["nombre"]
+    ordering_fields = ["nombre", "id_tarea", "duracion_base", "cantidad_personal_minimo"]
+    ordering = ["nombre"]
+
+
 # UnidadViewSet comentado - modelo no existe en el diagrama ER
 # class UnidadViewSet(viewsets.ModelViewSet):
 #     queryset = Unidad.objects.all()
@@ -49,12 +72,14 @@ class MarcaViewSet(viewsets.ModelViewSet):
 
 
 class ProductoViewSet(viewsets.ModelViewSet):
-    queryset = Producto.objects.select_related("categoria", "marca").all()
+    queryset = Producto.objects.select_related("categoria", "marca", "especie").prefetch_related("tareas").all()
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = {
         "categoria": ["exact"],
         "marca": ["exact"],
+        "especie": ["exact"],
+        "tipo_producto": ["exact"],
         "precio": ["gte", "lte", "exact"],
         "stock__cantidad": ["gte", "lte"],
     }
@@ -66,6 +91,65 @@ class ProductoViewSet(viewsets.ModelViewSet):
         if self.action == "list":
             return ProductoListSerializer
         return ProductoSerializer
+
+    def _normalize_tareas_in_data(self, data):
+        """Permite enviar tareas como JSON dentro de multipart/form-data.
+
+        Ej: FormData.append('tareas', '[1,2]') o '[]'
+        """
+        if not hasattr(data, "copy"):
+            return data
+
+        normalized = data.copy()
+        if not hasattr(normalized, "getlist"):
+            return normalized
+
+        if "tareas" not in normalized:
+            return normalized
+
+        raw_values = normalized.getlist("tareas")
+        if len(raw_values) != 1:
+            return normalized
+
+        raw = raw_values[0]
+        if not isinstance(raw, str):
+            return normalized
+
+        raw = raw.strip()
+        if raw == "":
+            normalized.setlist("tareas", [])
+            return normalized
+
+        if not raw.startswith("["):
+            return normalized
+
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            return normalized
+
+        if not isinstance(parsed, list):
+            return normalized
+
+        normalized.setlist("tareas", [str(v) for v in parsed])
+        return normalized
+
+    def create(self, request, *args, **kwargs):
+        data = self._normalize_tareas_in_data(request.data)
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        data = self._normalize_tareas_in_data(request.data)
+        serializer = self.get_serializer(instance, data=data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
 
     @action(detail=False, methods=["get"])
     def stock_bajo(self, request):

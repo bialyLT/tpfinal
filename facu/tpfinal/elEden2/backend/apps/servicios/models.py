@@ -571,6 +571,13 @@ class Diseno(models.Model):
     fecha_presentacion = models.DateTimeField(null=True, blank=True)
     fecha_respuesta = models.DateTimeField(null=True, blank=True)
     fecha_propuesta = models.DateTimeField(null=True, blank=True, help_text="Fecha propuesta para realizar el servicio")
+
+    # Programación estimada (separado en fecha/hora)
+    fecha_inicio = models.DateField(null=True, blank=True, help_text="Fecha estimada de inicio del trabajo")
+    hora_inicio = models.TimeField(null=True, blank=True, help_text="Hora estimada de inicio del trabajo")
+    fecha_fin = models.DateField(null=True, blank=True, help_text="Fecha estimada de finalización del trabajo")
+    hora_fin = models.TimeField(null=True, blank=True, help_text="Hora estimada de finalización del trabajo")
+
     fecha_actualizacion = models.DateTimeField(auto_now=True)
 
     # Observaciones

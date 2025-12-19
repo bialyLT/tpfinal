@@ -1,6 +1,6 @@
 ﻿from django.contrib import admin
 
-from .models import Categoria, Marca, Producto, Stock
+from .models import Categoria, Especie, Marca, Producto, Stock, Tarea
 
 
 @admin.register(Categoria)
@@ -17,6 +17,20 @@ class MarcaAdmin(admin.ModelAdmin):
     ordering = ("nombre_marca",)
 
 
+@admin.register(Especie)
+class EspecieAdmin(admin.ModelAdmin):
+    list_display = ("id_especie", "nombre_especie")
+    search_fields = ("nombre_especie",)
+    ordering = ("nombre_especie",)
+
+
+@admin.register(Tarea)
+class TareaAdmin(admin.ModelAdmin):
+    list_display = ("id_tarea", "nombre", "duracion_base", "cantidad_personal_minimo")
+    search_fields = ("nombre",)
+    ordering = ("nombre",)
+
+
 class StockInline(admin.TabularInline):
     model = Stock
     extra = 0
@@ -29,12 +43,14 @@ class ProductoAdmin(admin.ModelAdmin):
     list_display = (
         "id_producto",
         "nombre",
+        "tipo_producto",
         "categoria",
         "marca",
+        "especie",
         "precio",
         "get_stock",
     )
-    list_filter = ("categoria", "marca")
+    list_filter = ("tipo_producto", "categoria", "marca", "especie")
     search_fields = ("nombre", "descripcion")
     ordering = ("nombre",)
     inlines = [StockInline]

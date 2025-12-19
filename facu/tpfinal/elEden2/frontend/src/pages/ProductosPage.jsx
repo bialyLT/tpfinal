@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { productosService, categoriasService, marcasService } from '../services';
+import { productosService, categoriasService, marcasService, especiesService, tareasService } from '../services';
 import ProductSelector from '../components/ProductSelector';
 import { handleApiError, success } from '../utils/notifications';
 import {
@@ -20,6 +20,8 @@ const ProductosPage = () => {
   const [productos, setProductos] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [marcas, setMarcas] = useState([]);
+  const [especies, setEspecies] = useState([]);
+  const [tareas, setTareas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategoria, setSelectedCategoria] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -34,9 +36,14 @@ const ProductosPage = () => {
     nombre: '',
     descripcion: '',
     categoria: '',
+    tipoProducto: 'true',
     marca: '',
+    especie: '',
+    tareas: [],
     imagen: null
   });
+
+  const isInsumo = String(formData.tipoProducto) === 'true';
 
   const fetchData = useCallback(async () => {
     try {
@@ -50,14 +57,18 @@ const ProductosPage = () => {
       if (stockRange.min) params.stock__cantidad__gte = stockRange.min;
       if (stockRange.max) params.stock__cantidad__lte = stockRange.max;
 
-      const [productosData, categoriasData, marcasData] = await Promise.all([
+      const [productosData, categoriasData, marcasData, especiesData, tareasData] = await Promise.all([
         productosService.getProductos(params),
         categoriasService.getAll(),
-        marcasService.getAll()
+        marcasService.getAll(),
+        especiesService.getAll(),
+        tareasService.getAll(),
       ]);
       setProductos(productosData.results || []);
       setCategorias(Array.isArray(categoriasData) ? categoriasData : categoriasData.results || []);
       setMarcas(Array.isArray(marcasData) ? marcasData : marcasData.results || []);
+      setEspecies(Array.isArray(especiesData) ? especiesData : especiesData.results || []);
+      setTareas(Array.isArray(tareasData) ? tareasData : tareasData.results || []);
     } catch (error) {
       handleApiError(error, 'Error al cargar los datos');
     } finally {
@@ -74,12 +85,18 @@ const ProductosPage = () => {
       console.log('Producto recibido:', producto);
       console.log('Categoria:', producto.categoria, 'Marca:', producto.marca, 'Imagen:', producto.imagen);
 
+      const tipo = producto.tipoProducto;
+      const tipoProducto = String(tipo === true || tipo === 'true');
+
       setSelectedProducto(producto);
       setFormData({
         nombre: producto.nombre,
         descripcion: producto.descripcion || '',
         categoria: producto.categoria ? String(producto.categoria) : '',
+        tipoProducto,
         marca: producto.marca ? String(producto.marca) : '',
+        especie: producto.especie ? String(producto.especie) : '',
+        tareas: Array.isArray(producto.tareas) ? producto.tareas.map((t) => String(t)) : [],
         imagen: null
       });
       // Si el producto tiene imagen, mostrarla como preview
@@ -96,7 +113,10 @@ const ProductosPage = () => {
         nombre: '',
         descripcion: '',
         categoria: '',
+        tipoProducto: 'true',
         marca: '',
+        especie: '',
+        tareas: [],
         imagen: null
       });
       setImagePreview(null);
@@ -111,10 +131,22 @@ const ProductosPage = () => {
       nombre: '',
       descripcion: '',
       categoria: '',
+      tipoProducto: 'true',
       marca: '',
+      especie: '',
+      tareas: [],
       imagen: null
     });
     setImagePreview(null);
+  };
+
+  const handleTipoProductoChange = (value) => {
+    setFormData((prev) => ({
+      ...prev,
+      tipoProducto: value,
+      marca: value === 'true' ? prev.marca : '',
+      especie: value === 'false' ? prev.especie : '',
+    }));
   };
 
   const handleImageChange = (e) => {
@@ -145,7 +177,16 @@ const ProductosPage = () => {
       submitData.append('nombre', formData.nombre);
       submitData.append('descripcion', formData.descripcion);
       submitData.append('categoria', formData.categoria);
-      submitData.append('marca', formData.marca);
+      submitData.append('tipoProducto', String(formData.tipoProducto));
+
+      // Enviar tareas como JSON dentro de multipart (backend lo normaliza)
+      submitData.append('tareas', JSON.stringify((formData.tareas || []).map((id) => Number(id))));
+
+      if (isInsumo) {
+        submitData.append('marca', formData.marca);
+      } else {
+        submitData.append('especie', formData.especie);
+      }
 
       if (formData.imagen instanceof File) {
         submitData.append('imagen', formData.imagen);
@@ -180,6 +221,8 @@ const ProductosPage = () => {
 
   // Client-side filtering removed in favor of server-side filtering
   const filteredProductos = productos;
+
+  const canSubmit = categorias.length > 0 && (isInsumo ? marcas.length > 0 : especies.length > 0);
 
   if (loading) {
     return (
@@ -373,8 +416,10 @@ const ProductosPage = () => {
                       <span className="font-semibold text-white">{producto.categoria_nombre || 'N/A'}</span>
                     </div>
                     <div className="flex items-center justify-between text-gray-300">
-                      <span>Marca:</span>
-                      <span className="font-semibold text-white">{producto.marca_nombre || 'N/A'}</span>
+                      <span>{producto.tipoProducto ? 'Marca:' : 'Especie:'}</span>
+                      <span className="font-semibold text-white">
+                        {producto.tipoProducto ? (producto.marca_nombre || 'N/A') : (producto.especie_nombre || 'N/A')}
+                      </span>
                     </div>
                     <div className="flex items-center justify-between text-gray-300">
                       <span>Stock actual:</span>
@@ -417,7 +462,7 @@ const ProductosPage = () => {
                 <tr>
                   <th scope="col" className="px-6 py-3">Producto</th>
                   <th scope="col" className="px-6 py-3">Categoría</th>
-                  <th scope="col" className="px-6 py-3">Marca</th>
+                  <th scope="col" className="px-6 py-3">Marca/Especie</th>
                   <th scope="col" className="px-6 py-3">Costo</th>
                   <th scope="col" className="px-6 py-3">Stock</th>
                   <th scope="col" className="px-6 py-3 text-center">Estado</th>
@@ -443,7 +488,9 @@ const ProductosPage = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-gray-300">{producto.categoria_nombre || '-'}</td>
-                    <td className="px-6 py-4 text-gray-300">{producto.marca_nombre || '-'}</td>
+                    <td className="px-6 py-4 text-gray-300">
+                      {producto.tipoProducto ? (producto.marca_nombre || '-') : (producto.especie_nombre || '-')}
+                    </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center text-green-400">
                         <DollarSign className="w-4 h-4 mr-1" />
@@ -562,28 +609,62 @@ const ProductosPage = () => {
                     )}
                   </div>
 
-                  {/* Marca */}
+                  {/* Tipo */}
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Marca *
+                      Tipo de Producto *
                     </label>
                     <select
-                      value={formData.marca}
-                      onChange={(e) => setFormData({ ...formData, marca: e.target.value })}
+                      value={formData.tipoProducto}
+                      onChange={(e) => handleTipoProductoChange(e.target.value)}
                       className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
                       required
                     >
-                      <option value="">Seleccione marca</option>
-                      {marcas.map(marca => (
-                        <option key={marca.id_marca} value={String(marca.id_marca)}>
-                          {marca.nombre_marca}
-                        </option>
-                      ))}
+                      <option value="true">Insumo</option>
+                      <option value="false">Planta</option>
                     </select>
-                    {marcas.length === 0 && (
-                      <p className="text-xs text-yellow-400 mt-1">
-                        ⚠️ Primero debes crear marcas
-                      </p>
+                  </div>
+
+                  {/* Marca/Especie */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      {isInsumo ? 'Marca *' : 'Especie *'}
+                    </label>
+                    {isInsumo ? (
+                      <select
+                        value={formData.marca}
+                        onChange={(e) => setFormData({ ...formData, marca: e.target.value })}
+                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        required
+                      >
+                        <option value="">Seleccione marca</option>
+                        {marcas.map((marca) => (
+                          <option key={marca.id_marca} value={String(marca.id_marca)}>
+                            {marca.nombre_marca}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <select
+                        value={formData.especie}
+                        onChange={(e) => setFormData({ ...formData, especie: e.target.value })}
+                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        required
+                      >
+                        <option value="">Seleccione especie</option>
+                        {especies.map((especie) => (
+                          <option key={especie.id_especie} value={String(especie.id_especie)}>
+                            {especie.nombre_especie}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
+                    {isInsumo && marcas.length === 0 && (
+                      <p className="text-xs text-yellow-400 mt-1">⚠️ Primero debes crear marcas</p>
+                    )}
+                    {!isInsumo && especies.length === 0 && (
+                      <p className="text-xs text-yellow-400 mt-1">⚠️ Primero debes crear especies</p>
                     )}
                   </div>
 
@@ -599,6 +680,32 @@ const ProductosPage = () => {
                       rows="3"
                       placeholder="Descripción detallada del producto"
                     />
+                  </div>
+
+                  {/* Tareas */}
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Tareas (opcionales)
+                    </label>
+                    <select
+                      multiple
+                      value={formData.tareas}
+                      onChange={(e) => {
+                        const selected = Array.from(e.target.selectedOptions).map((opt) => opt.value);
+                        setFormData({ ...formData, tareas: selected });
+                      }}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      size={Math.min(6, Math.max(3, tareas.length || 3))}
+                    >
+                      {tareas.map((tarea) => (
+                        <option key={tarea.id_tarea} value={String(tarea.id_tarea)}>
+                          {tarea.nombre}
+                        </option>
+                      ))}
+                    </select>
+                    {tareas.length === 0 && (
+                      <p className="text-xs text-yellow-400 mt-1">⚠️ No hay tareas registradas</p>
+                    )}
                   </div>
 
                   {/* Imagen */}
@@ -650,10 +757,10 @@ const ProductosPage = () => {
                 </div>
 
                 {/* Advertencias */}
-                {(categorias.length === 0 || marcas.length === 0) && (
+                {(categorias.length === 0 || (isInsumo ? marcas.length === 0 : especies.length === 0)) && (
                   <div className="mt-4 bg-yellow-600/10 border border-yellow-600/30 rounded-lg p-4">
                     <p className="text-yellow-400 text-sm">
-                      <span className="font-semibold">⚠️ Atención:</span> Para crear un producto necesitas tener al menos una categoría y una marca registradas.
+                      <span className="font-semibold">⚠️ Atención:</span> Para crear un producto necesitas tener al menos una categoría y {isInsumo ? 'una marca' : 'una especie'} registradas.
                     </p>
                   </div>
                 )}
@@ -670,7 +777,7 @@ const ProductosPage = () => {
                   <button
                     type="submit"
                     className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={categorias.length === 0 || marcas.length === 0}
+                    disabled={!canSubmit}
                   >
                     {selectedProducto ? 'Actualizar' : 'Crear'} Producto
                   </button>

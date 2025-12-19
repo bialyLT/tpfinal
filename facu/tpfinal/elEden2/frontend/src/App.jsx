@@ -31,6 +31,8 @@ import PagoExitoso from './pages/reservas/PagoExitoso';
 import ComprasPage from './pages/ComprasPage';
 import CategoriasPage from './pages/CategoriasPage';
 import MarcasPage from './pages/MarcasPage';
+import EspeciesPage from './pages/EspeciesPage';
+import TareasPage from './pages/TareasPage';
 import ProveedoresPage from './pages/ProveedoresPage';
 import AuditLogPage from './pages/AuditLogPage';
 
@@ -205,6 +207,26 @@ function App() {
                   <ProductosPage />
                 </ProtectedRoute>
               } 
+            />
+
+            {/* Especies - Solo Empleados y Administradores */}
+            <Route
+              path="/especies"
+              element={
+                <ProtectedRoute allowedRoles={['empleado', 'diseñador', 'administrador']}>
+                  <EspeciesPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Tareas - Solo Empleados y Administradores */}
+            <Route
+              path="/tareas"
+              element={
+                <ProtectedRoute allowedRoles={['empleado', 'diseñador', 'administrador']}>
+                  <TareasPage />
+                </ProtectedRoute>
+              }
             />
             
             {/* Servicios (vista administrativa) - Solo Empleados y Administradores */}

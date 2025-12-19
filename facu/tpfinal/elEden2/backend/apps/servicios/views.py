@@ -1181,6 +1181,34 @@ class DisenoViewSet(viewsets.ModelViewSet):
             logger.error(f"Errores de validación: {serializer.errors}")
         serializer.is_valid(raise_exception=True)
 
+        # Procesar productos si vienen como JSON string (para cálculo de tiempos + creación)
+        import json
+
+        productos_data = request.data.get("productos")
+        if productos_data and isinstance(productos_data, str):
+            productos_data = json.loads(productos_data)
+
+        # Calcular duración total desde tareas asociadas a productos
+        from apps.servicios.scheduling import compute_work_schedule
+
+        total_minutes = 0
+        if productos_data:
+            producto_ids = [p.get("producto_id") for p in productos_data if p.get("producto_id")]
+            productos_qs = Producto.objects.filter(id_producto__in=producto_ids).prefetch_related("tareas")
+            duracion_por_producto = {
+                prod.id_producto: sum(int(t.duracion_base or 0) for t in prod.tareas.all()) for prod in productos_qs
+            }
+            # Sumar por cada item enviado (si se repite un producto, cuenta varias veces)
+            for item in productos_data:
+                pid = item.get("producto_id")
+                if pid is None:
+                    continue
+                total_minutes += int(duracion_por_producto.get(int(pid), 0))
+
+        schedule = compute_work_schedule(serializer.validated_data.get("fecha_propuesta"), total_minutes)
+        start_local = schedule.start_local
+        end_local = schedule.end_local
+
         # Crear el diseño
         diseno = Diseno.objects.create(
             titulo=serializer.validated_data["titulo"],
@@ -1190,7 +1218,12 @@ class DisenoViewSet(viewsets.ModelViewSet):
             servicio_id=serializer.validated_data["servicio_id"],
             disenador_id=serializer.validated_data.get("disenador_id"),
             notas_internas=serializer.validated_data.get("notas_internas", ""),
-            fecha_propuesta=serializer.validated_data.get("fecha_propuesta"),
+            # Mantener fecha_propuesta como inicio normalizado (compatibilidad)
+            fecha_propuesta=start_local,
+            fecha_inicio=start_local.date(),
+            hora_inicio=start_local.time().replace(tzinfo=None),
+            fecha_fin=end_local.date(),
+            hora_fin=end_local.time().replace(tzinfo=None),
             estado="borrador",
         )
 
@@ -1210,15 +1243,9 @@ class DisenoViewSet(viewsets.ModelViewSet):
             diseno.reserva.estado = "confirmada"
             diseno.reserva.save()
 
-        # Procesar productos si vienen como JSON string
-        import json
-
         from apps.productos.models import Stock
 
-        productos_data = request.data.get("productos")
         if productos_data:
-            if isinstance(productos_data, str):
-                productos_data = json.loads(productos_data)
 
             # Primero validar stock disponible (solo bloquear si no hay stock en absoluto)
             for prod in productos_data:
@@ -1276,6 +1303,11 @@ class DisenoViewSet(viewsets.ModelViewSet):
         """
         import json
 
+        from django.utils.dateparse import parse_datetime
+        from django.utils import timezone
+
+        from apps.servicios.scheduling import compute_work_schedule
+
         diseno = self.get_object()
         user = request.user
 
@@ -1309,25 +1341,36 @@ class DisenoViewSet(viewsets.ModelViewSet):
         if "presupuesto" in request.data:
             diseno.presupuesto = float(request.data["presupuesto"])
         if "fecha_propuesta" in request.data:
-            diseno.fecha_propuesta = request.data["fecha_propuesta"]
+            raw_fecha = request.data["fecha_propuesta"]
+            if isinstance(raw_fecha, str):
+                parsed = parse_datetime(raw_fecha)
+                if parsed is None:
+                    return Response(
+                        {"error": "fecha_propuesta inválida"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if timezone.is_naive(parsed):
+                    parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
+                diseno.fecha_propuesta = parsed
+            else:
+                diseno.fecha_propuesta = raw_fecha
         if "notas_internas" in request.data:
             diseno.notas_internas = request.data["notas_internas"]
 
-        diseno.save()
-
         # Actualizar productos (eliminar los antiguos y crear nuevos)
+        productos_payload = None
         if "productos" in request.data:
             # Eliminar productos anteriores
             diseno.productos.all().delete()
 
             # Crear nuevos productos
-            productos_data = (
+            productos_payload = (
                 json.loads(request.data["productos"])
                 if isinstance(request.data["productos"], str)
                 else request.data["productos"]
             )
 
-            for prod in productos_data:
+            for prod in productos_payload:
                 producto = Producto.objects.get(id_producto=prod["producto_id"])
                 DisenoProducto.objects.create(
                     diseno=diseno,
@@ -1349,6 +1392,43 @@ class DisenoViewSet(viewsets.ModelViewSet):
                     descripcion=f"Imagen {ultimo_orden + idx + 1}",
                 )
 
+        # Recalcular programación si cambió fecha_propuesta o productos
+        if "fecha_propuesta" in request.data or productos_payload is not None:
+            total_minutes = 0
+
+            if productos_payload is None:
+                producto_ids = list(diseno.productos.values_list("producto_id", flat=True))
+                if producto_ids:
+                    productos_qs = Producto.objects.filter(id_producto__in=producto_ids).prefetch_related("tareas")
+                    for prod in productos_qs:
+                        total_minutes += sum(int(t.duracion_base or 0) for t in prod.tareas.all())
+            else:
+                producto_ids = [p.get("producto_id") for p in productos_payload if p.get("producto_id")]
+                if producto_ids:
+                    productos_qs = Producto.objects.filter(id_producto__in=producto_ids).prefetch_related("tareas")
+                    duracion_por_producto = {
+                        prod.id_producto: sum(int(t.duracion_base or 0) for t in prod.tareas.all()) for prod in productos_qs
+                    }
+                    # Sumar por cada item enviado (si se repite un producto, cuenta varias veces)
+                    for item in productos_payload:
+                        pid = item.get("producto_id")
+                        if pid is None:
+                            continue
+                        total_minutes += int(duracion_por_producto.get(int(pid), 0))
+
+            schedule = compute_work_schedule(diseno.fecha_propuesta, total_minutes)
+            start_local = schedule.start_local
+            end_local = schedule.end_local
+
+            # Mantener fecha_propuesta como inicio normalizado (compatibilidad)
+            diseno.fecha_propuesta = start_local
+            diseno.fecha_inicio = start_local.date()
+            diseno.hora_inicio = start_local.time().replace(tzinfo=None)
+            diseno.fecha_fin = end_local.date()
+            diseno.hora_fin = end_local.time().replace(tzinfo=None)
+
+        diseno.save()
+
         # Retornar el diseño actualizado con todos sus detalles
         output_serializer = DisenoDetalleSerializer(diseno, context={"request": request})
         return Response(output_serializer.data)
@@ -1366,7 +1446,6 @@ class DisenoViewSet(viewsets.ModelViewSet):
             if diseno.reserva and diseno.reserva.cliente:
                 cliente = diseno.reserva.cliente
 
-                # Preparar lista de productos
                 productos_lista = []
                 for dp in diseno.productos.all():
                     productos_lista.append(
@@ -1377,12 +1456,10 @@ class DisenoViewSet(viewsets.ModelViewSet):
                         }
                     )
 
-                # Contar imágenes
                 imagenes_count = diseno.imagenes.count()
 
-                # Nombre del diseñador
                 disenador_nombre = None
-                if diseno.disenador:
+                if diseno.disenador and diseno.disenador.persona:
                     disenador_nombre = f"{diseno.disenador.persona.nombre} {diseno.disenador.persona.apellido}"
 
                 EmailService.send_design_proposal_notification(
