@@ -356,6 +356,31 @@ export const serviciosService = {
   }
 };
 
+// Ventas Services
+export const ventasService = {
+  getVentas: async (params = {}) => {
+    const response = await api.get('/ventas/ventas/', { params });
+    return response.data;
+  },
+
+  getVentaById: async (id) => {
+    const response = await api.get(`/ventas/ventas/${id}/`);
+    return response.data;
+  },
+};
+
+export const detallesVentaService = {
+  getDetalles: async (params = {}) => {
+    const response = await api.get('/ventas/detalles-venta/', { params });
+    return response.data;
+  },
+
+  getDetalleById: async (id) => {
+    const response = await api.get(`/ventas/detalles-venta/${id}/`);
+    return response.data;
+  },
+};
+
 // Encuestas Services
 export const encuestasService = {
   getEncuestas: async (params = {}) => {

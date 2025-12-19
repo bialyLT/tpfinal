@@ -35,6 +35,7 @@ import EspeciesPage from './pages/EspeciesPage';
 import TareasPage from './pages/TareasPage';
 import ProveedoresPage from './pages/ProveedoresPage';
 import AuditLogPage from './pages/AuditLogPage';
+import EstadisticasPage from './pages/EstadisticasPage';
 
 // Basic Protected Route Component (solo requiere autenticación)
 const BasicProtectedRoute = ({ children }) => {
@@ -177,6 +178,16 @@ function App() {
                   <DashboardPage />
                 </ProtectedRoute>
               } 
+            />
+
+            {/* Estadísticas - Solo Administradores */}
+            <Route
+              path="/estadisticas"
+              element={
+                <ProtectedRoute allowedRoles={['administrador']}>
+                  <EstadisticasPage />
+                </ProtectedRoute>
+              }
             />
 
             {/* Empleados - Solo Administradores */}

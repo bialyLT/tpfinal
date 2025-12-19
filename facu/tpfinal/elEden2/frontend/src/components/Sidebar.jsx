@@ -83,6 +83,7 @@ const Sidebar = () => {
     if (isAdmin) {
       return [
         { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+        { name: 'Estadísticas', href: '/estadisticas', icon: FileText },
         { 
           name: 'Inventario', 
           icon: Package,
