@@ -16,18 +16,17 @@ import { auditService } from '../services';
 
 const INITIAL_FILTERS = {
   search: '',
-  method: '',
+  operation: '',
   role: '',
   startDate: '',
   endDate: '',
 };
 
-const METHOD_OPTIONS = [
+const OPERATION_OPTIONS = [
   { label: 'Todos', value: '' },
-  { label: 'POST', value: 'POST' },
-  { label: 'PUT', value: 'PUT' },
-  { label: 'PATCH', value: 'PATCH' },
-  { label: 'DELETE', value: 'DELETE' },
+  { label: 'Creación', value: 'create' },
+  { label: 'Modificación', value: 'update' },
+  { label: 'Eliminación', value: 'delete' },
 ];
 
 const ROLE_OPTIONS = [
@@ -35,6 +34,100 @@ const ROLE_OPTIONS = [
   { label: 'Administradores', value: 'administrador' },
   { label: 'Empleados', value: 'empleado' },
 ];
+
+const getOperationFromMethod = (method) => {
+  const normalized = String(method || '').toUpperCase();
+  if (normalized === 'POST') return 'create';
+  if (normalized === 'PUT' || normalized === 'PATCH') return 'update';
+  if (normalized === 'DELETE') return 'delete';
+  return '';
+};
+
+const getOperationLabel = (method) => {
+  const op = getOperationFromMethod(method);
+  if (op === 'create') return 'Creación';
+  if (op === 'update') return 'Modificación';
+  if (op === 'delete') return 'Eliminación';
+  return String(method || '').toUpperCase() || '--';
+};
+
+const getOperationBadgeClass = (method) => {
+  const op = getOperationFromMethod(method);
+  if (op === 'delete') return 'bg-red-500/20 text-red-300';
+  if (op === 'create') return 'bg-emerald-500/20 text-emerald-300';
+  if (op === 'update') return 'bg-sky-500/20 text-sky-300';
+  return 'bg-gray-500/20 text-gray-300';
+};
+
+const extractErrorMessage = (body) => {
+  if (!body) return 'Error desconocido.';
+  if (typeof body === 'string') return body;
+
+  if (Array.isArray(body)) {
+    const first = body.find(Boolean);
+    return first ? String(first) : 'Error desconocido.';
+  }
+
+  if (typeof body === 'object') {
+    const direct = body.detail || body.error || body.message || body.non_field_errors;
+    if (direct) {
+      if (Array.isArray(direct)) return direct.filter(Boolean).map(String).join(' | ');
+      return String(direct);
+    }
+
+    const entries = Object.entries(body);
+    if (entries.length === 0) return 'Error desconocido.';
+
+    // DRF validation errors: { field: ["msg"] }
+    return entries
+      .slice(0, 4)
+      .map(([key, value]) => {
+        if (Array.isArray(value)) return `${key}: ${value.filter(Boolean).map(String).join(' | ')}`;
+        if (typeof value === 'string') return `${key}: ${value}`;
+        return `${key}: ${JSON.stringify(value)}`;
+      })
+      .join(' • ');
+  }
+
+  return String(body);
+};
+
+const extractCreatedSummary = (entity, responseBody) => {
+  if (!responseBody || typeof responseBody !== 'object') {
+    return entity ? `${entity} creado.` : 'Creado.';
+  }
+
+  const candidates = ['nombre', 'name', 'titulo', 'title', 'descripcion', 'description', 'email', 'username'];
+  const labelKey = candidates.find((key) => responseBody[key]);
+  const label = labelKey ? String(responseBody[labelKey]) : '';
+  const id = responseBody.id ?? responseBody.pk;
+
+  const entityLabel = entity ? entity.charAt(0).toUpperCase() + entity.slice(1) : 'Entidad';
+  if (label && id != null) return `${entityLabel} creado: ${label} (ID ${id})`;
+  if (label) return `${entityLabel} creado: ${label}`;
+  if (id != null) return `${entityLabel} creado (ID ${id})`;
+  return `${entityLabel} creado.`;
+};
+
+const extractResultSummary = (log) => {
+  const code = Number(log?.response_code);
+  const method = String(log?.method || '').toUpperCase();
+
+  if (!Number.isFinite(code)) return 'Sin resultado.';
+  if (code >= 400) return extractErrorMessage(log?.response_body);
+
+  if (method === 'POST') return extractCreatedSummary(log?.entity, log?.response_body);
+  if (method === 'DELETE') {
+    const entityLabel = log?.entity ? log.entity.charAt(0).toUpperCase() + log.entity.slice(1) : 'Entidad';
+    return log?.object_id ? `${entityLabel} eliminado (ID ${log.object_id}).` : `${entityLabel} eliminado.`;
+  }
+  if (method === 'PUT' || method === 'PATCH') {
+    const entityLabel = log?.entity ? log.entity.charAt(0).toUpperCase() + log.entity.slice(1) : 'Entidad';
+    return log?.object_id ? `${entityLabel} modificado (ID ${log.object_id}).` : `${entityLabel} modificado.`;
+  }
+
+  return 'Operación exitosa.';
+};
 
 const AuditLogPage = () => {
   const [logs, setLogs] = useState([]);
@@ -55,7 +148,7 @@ const AuditLogPage = () => {
     try {
       const params = { page };
       if (appliedFilters.search) params.search = appliedFilters.search;
-      if (appliedFilters.method) params.method = appliedFilters.method;
+      if (appliedFilters.operation) params.operation = appliedFilters.operation;
       if (appliedFilters.role) params.role = appliedFilters.role;
       if (appliedFilters.startDate) params.start_date = appliedFilters.startDate;
       if (appliedFilters.endDate) params.end_date = appliedFilters.endDate;
@@ -167,15 +260,15 @@ const AuditLogPage = () => {
             <div className="space-y-1">
               <label className="text-sm text-gray-400 flex items-center gap-2">
                 <Filter className="w-4 h-4" />
-                Método
+                Acción
               </label>
               <select
-                name="method"
-                value={filters.method}
+                name="operation"
+                value={filters.operation}
                 onChange={handleFilterChange}
                 className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2"
               >
-                {METHOD_OPTIONS.map((option) => (
+                {OPERATION_OPTIONS.map((option) => (
                   <option key={option.value || 'all'} value={option.value}>
                     {option.label}
                   </option>
@@ -298,21 +391,13 @@ const AuditLogPage = () => {
                       <p className="text-lg font-semibold text-white">{log.user_display}</p>
                       <p className="text-sm text-gray-400 capitalize">Rol: {log.role}</p>
                       <p className="text-sm text-gray-300 mt-1">{log.action}</p>
-                      <p className="text-xs text-gray-500">Endpoint: {log.endpoint}</p>
                     </div>
                     <div className="flex flex-col items-start gap-2">
                       <span
-                        className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                          log.method === 'DELETE'
-                            ? 'bg-red-500/20 text-red-300'
-                            : log.method === 'POST'
-                              ? 'bg-emerald-500/20 text-emerald-300'
-                              : 'bg-sky-500/20 text-sky-300'
-                        }`}
+                        className={`px-3 py-1 rounded-full text-xs font-semibold ${getOperationBadgeClass(log.method)}`}
                       >
-                        {log.method}
+                        {getOperationLabel(log.method)}
                       </span>
-                      <span className="text-sm text-gray-300">Código: {log.response_code || '--'}</span>
                       <button
                         type="button"
                         onClick={() => toggleExpanded(log.id)}
@@ -336,20 +421,12 @@ const AuditLogPage = () => {
                         {log.object_id && <p>ID Impactado: {log.object_id}</p>}
                       </div>
                       <div>
+                        <p className="text-xs text-gray-400 uppercase tracking-wide">Resultado</p>
+                        <p className={`mt-1 ${Number(log.response_code) >= 400 ? 'text-red-300' : 'text-emerald-200'}`}>{extractResultSummary(log)}</p>
+                      </div>
+                      <div>
                         <p className="text-xs text-gray-400 uppercase tracking-wide">Datos enviados</p>
                         <pre className="mt-1 bg-black/30 p-3 rounded-md text-xs overflow-auto max-h-60">{stringifyData(log.payload)}</pre>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-400 uppercase tracking-wide">Respuesta</p>
-                        <pre className="mt-1 bg-black/30 p-3 rounded-md text-xs overflow-auto max-h-60">{stringifyData(log.response_body)}</pre>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-400 uppercase tracking-wide">Metadatos</p>
-                        <pre className="mt-1 bg-black/30 p-3 rounded-md text-xs overflow-auto max-h-60">{stringifyData({
-                          ip: log.ip_address,
-                          user_agent: log.user_agent,
-                          metadata: log.metadata,
-                        })}</pre>
                       </div>
                     </div>
                   )}

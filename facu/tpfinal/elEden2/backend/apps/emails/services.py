@@ -3,6 +3,7 @@ Servicios para envío de emails
 """
 
 import logging
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -1159,6 +1160,109 @@ El equipo de El Edén
         except Exception as e:
             logger.error("❌ [EmailService] Error al enviar solicitud de encuesta")
             logger.error(f"   📧 Destinatario: {cliente_email}")
+            logger.error(f"   ❌ Error: {str(e)}")
+            logger.error(f"   🔍 Tipo: {type(e).__name__}")
+            return False
+
+    @staticmethod
+    def send_survey_score_notification_to_employees(reserva, puntuacion_promedio, cantidad_items=None):
+        """Notifica a los empleados asignados a una reserva que un cliente completó una encuesta.
+
+        Importante: NO incluye el nombre/identidad del cliente.
+
+        Args:
+            reserva (apps.servicios.models.Reserva): Reserva asociada a la encuesta.
+            puntuacion_promedio (Decimal|float|int|str): Puntaje promedio (escala 1-10).
+            cantidad_items (int|None): Cantidad de preguntas consideradas para el puntaje.
+
+        Returns:
+            bool: True si se envió al menos un email.
+        """
+        try:
+            if reserva is None:
+                return False
+
+            empleados = getattr(reserva, "empleados", None)
+            if empleados is None:
+                return False
+
+            empleados_qs = empleados.filter(activo=True).select_related("persona")
+            destinatarios = []
+            for empleado in empleados_qs:
+                email = getattr(getattr(empleado, "persona", None), "email", None)
+                if email:
+                    destinatarios.append(email)
+
+            # Evitar enviar si no hay destinatarios válidos
+            destinatarios = sorted(set(destinatarios))
+            if not destinatarios:
+                return False
+
+            if not isinstance(puntuacion_promedio, Decimal):
+                try:
+                    puntuacion_promedio = Decimal(str(puntuacion_promedio))
+                except Exception:
+                    puntuacion_promedio = Decimal("0")
+
+            puntuacion_promedio_fmt = puntuacion_promedio.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            servicio_nombre = getattr(getattr(reserva, "servicio", None), "nombre", "(sin servicio)")
+            fecha_reserva = getattr(reserva, "fecha_reserva", None)
+            fecha_reserva_str = fecha_reserva.strftime("%d/%m/%Y %H:%M") if fecha_reserva else "(sin fecha)"
+
+            subject = f"Nueva calificación recibida - Reserva #{reserva.id_reserva}"
+
+            items_line = ""
+            if cantidad_items is not None:
+                items_line = f"\nÍtems considerados: {cantidad_items}"
+
+            message = f"""
+Se registró una nueva encuesta de satisfacción para una reserva en la que estás asignado/a.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DETALLE DE RESERVA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Reserva N°: #{reserva.id_reserva}
+Servicio: {servicio_nombre}
+Fecha programada: {fecha_reserva_str}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PUNTAJE RECIBIDO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Puntuación promedio: {puntuacion_promedio_fmt} / 10{items_line}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔎 Puedes ver mas informacion en tu perfil
+
+Saludos cordiales,
+El equipo de El Edén
+            """.strip()
+
+            sent_any = False
+            # Enviar individualmente para no exponer correos entre empleados
+            for email in destinatarios:
+                try:
+                    send_mail(
+                        subject=subject,
+                        message=message,
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[email],
+                        fail_silently=False,
+                    )
+                    sent_any = True
+                except Exception as exc:
+                    logger.error("❌ [EmailService] Error al notificar puntaje de encuesta a empleado")
+                    logger.error(f"   📧 Destinatario: {email}")
+                    logger.error(f"   🧾 Reserva: {getattr(reserva, 'id_reserva', None)}")
+                    logger.error(f"   ❌ Error: {exc}")
+
+            return sent_any
+
+        except Exception as e:
+            logger.error("❌ [EmailService] Error inesperado al notificar puntaje de encuesta")
+            logger.error(f"   🧾 Reserva: {getattr(reserva, 'id_reserva', None)}")
             logger.error(f"   ❌ Error: {str(e)}")
             logger.error(f"   🔍 Tipo: {type(e).__name__}")
             return False

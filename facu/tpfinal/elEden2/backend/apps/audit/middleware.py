@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Optional, Tuple
 
 from django.utils.deprecation import MiddlewareMixin
@@ -12,10 +13,15 @@ class AuditLogMiddleware(MiddlewareMixin):
     TRACKED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
     API_PREFIX = "/api/"
     EXCLUDED_PATHS = (
+        # Audit endpoints
         "/api/v1/audit/logs/",
+        # Auth/token endpoints
         "/api/v1/token/",
         "/api/v1/token/refresh/",
         "/api/v1/token/blacklist/",
+        # Google OAuth endpoints (should not appear in audit)
+        "/api/v1/auth/google/",
+        "/api/v1/auth/google/callback/",
     )
 
     def process_response(self, request, response):
@@ -50,7 +56,7 @@ class AuditLogMiddleware(MiddlewareMixin):
             user=user,
             role=role,
             method=request.method,
-            action=self._build_action(request.method, entity),
+            action=self._build_action(request.method, entity, path, user, payload, response_body),
             entity=entity,
             object_id=object_id,
             endpoint=path,
@@ -63,6 +69,23 @@ class AuditLogMiddleware(MiddlewareMixin):
         )
 
     def _extract_request_payload(self, request) -> Optional[Any]:
+        content_type = request.META.get("CONTENT_TYPE", "")
+
+        # Prefer parsed form fields for form/multipart requests (common in uploads)
+        if "multipart/form-data" in content_type or "application/x-www-form-urlencoded" in content_type:
+            try:
+                post_data = {key: values[-1] if values else "" for key, values in request.POST.lists()}
+                files = list(request.FILES.keys()) if getattr(request, "FILES", None) else []
+                data = {**post_data}
+                if files:
+                    data["_files"] = files
+                if not data:
+                    return None
+                return sanitize_payload(data)
+            except Exception:
+                # Fall back to raw body handling below
+                pass
+
         try:
             body = request.body
         except Exception:
@@ -71,7 +94,6 @@ class AuditLogMiddleware(MiddlewareMixin):
         if not body:
             return None
 
-        content_type = request.META.get("CONTENT_TYPE", "")
         if "application/json" in content_type:
             try:
                 data = json.loads(body.decode("utf-8"))
@@ -120,7 +142,11 @@ class AuditLogMiddleware(MiddlewareMixin):
 
         return entity, object_id
 
-    def _build_action(self, method: str, entity: str) -> str:
+    def _build_action(self, method: str, entity: str, path: str, user, payload: Any, response_body: Any) -> str:
+        custom = self._build_custom_action(method, path, user, payload, response_body)
+        if custom:
+            return custom
+
         action_map = {
             "POST": "Creación",
             "PUT": "Actualización total",
@@ -129,6 +155,94 @@ class AuditLogMiddleware(MiddlewareMixin):
         }
         verb = action_map.get(method.upper(), method)
         return f"{verb} de {entity}"
+
+    def _build_custom_action(self, method: str, path: str, user, payload: Any, response_body: Any) -> str | None:
+        """Provide more meaningful messages for certain non-CRUD endpoints."""
+        normalized_method = method.upper()
+        normalized_path = path if path.endswith("/") else f"{path}/"
+
+        user_display = self._get_user_display(user)
+
+        # Weather: cancel rescheduling (dismiss alert)
+        # Example: /api/v1/weather/alerts/18/dismiss/
+        if normalized_method == "POST" and normalized_path.startswith("/api/v1/weather/alerts/") and normalized_path.endswith("/dismiss/"):
+            return f"El usuario {user_display} canceló la reprogramación"
+
+        # Weather: simulate rain
+        # Example: /api/v1/weather/simulate/
+        if normalized_method == "POST" and normalized_path == "/api/v1/weather/simulate/":
+            return f"El usuario {user_display} creó una simulación de lluvia"
+
+        # Servicios/Disenos: crear diseño completo
+        # Example: /api/v1/servicios/disenos/crear-completo/
+        if normalized_method == "POST" and normalized_path == "/api/v1/servicios/disenos/crear-completo/":
+            reserva_id = self._extract_reserva_id(payload) or self._extract_reserva_id(response_body)
+            if reserva_id:
+                return f"El usuario {user_display} creó un diseño para la reserva {reserva_id}"
+            return f"El usuario {user_display} creó un diseño"
+
+        # Servicios/Disenos: presentar diseño
+        # Example: /api/v1/servicios/disenos/<id>/presentar/
+        if normalized_method == "POST" and normalized_path.startswith("/api/v1/servicios/disenos/") and normalized_path.endswith("/presentar/"):
+            reserva_id = self._extract_reserva_id(response_body) or self._extract_reserva_id(payload)
+            if reserva_id:
+                return f"El usuario {user_display} presentó el diseño para la reserva {reserva_id}"
+            return f"El usuario {user_display} presentó el diseño"
+
+        # Servicios/Reservas: finalizar servicio
+        # Example: /api/v1/servicios/reservas/<id>/finalizar-servicio/
+        if normalized_method == "POST" and normalized_path.startswith("/api/v1/servicios/reservas/") and normalized_path.endswith("/finalizar-servicio/"):
+            return f"El usuario {user_display} finalizó el servicio"
+
+        return None
+
+    def _get_user_display(self, user) -> str:
+        if not user:
+            return "Sistema"
+        try:
+            full_name = user.get_full_name().strip()
+        except Exception:
+            full_name = ""
+        return full_name or getattr(user, "username", None) or getattr(user, "email", "Usuario")
+
+    def _extract_reserva_id(self, data: Any) -> str | None:
+        """Try to find a reserva identifier inside a payload/response snapshot."""
+        if not data:
+            return None
+
+        # direct scalar
+        if isinstance(data, (str, int)):
+            return str(data)
+
+        # dict-like
+        if isinstance(data, dict):
+            for key in ("reserva_id", "id_reserva", "reserva"):
+                value = data.get(key)
+                if value is None:
+                    continue
+                if isinstance(value, (str, int)) and str(value).strip():
+                    return str(value).strip()
+                if isinstance(value, dict):
+                    nested = value.get("id_reserva") or value.get("id") or value.get("pk")
+                    if nested is not None and str(nested).strip():
+                        return str(nested).strip()
+
+            # deep search (bounded)
+            for _, value in list(data.items())[:25]:
+                found = self._extract_reserva_id(value)
+                if found:
+                    return found
+            return None
+
+        # list-like
+        if isinstance(data, list):
+            for item in data[:25]:
+                found = self._extract_reserva_id(item)
+                if found:
+                    return found
+            return None
+
+        return None
 
     def _get_ip(self, request) -> Optional[str]:
         forwarded = request.META.get("HTTP_X_FORWARDED_FOR")

@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.users.models import Cliente, Empleado
+from apps.emails.services import EmailService
 
 from .models import Encuesta, EncuestaRespuesta, Pregunta, Respuesta
 from .serializers import (
@@ -281,6 +282,19 @@ class EncuestaViewSet(viewsets.ModelViewSet):
                         cantidad_puntuacion = len(valores_puntuacion)
                         timestamp = encuesta_respuesta.fecha_completada
                         empleados_asignados = list(reserva.empleados.all())
+
+                        promedio_encuesta = (total_puntuacion / Decimal(cantidad_puntuacion)).quantize(
+                            Decimal("0.01")
+                        )
+
+                        # Notificar a empleados asignados (sin datos del cliente).
+                        transaction.on_commit(
+                            lambda: EmailService.send_survey_score_notification_to_employees(
+                                reserva=reserva,
+                                puntuacion_promedio=promedio_encuesta,
+                                cantidad_items=cantidad_puntuacion,
+                            )
+                        )
 
                         for empleado in empleados_asignados:
                             empleado.registrar_resultado_encuesta(

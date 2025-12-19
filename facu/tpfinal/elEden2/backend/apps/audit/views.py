@@ -20,6 +20,21 @@ class AuditLogListAPIView(generics.ListAPIView):
         queryset = super().get_queryset()
         params = self.request.query_params
 
+        # Nunca mostrar endpoints de autenticación Google en auditoría
+        queryset = queryset.exclude(endpoint__startswith="/api/v1/auth/google/")
+
+        operation = params.get("operation")
+        if operation:
+            normalized = operation.strip().lower()
+            operation_map = {
+                "create": ["POST"],
+                "update": ["PUT", "PATCH"],
+                "delete": ["DELETE"],
+            }
+            methods = operation_map.get(normalized)
+            if methods:
+                queryset = queryset.filter(method__in=methods)
+
         metodo = params.get("method")
         if metodo:
             queryset = queryset.filter(method__iexact=metodo.upper())
