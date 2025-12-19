@@ -621,6 +621,7 @@ export const tareasService = {
   },
 };
 
+
 // Compras Services
 export const comprasService = {
   getAll: async (params = {}) => {

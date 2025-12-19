@@ -566,6 +566,15 @@ class Diseno(models.Model):
         blank=True,
     )
 
+    # Tareas propias del diseño (independientes de las tareas asociadas a productos)
+    # Reusa el mismo catálogo de tareas del ABM de productos.
+    tareas_diseno = models.ManyToManyField(
+        "productos.Tarea",
+        through="servicios.DisenoTarea",
+        related_name="disenos",
+        blank=True,
+    )
+
     # Fechas
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_presentacion = models.DateTimeField(null=True, blank=True)
@@ -683,6 +692,24 @@ class DisenoProducto(models.Model):
     def subtotal(self):
         """Calcular subtotal del producto"""
         return self.cantidad * self.precio_unitario
+
+
+class DisenoTarea(models.Model):
+    """Tabla intermedia Diseño <-> Tarea (M2M explícita)."""
+
+    id_diseno_tarea = models.AutoField(primary_key=True)
+    diseno = models.ForeignKey(Diseno, on_delete=models.CASCADE, related_name="diseno_tareas")
+    tarea = models.ForeignKey("productos.Tarea", on_delete=models.CASCADE, related_name="tarea_disenos")
+
+    class Meta:
+        verbose_name = "Diseño-Tarea"
+        verbose_name_plural = "Diseños-Tareas"
+        db_table = "diseno_tarea"
+        unique_together = ("diseno", "tarea")
+        indexes = [models.Index(fields=["diseno"]), models.Index(fields=["tarea"]) ]
+
+    def __str__(self):
+        return f"{self.diseno_id} - {self.tarea_id}"
 
 
 class ImagenDiseno(models.Model):

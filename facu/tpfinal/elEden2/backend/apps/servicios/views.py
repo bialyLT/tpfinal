@@ -16,7 +16,7 @@ from rest_framework.permissions import (
 )
 from rest_framework.response import Response
 
-from apps.productos.models import Producto
+from apps.productos.models import Producto, Tarea
 from apps.users.models import Cliente, Empleado, Localidad
 from apps.users.services.address_service import (
     get_operational_area_message,
@@ -1118,7 +1118,7 @@ class DisenoViewSet(viewsets.ModelViewSet):
                     "reserva",
                     "reserva__cliente__persona",
                 )
-                .prefetch_related("productos", "imagenes")
+                .prefetch_related("productos", "imagenes", "tareas_diseno")
                 .filter(reserva__cliente=cliente)
             )
         except Cliente.DoesNotExist:
@@ -1175,18 +1175,39 @@ class DisenoViewSet(viewsets.ModelViewSet):
         except Empleado.DoesNotExist:
             pass  # No es empleado, puede ser admin
 
-        # Validar datos básicos
+        import json
+
+        # Procesar productos si vienen como JSON string (para validación + cálculo + creación)
+        productos_data = request.data.get("productos")
+        if productos_data and isinstance(productos_data, str):
+            productos_data = json.loads(productos_data)
+
+        # Procesar tareas_diseno si vienen como JSON string
+        tareas_diseno_data = request.data.get("tareas_diseno")
+        if tareas_diseno_data is None:
+            try:
+                tareas_diseno_data = request.data.getlist("tareas_diseno")
+            except Exception:
+                tareas_diseno_data = None
+        if tareas_diseno_data and isinstance(tareas_diseno_data, str):
+            tareas_diseno_data = json.loads(tareas_diseno_data)
+        if isinstance(tareas_diseno_data, list) and len(tareas_diseno_data) == 1 and isinstance(tareas_diseno_data[0], str):
+            # case: ['[1,2]']
+            s = tareas_diseno_data[0].strip()
+            if s.startswith("["):
+                tareas_diseno_data = json.loads(s)
+
+        data["productos"] = productos_data or []
+        data["tareas_diseno"] = tareas_diseno_data or []
+
+        # Validar datos (incluye tareas_diseno y estructura de productos)
         serializer = CrearDisenoSerializer(data=data)
         if not serializer.is_valid():
             logger.error(f"Errores de validación: {serializer.errors}")
         serializer.is_valid(raise_exception=True)
 
-        # Procesar productos si vienen como JSON string (para cálculo de tiempos + creación)
-        import json
-
-        productos_data = request.data.get("productos")
-        if productos_data and isinstance(productos_data, str):
-            productos_data = json.loads(productos_data)
+        productos_data = serializer.validated_data.get("productos") or []
+        tareas_diseno_ids = serializer.validated_data.get("tareas_diseno") or []
 
         # Calcular duración total desde tareas asociadas a productos
         from apps.servicios.scheduling import compute_work_schedule
@@ -1203,7 +1224,14 @@ class DisenoViewSet(viewsets.ModelViewSet):
                 pid = item.get("producto_id")
                 if pid is None:
                     continue
-                total_minutes += int(duracion_por_producto.get(int(pid), 0))
+                qty = int(item.get("cantidad") or 0)
+                if qty < 0:
+                    qty = 0
+                total_minutes += int(duracion_por_producto.get(int(pid), 0)) * qty
+
+        if tareas_diseno_ids:
+            tareas_qs = Tarea.objects.filter(id_tarea__in=tareas_diseno_ids)
+            total_minutes += sum(int(t.duracion_base or 0) for t in tareas_qs)
 
         schedule = compute_work_schedule(serializer.validated_data.get("fecha_propuesta"), total_minutes)
         start_local = schedule.start_local
@@ -1226,6 +1254,9 @@ class DisenoViewSet(viewsets.ModelViewSet):
             hora_fin=end_local.time().replace(tzinfo=None),
             estado="borrador",
         )
+
+        if tareas_diseno_ids:
+            diseno.tareas_diseno.set(tareas_diseno_ids)
 
         # Si hay reserva asociada, cambiar su estado a 'confirmada'
         if diseno.reserva:
@@ -1380,6 +1411,40 @@ class DisenoViewSet(viewsets.ModelViewSet):
                     notas=prod.get("notas", ""),
                 )
 
+        # Actualizar tareas del diseño (M2M)
+        tareas_diseno_payload = None
+        if "tareas_diseno" in request.data:
+            raw = request.data.get("tareas_diseno")
+            if raw is None:
+                try:
+                    raw = request.data.getlist("tareas_diseno")
+                except Exception:
+                    raw = None
+            if isinstance(raw, str):
+                tareas_diseno_payload = json.loads(raw) if raw.strip().startswith("[") else [int(raw)]
+            elif isinstance(raw, list):
+                if len(raw) == 1 and isinstance(raw[0], str) and raw[0].strip().startswith("["):
+                    tareas_diseno_payload = json.loads(raw[0])
+                else:
+                    tareas_diseno_payload = [int(v) for v in raw if str(v).strip() != ""]
+            elif raw is None:
+                tareas_diseno_payload = []
+
+            tareas_diseno_payload = [int(v) for v in (tareas_diseno_payload or [])]
+            existentes = set(
+                Tarea.objects.filter(id_tarea__in=tareas_diseno_payload).values_list(
+                    "id_tarea", flat=True
+                )
+            )
+            faltantes = [i for i in tareas_diseno_payload if i not in existentes]
+            if faltantes:
+                return Response(
+                    {"error": f"Tareas inexistentes: {faltantes}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            diseno.tareas_diseno.set(tareas_diseno_payload)
+
         # Agregar nuevas imágenes (no eliminar las existentes)
         imagenes = request.FILES.getlist("imagenes_diseño")
         if imagenes:
@@ -1392,16 +1457,26 @@ class DisenoViewSet(viewsets.ModelViewSet):
                     descripcion=f"Imagen {ultimo_orden + idx + 1}",
                 )
 
-        # Recalcular programación si cambió fecha_propuesta o productos
-        if "fecha_propuesta" in request.data or productos_payload is not None:
+        # Recalcular programación si cambió fecha_propuesta, productos o tareas_diseno
+        if "fecha_propuesta" in request.data or productos_payload is not None or tareas_diseno_payload is not None:
             total_minutes = 0
 
             if productos_payload is None:
-                producto_ids = list(diseno.productos.values_list("producto_id", flat=True))
+                lineas = list(diseno.productos.values("producto_id", "cantidad"))
+                producto_ids = [l["producto_id"] for l in lineas if l.get("producto_id")]
                 if producto_ids:
                     productos_qs = Producto.objects.filter(id_producto__in=producto_ids).prefetch_related("tareas")
-                    for prod in productos_qs:
-                        total_minutes += sum(int(t.duracion_base or 0) for t in prod.tareas.all())
+                    duracion_por_producto = {
+                        prod.id_producto: sum(int(t.duracion_base or 0) for t in prod.tareas.all()) for prod in productos_qs
+                    }
+                    for l in lineas:
+                        pid = l.get("producto_id")
+                        if pid is None:
+                            continue
+                        qty = int(l.get("cantidad") or 0)
+                        if qty < 0:
+                            qty = 0
+                        total_minutes += int(duracion_por_producto.get(int(pid), 0)) * qty
             else:
                 producto_ids = [p.get("producto_id") for p in productos_payload if p.get("producto_id")]
                 if producto_ids:
@@ -1409,12 +1484,21 @@ class DisenoViewSet(viewsets.ModelViewSet):
                     duracion_por_producto = {
                         prod.id_producto: sum(int(t.duracion_base or 0) for t in prod.tareas.all()) for prod in productos_qs
                     }
-                    # Sumar por cada item enviado (si se repite un producto, cuenta varias veces)
                     for item in productos_payload:
                         pid = item.get("producto_id")
                         if pid is None:
                             continue
-                        total_minutes += int(duracion_por_producto.get(int(pid), 0))
+                        qty = int(item.get("cantidad") or 0)
+                        if qty < 0:
+                            qty = 0
+                        total_minutes += int(duracion_por_producto.get(int(pid), 0)) * qty
+
+            # Sumar tareas propias del diseño
+            if tareas_diseno_payload is None:
+                tareas_qs = diseno.tareas_diseno.all()
+            else:
+                tareas_qs = Tarea.objects.filter(id_tarea__in=(tareas_diseno_payload or []))
+            total_minutes += sum(int(t.duracion_base or 0) for t in tareas_qs)
 
             schedule = compute_work_schedule(diseno.fecha_propuesta, total_minutes)
             start_local = schedule.start_local

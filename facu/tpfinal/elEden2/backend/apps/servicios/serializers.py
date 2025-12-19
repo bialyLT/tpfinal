@@ -1,10 +1,13 @@
 ﻿from rest_framework import serializers
 
 from apps.users.models import Cliente
+from apps.productos.models import Tarea
+from apps.productos.serializers import TareaSerializer
 
 from .models import (
     Diseno,
     DisenoProducto,
+    DisenoTarea,
     FormaTerreno,
     ImagenDiseno,
     ImagenReserva,
@@ -372,6 +375,7 @@ class DisenoSerializer(serializers.ModelSerializer):
     cliente_nombre = serializers.SerializerMethodField()
     disenador_id = serializers.IntegerField(source="disenador.id_empleado", read_only=True, allow_null=True)
     disenador_nombre = serializers.SerializerMethodField()
+    tareas_diseno = TareaSerializer(many=True, read_only=True)
 
     class Meta:
         model = Diseno
@@ -399,6 +403,7 @@ class DisenoSerializer(serializers.ModelSerializer):
             "hora_inicio",
             "fecha_fin",
             "hora_fin",
+            "tareas_diseno",
         ]
         read_only_fields = [
             "id_diseno",
@@ -430,6 +435,7 @@ class DisenoDetalleSerializer(serializers.ModelSerializer):
     productos = DisenoProductoSerializer(many=True, read_only=True)
     imagenes = ImagenDisenoSerializer(many=True, read_only=True)
     total_productos = serializers.SerializerMethodField()
+    tareas_diseno = TareaSerializer(many=True, read_only=True)
 
     class Meta:
         model = Diseno
@@ -461,6 +467,7 @@ class DisenoDetalleSerializer(serializers.ModelSerializer):
             "hora_inicio",
             "fecha_fin",
             "hora_fin",
+            "tareas_diseno",
             "fecha_actualizacion",
         ]
         read_only_fields = [
@@ -498,6 +505,9 @@ class CrearDisenoSerializer(serializers.Serializer):
     notas_internas = serializers.CharField(required=False, allow_blank=True)
     fecha_propuesta = serializers.DateTimeField(required=False, allow_null=True)
 
+    # Tareas propias del diseño (lista de IDs)
+    tareas_diseno = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=True)
+
     # Productos como lista de diccionarios
     productos = serializers.ListField(child=serializers.DictField(), required=False, allow_empty=True)
 
@@ -517,3 +527,13 @@ class CrearDisenoSerializer(serializers.Serializer):
             if "precio_unitario" not in producto:
                 raise serializers.ValidationError("Cada producto debe tener 'precio_unitario'")
         return value
+
+    def validate_tareas_diseno(self, value):
+        if not value:
+            return []
+        ids = [int(v) for v in value]
+        existentes = set(Tarea.objects.filter(id_tarea__in=ids).values_list("id_tarea", flat=True))
+        faltantes = [i for i in ids if i not in existentes]
+        if faltantes:
+            raise serializers.ValidationError(f"Tareas inexistentes: {faltantes}")
+        return ids

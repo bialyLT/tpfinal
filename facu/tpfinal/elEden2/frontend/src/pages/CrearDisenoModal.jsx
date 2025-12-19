@@ -91,6 +91,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
   const [loading, setLoading] = useState(false);
   const [productos, setProductos] = useState([]);
   const [tareasById, setTareasById] = useState({});
+  const [tareasDisenoSeleccionadas, setTareasDisenoSeleccionadas] = useState([]);
   const [disenoCompleto, setDisenoCompleto] = useState(null);
   const [fechaPropuesta, setFechaPropuesta] = useState(null);
   const [fechaPropuestaDatePart, setFechaPropuestaDatePart] = useState(null); // selected date (day)
@@ -189,6 +190,16 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       
       // Guardar el diseño completo en el estado
       setDisenoCompleto(disenoData);
+
+      // Inicializar tareas del diseño seleccionadas (si vienen del backend)
+      if (Array.isArray(disenoData.tareas_diseno)) {
+        const ids = disenoData.tareas_diseno
+          .map((t) => Number(t?.id_tarea))
+          .filter((id) => Number.isFinite(id));
+        setTareasDisenoSeleccionadas(ids);
+      } else {
+        setTareasDisenoSeleccionadas([]);
+      }
 
       // Inicializar reserva seleccionada para edicion
       const reservaIdFromDiseno = disenoData.reserva_id || disenoData.reserva?.id_reserva || disenoData.reserva?.id;
@@ -527,6 +538,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
     setImagenesDiseno([]);
     setImagenesExistentes([]);
     setProductosSeleccionados([]);
+    setTareasDisenoSeleccionadas([]);
     setPreviewImages([]);
     setDisenoCompleto(null);
     setFechaPropuesta(null);
@@ -665,7 +677,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
 
   const totalMinutesTrabajo = useMemo(() => {
     // Cada producto seleccionado aporta sus tareas escaladas por cantidad
-    return productosSeleccionados.reduce((sum, line) => {
+    const minutesProductos = productosSeleccionados.reduce((sum, line) => {
       const productId = Number(line.producto_id);
       if (!productId) return sum;
 
@@ -682,7 +694,15 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
 
       return sum + (minutes * qty);
     }, 0);
-  }, [productosSeleccionados, productos, tareasById]);
+
+    const minutesTareasDiseno = (tareasDisenoSeleccionadas || []).reduce((acc, tid) => {
+      const tarea = tareasById[Number(tid)];
+      const dur = Number(tarea?.duracion_base);
+      return acc + (Number.isFinite(dur) ? dur : 0);
+    }, 0);
+
+    return minutesProductos + minutesTareasDiseno;
+  }, [productosSeleccionados, productos, tareasById, tareasDisenoSeleccionadas]);
 
   const totalHorasTrabajo = useMemo(() => {
     if (!totalMinutesTrabajo || totalMinutesTrabajo <= 0) return 0;
@@ -799,6 +819,12 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
         );
         formDataToSend.append('productos', JSON.stringify(productosValidados));
       }
+
+      // Agregar tareas del diseño (siempre, para permitir limpiar en edición)
+      const tareasDisenoIds = (tareasDisenoSeleccionadas || [])
+        .map((id) => Number(id))
+        .filter((id) => Number.isFinite(id));
+      formDataToSend.append('tareas_diseno', JSON.stringify(tareasDisenoIds));
 
       let response;
       
@@ -1169,6 +1195,53 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
               ))}
             </div>
             )}
+
+            {/* Tareas del diseño (usa el mismo ABM de tareas de productos) */}
+            {mode !== 'jardin' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Tareas del diseño
+              </label>
+              <div className="bg-gray-800 p-3 rounded-md border border-gray-700 max-h-48 overflow-y-auto">
+                {Object.keys(tareasById || {}).length === 0 ? (
+                  <p className="text-sm text-gray-400">No hay tareas disponibles.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {Object.values(tareasById)
+                      .sort((a, b) => String(a?.nombre || '').localeCompare(String(b?.nombre || '')))
+                      .map((t) => {
+                        const id = Number(t?.id_tarea);
+                        if (!Number.isFinite(id)) return null;
+                        const checked = (tareasDisenoSeleccionadas || []).includes(id);
+                        const dur = Number(t?.duracion_base);
+                        return (
+                          <label key={id} className="flex items-center justify-between bg-gray-700 rounded-md px-3 py-2 cursor-pointer">
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => {
+                                  setTareasDisenoSeleccionadas((prev) => {
+                                    const current = Array.isArray(prev) ? prev : [];
+                                    if (current.includes(id)) return current.filter((x) => x !== id);
+                                    return [...current, id];
+                                  });
+                                }}
+                                className="h-4 w-4 accent-green-500"
+                              />
+                              <span className="text-sm text-white">{t?.nombre || `Tarea #${id}`}</span>
+                            </div>
+                            <span className="text-xs text-gray-300">
+                              {Number.isFinite(dur) ? `${dur} min` : ''}
+                            </span>
+                          </label>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            </div>
+            )}
             
             {/* Presupuestos y Fecha (solo en modo diseño) */}
             {mode !== 'jardin' && (
@@ -1263,7 +1336,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                 </div>
 
                 <div className="mt-2 text-xs text-gray-400">
-                  <div>Duración estimada (por tareas de productos): <span className="text-white font-semibold">{totalHorasTrabajo}h</span></div>
+                  <div>Duración estimada: <span className="text-white font-semibold">{totalHorasTrabajo}h</span></div>
                   {fechaInicioNormalizada && (
                     <div>
                       Finaliza: <span className="text-white font-semibold">{formatLocalDateTime(fechaFinCalculada || fechaInicioNormalizada)}</span>
@@ -1275,6 +1348,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                 </div>
               </div>
             </div>
+
             </>
             )}
 
