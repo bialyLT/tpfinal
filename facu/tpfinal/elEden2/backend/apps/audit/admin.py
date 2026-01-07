@@ -5,15 +5,13 @@ from .models import AuditLog
 
 @admin.register(AuditLog)
 class AuditLogAdmin(admin.ModelAdmin):
-    list_display = ("created_at", "user", "role", "method", "entity", "response_code")
-    list_filter = ("role", "method", "entity", "response_code")
+    list_display = ("created_at", "user", "role", "method", "entity")
+    list_filter = ("role", "method", "entity")
     search_fields = (
         "user__username",
         "user__email",
         "action",
         "entity",
-        "object_id",
-        "endpoint",
     )
     readonly_fields = ("created_at",)
 
@@ -28,14 +26,8 @@ class AuditLogAdmin(admin.ModelAdmin):
                     "method",
                     "action",
                     "entity",
-                    "object_id",
-                    "endpoint",
                 )
             },
         ),
-        (
-            "Detalles de la petición",
-            {"fields": ("ip_address", "user_agent", "payload")},
-        ),
-        ("Respuesta", {"fields": ("response_code", "response_body", "metadata")}),
+        ("Respuesta", {"fields": ("response_body", "metadata")}),
     )

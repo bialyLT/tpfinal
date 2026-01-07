@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import json
-import re
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 from django.utils.deprecation import MiddlewareMixin
 
@@ -44,11 +43,16 @@ class AuditLogMiddleware(MiddlewareMixin):
         if not getattr(user, "is_authenticated", False):
             return
 
-        role = self._resolve_role(user)
-        if role not in {"administrador", "empleado"}:
+        is_admin = bool(getattr(user, "is_superuser", False) or getattr(user, "is_staff", False))
+        is_employee = bool(getattr(user, "groups", None) and user.groups.exists())
+
+        # Solo auditar acciones de administradores y empleados
+        if not is_admin and not is_employee:
             return
 
-        entity, object_id = self._extract_entity(path)
+        role = "administrador" if is_admin else "empleado"
+
+        entity = self._extract_entity(path)
         payload = self._extract_request_payload(request)
         response_body = self._extract_response_body(response)
 
@@ -58,14 +62,8 @@ class AuditLogMiddleware(MiddlewareMixin):
             method=request.method,
             action=self._build_action(request.method, entity, path, user, payload, response_body),
             entity=entity,
-            object_id=object_id,
-            endpoint=path,
-            ip_address=self._get_ip(request),
-            user_agent=request.META.get("HTTP_USER_AGENT", ""),
-            payload=payload,
-            response_code=getattr(response, "status_code", None),
             response_body=response_body,
-            metadata=self._build_metadata(request, response),
+            metadata=self._build_metadata(request, response, user=user, is_admin=is_admin),
         )
 
     def _extract_request_payload(self, request) -> Optional[Any]:
@@ -126,21 +124,18 @@ class AuditLogMiddleware(MiddlewareMixin):
 
         return sanitize_payload(data)
 
-    def _extract_entity(self, path: str) -> Tuple[str, Optional[str]]:
+    def _extract_entity(self, path: str) -> str:
         segments = [segment for segment in path.rstrip("/").split("/") if segment]
         if not segments:
-            return "root", None
+            return "root"
 
         entity = segments[-1]
-        object_id = None
         if entity.isdigit() and len(segments) >= 2:
-            object_id = entity
             entity = segments[-2]
         elif "-" in entity and entity.replace("-", "").isdigit():
-            object_id = entity
             entity = segments[-2] if len(segments) >= 2 else entity
 
-        return entity, object_id
+        return entity
 
     def _build_action(self, method: str, entity: str, path: str, user, payload: Any, response_body: Any) -> str:
         custom = self._build_custom_action(method, path, user, payload, response_body)
@@ -244,35 +239,15 @@ class AuditLogMiddleware(MiddlewareMixin):
 
         return None
 
-    def _get_ip(self, request) -> Optional[str]:
-        forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-        return request.META.get("REMOTE_ADDR")
+    def _build_metadata(self, request, response, *, user=None, is_admin: bool = False):
+        try:
+            groups = list(user.groups.values_list("name", flat=True)) if user and getattr(user, "groups", None) else []
+        except Exception:
+            groups = []
 
-    def _resolve_role(self, user) -> str:
-        if not getattr(user, "is_authenticated", False):
-            return "anonimo"
-
-        if user.is_superuser or user.is_staff:
-            return "administrador"
-
-        perfil = getattr(user, "perfil", None)
-        if perfil and getattr(perfil, "tipo_usuario", None):
-            tipo = perfil.tipo_usuario.lower()
-            if tipo in {"administrador", "empleado", "diseñador", "cliente"}:
-                return "empleado" if tipo == "diseñador" else tipo
-
-        group_names = set(user.groups.values_list("name", flat=True))
-        if "Administradores" in group_names:
-            return "administrador"
-        if "Empleados" in group_names:
-            return "empleado"
-
-        return "cliente"
-
-    def _build_metadata(self, request, response):
         return {
             "query_params": request.GET.dict(),
             "response_reason": getattr(response, "reason_phrase", ""),
+            "user_groups": groups,
+            "is_admin": bool(is_admin),
         }

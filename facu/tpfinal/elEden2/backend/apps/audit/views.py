@@ -20,9 +20,6 @@ class AuditLogListAPIView(generics.ListAPIView):
         queryset = super().get_queryset()
         params = self.request.query_params
 
-        # Nunca mostrar endpoints de autenticación Google en auditoría
-        queryset = queryset.exclude(endpoint__startswith="/api/v1/auth/google/")
-
         operation = params.get("operation")
         if operation:
             normalized = operation.strip().lower()
@@ -58,7 +55,6 @@ class AuditLogListAPIView(generics.ListAPIView):
                 | models.Q(user__email__icontains=search)
                 | models.Q(action__icontains=search)
                 | models.Q(entity__icontains=search)
-                | models.Q(object_id__icontains=search)
             )
 
         start_date = params.get("start_date")

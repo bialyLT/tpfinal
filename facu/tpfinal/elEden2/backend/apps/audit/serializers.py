@@ -16,11 +16,6 @@ class AuditLogSerializer(serializers.ModelSerializer):
             "method",
             "action",
             "entity",
-            "object_id",
-            "endpoint",
-            "ip_address",
-            "payload",
-            "response_code",
             "response_body",
             "metadata",
         ]

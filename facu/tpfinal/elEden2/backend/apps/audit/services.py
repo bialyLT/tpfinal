@@ -47,4 +47,6 @@ class AuditService:
 
     @staticmethod
     def register(**payload) -> AuditLog:
-        return AuditLog.objects.create(**payload)
+        allowed_fields = {field.name for field in AuditLog._meta.fields}
+        cleaned_payload = {key: value for key, value in payload.items() if key in allowed_fields}
+        return AuditLog.objects.create(**cleaned_payload)

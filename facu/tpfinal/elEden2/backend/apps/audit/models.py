@@ -3,14 +3,6 @@ from django.db import models
 
 
 class AuditLog(models.Model):
-    ROLE_CHOICES = (
-        ("administrador", "Administrador"),
-        ("empleado", "Empleado"),
-        ("cliente", "Cliente"),
-        ("anonimo", "Anónimo"),
-        ("desconocido", "Desconocido"),
-    )
-
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -18,16 +10,10 @@ class AuditLog(models.Model):
         blank=True,
         related_name="audit_logs",
     )
-    role = models.CharField(max_length=32, choices=ROLE_CHOICES, default="desconocido")
+    role = models.CharField(max_length=32, blank=True, default="")
     method = models.CharField(max_length=10)
     action = models.CharField(max_length=120)
     entity = models.CharField(max_length=120)
-    object_id = models.CharField(max_length=64, null=True, blank=True)
-    endpoint = models.CharField(max_length=255)
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    user_agent = models.TextField(blank=True)
-    payload = models.JSONField(null=True, blank=True)
-    response_code = models.PositiveIntegerField(null=True, blank=True)
     response_body = models.JSONField(null=True, blank=True)
     metadata = models.JSONField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

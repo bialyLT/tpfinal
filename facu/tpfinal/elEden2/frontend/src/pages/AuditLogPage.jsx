@@ -109,21 +109,31 @@ const extractCreatedSummary = (entity, responseBody) => {
   return `${entityLabel} creado.`;
 };
 
+const isLikelyErrorResponse = (body) => {
+  if (!body) return false;
+  if (typeof body === 'string') return true;
+  if (Array.isArray(body)) return body.some(Boolean);
+  if (typeof body === 'object') {
+    return Boolean(body.detail || body.error || body.message || body.non_field_errors);
+  }
+  return false;
+};
+
 const extractResultSummary = (log) => {
-  const code = Number(log?.response_code);
   const method = String(log?.method || '').toUpperCase();
 
-  if (!Number.isFinite(code)) return 'Sin resultado.';
-  if (code >= 400) return extractErrorMessage(log?.response_body);
+  if (isLikelyErrorResponse(log?.response_body)) {
+    return extractErrorMessage(log?.response_body);
+  }
 
   if (method === 'POST') return extractCreatedSummary(log?.entity, log?.response_body);
   if (method === 'DELETE') {
     const entityLabel = log?.entity ? log.entity.charAt(0).toUpperCase() + log.entity.slice(1) : 'Entidad';
-    return log?.object_id ? `${entityLabel} eliminado (ID ${log.object_id}).` : `${entityLabel} eliminado.`;
+    return `${entityLabel} eliminado.`;
   }
   if (method === 'PUT' || method === 'PATCH') {
     const entityLabel = log?.entity ? log.entity.charAt(0).toUpperCase() + log.entity.slice(1) : 'Entidad';
-    return log?.object_id ? `${entityLabel} modificado (ID ${log.object_id}).` : `${entityLabel} modificado.`;
+    return `${entityLabel} modificado.`;
   }
 
   return 'Operación exitosa.';
@@ -418,15 +428,18 @@ const AuditLogPage = () => {
                       <div>
                         <p className="text-xs text-gray-400 uppercase tracking-wide">Recurso</p>
                         <p className="mt-1">Entidad: {log.entity}</p>
-                        {log.object_id && <p>ID Impactado: {log.object_id}</p>}
                       </div>
                       <div>
                         <p className="text-xs text-gray-400 uppercase tracking-wide">Resultado</p>
-                        <p className={`mt-1 ${Number(log.response_code) >= 400 ? 'text-red-300' : 'text-emerald-200'}`}>{extractResultSummary(log)}</p>
+                        <p className={`mt-1 ${isLikelyErrorResponse(log.response_body) ? 'text-red-300' : 'text-emerald-200'}`}>{extractResultSummary(log)}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-400 uppercase tracking-wide">Datos enviados</p>
-                        <pre className="mt-1 bg-black/30 p-3 rounded-md text-xs overflow-auto max-h-60">{stringifyData(log.payload)}</pre>
+                        <p className="text-xs text-gray-400 uppercase tracking-wide">Respuesta</p>
+                        <pre className="mt-1 bg-black/30 p-3 rounded-md text-xs overflow-auto max-h-60">{stringifyData(log.response_body)}</pre>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400 uppercase tracking-wide">Metadata</p>
+                        <pre className="mt-1 bg-black/30 p-3 rounded-md text-xs overflow-auto max-h-60">{stringifyData(log.metadata)}</pre>
                       </div>
                     </div>
                   )}

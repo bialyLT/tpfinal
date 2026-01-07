@@ -1,6 +1,12 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+const normalizeApiBaseUrl = (value) => {
+  if (!value) return 'http://localhost:8000/api/v1';
+  const trimmed = String(value).replace(/\/+$/, '');
+  return trimmed.endsWith('/api/v1') ? trimmed : `${trimmed}/api/v1`;
+};
+
+const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_URL);
 
 // Crear instancia de axios con configuración base
 const api = axios.create({
