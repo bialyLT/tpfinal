@@ -66,7 +66,6 @@ class EncuestaEmailNotificationTests(TestCase):
             encuesta=cls.encuesta,
             texto="¿Cómo calificarías el servicio?",
             tipo="escala",
-            orden=1,
             obligatoria=True,
             impacta_puntuacion=True,
         )

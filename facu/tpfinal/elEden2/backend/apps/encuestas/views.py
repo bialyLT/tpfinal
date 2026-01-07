@@ -44,8 +44,8 @@ class EncuestaViewSet(viewsets.ModelViewSet):
     ]
     filterset_fields = ["activa"]
     search_fields = ["titulo", "descripcion"]
-    ordering_fields = ["fecha_creacion", "titulo"]
-    ordering = ["-fecha_creacion"]
+    ordering_fields = ["id_encuesta", "titulo"]
+    ordering = ["-id_encuesta"]
 
     def get_serializer_class(self):
         """Usar diferentes serializers según la acción"""
@@ -174,7 +174,6 @@ class EncuestaViewSet(viewsets.ModelViewSet):
                     encuesta=encuesta_activa,
                     cliente=cliente,
                     reserva=reserva,
-                    defaults={"fecha_inicio": timezone.now()},
                 )
 
                 # Eliminar respuestas anteriores si existe (por si quedó incompleta)
@@ -264,7 +263,7 @@ class EncuestaViewSet(viewsets.ModelViewSet):
 
                 # Marcar como completada
                 encuesta_respuesta.estado = "completada"
-                encuesta_respuesta.fecha_completada = timezone.now()
+                encuesta_respuesta.fecha_realizacion = timezone.now()
                 encuesta_respuesta.save()
 
                 try:
@@ -280,7 +279,7 @@ class EncuestaViewSet(viewsets.ModelViewSet):
                     if valores_puntuacion:
                         total_puntuacion = sum(valores_puntuacion, Decimal("0"))
                         cantidad_puntuacion = len(valores_puntuacion)
-                        timestamp = encuesta_respuesta.fecha_completada
+                        timestamp = encuesta_respuesta.fecha_realizacion
                         empleados_asignados = list(reserva.empleados.all())
 
                         promedio_encuesta = (total_puntuacion / Decimal(cantidad_puntuacion)).quantize(
@@ -345,8 +344,8 @@ class PreguntaViewSet(viewsets.ModelViewSet):
     ]
     filterset_fields = ["encuesta", "tipo", "obligatoria"]
     search_fields = ["texto"]
-    ordering_fields = ["orden", "texto"]
-    ordering = ["orden"]
+    ordering_fields = ["id_pregunta", "texto"]
+    ordering = ["id_pregunta"]
 
 
 class EncuestaRespuestaViewSet(viewsets.ModelViewSet):
@@ -364,8 +363,8 @@ class EncuestaRespuestaViewSet(viewsets.ModelViewSet):
         "cliente__persona__apellido",
         "encuesta__titulo",
     ]
-    ordering_fields = ["fecha_inicio", "fecha_completada"]
-    ordering = ["-fecha_inicio"]
+    ordering_fields = ["fecha_realizacion", "id_encuesta_respuesta"]
+    ordering = ["-id_encuesta_respuesta"]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -392,10 +391,8 @@ class RespuestaViewSet(viewsets.ModelViewSet):
     ]
     filterset_fields = ["encuesta_respuesta", "pregunta"]
     search_fields = ["valor_texto"]
-    ordering_fields = ["pregunta__orden"]
-    ordering = ["pregunta__orden"]
-
-    ordering = ["pregunta__orden"]
+    ordering_fields = ["pregunta__id_pregunta"]
+    ordering = ["pregunta__id_pregunta"]
 
 
 class EmpleadoImpactoEncuestaAPIView(APIView):
@@ -430,7 +427,7 @@ class EmpleadoImpactoEncuestaAPIView(APIView):
 
         total = queryset.count()
 
-        queryset = queryset.order_by("-encuesta_respuesta__fecha_completada", "pregunta__orden")
+        queryset = queryset.order_by("-encuesta_respuesta__fecha_realizacion", "pregunta__id_pregunta")
 
         limit = self._resolve_limit(request.query_params.get("limit"))
         if limit is not None:
@@ -449,7 +446,7 @@ class EmpleadoImpactoEncuestaAPIView(APIView):
                 start_dt = datetime.combine(parsed, time.min)
                 if timezone.is_naive(start_dt):
                     start_dt = timezone.make_aware(start_dt, timezone.get_current_timezone())
-                queryset = queryset.filter(encuesta_respuesta__fecha_completada__gte=start_dt)
+                queryset = queryset.filter(encuesta_respuesta__fecha_realizacion__gte=start_dt)
 
         if end_date_str:
             parsed = parse_date(end_date_str)
@@ -457,7 +454,7 @@ class EmpleadoImpactoEncuestaAPIView(APIView):
                 end_dt = datetime.combine(parsed, time.max.replace(microsecond=0))
                 if timezone.is_naive(end_dt):
                     end_dt = timezone.make_aware(end_dt, timezone.get_current_timezone())
-                queryset = queryset.filter(encuesta_respuesta__fecha_completada__lte=end_dt)
+                queryset = queryset.filter(encuesta_respuesta__fecha_realizacion__lte=end_dt)
 
         return queryset
 

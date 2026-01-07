@@ -15,7 +15,6 @@ class PreguntaSerializer(serializers.ModelSerializer):
             "texto",
             "tipo",
             "tipo_display",
-            "orden",
             "obligatoria",
             "opciones",
             "impacta_puntuacion",
@@ -33,7 +32,6 @@ class PreguntaCreateUpdateSerializer(serializers.ModelSerializer):
             "id_pregunta",
             "texto",
             "tipo",
-            "orden",
             "obligatoria",
             "opciones",
             "impacta_puntuacion",
@@ -74,13 +72,11 @@ class EncuestaSerializer(serializers.ModelSerializer):
             "id_encuesta",
             "titulo",
             "descripcion",
-            "fecha_creacion",
-            "fecha_actualizacion",
             "activa",
             "total_preguntas",
             "total_respuestas",
         ]
-        read_only_fields = ["id_encuesta", "fecha_creacion", "fecha_actualizacion"]
+        read_only_fields = ["id_encuesta"]
 
     def get_total_preguntas(self, obj):
         return obj.preguntas.count()
@@ -101,13 +97,11 @@ class EncuestaDetalleSerializer(serializers.ModelSerializer):
             "id_encuesta",
             "titulo",
             "descripcion",
-            "fecha_creacion",
-            "fecha_actualizacion",
             "activa",
             "preguntas",
             "total_respuestas",
         ]
-        read_only_fields = ["id_encuesta", "fecha_creacion", "fecha_actualizacion"]
+        read_only_fields = ["id_encuesta"]
 
     def get_total_respuestas(self, obj):
         return obj.respuestas_clientes.filter(estado="completada").count()
@@ -205,7 +199,7 @@ class RespuestaSerializer(serializers.ModelSerializer):
 class RespuestaImpactoSerializer(serializers.ModelSerializer):
     pregunta_texto = serializers.CharField(source="pregunta.texto", read_only=True)
     encuesta_titulo = serializers.CharField(source="encuesta_respuesta.encuesta.titulo", read_only=True)
-    fecha_encuesta = serializers.DateTimeField(source="encuesta_respuesta.fecha_completada", read_only=True)
+    fecha_encuesta = serializers.DateTimeField(source="encuesta_respuesta.fecha_realizacion", read_only=True)
     reserva = serializers.SerializerMethodField()
     cliente = serializers.SerializerMethodField()
     valor = serializers.SerializerMethodField()

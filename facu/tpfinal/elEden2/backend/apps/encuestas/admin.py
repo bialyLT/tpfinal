@@ -6,15 +6,15 @@ from .models import Encuesta, EncuestaRespuesta, Pregunta, Respuesta
 class PreguntaInline(admin.TabularInline):
     model = Pregunta
     extra = 1
-    fields = ("texto", "tipo", "orden", "obligatoria")
+    fields = ("texto", "tipo", "obligatoria")
 
 
 @admin.register(Encuesta)
 class EncuestaAdmin(admin.ModelAdmin):
-    list_display = ("id_encuesta", "titulo", "activa", "fecha_creacion")
-    list_filter = ("activa", "fecha_creacion")
+    list_display = ("id_encuesta", "titulo", "activa")
+    list_filter = ("activa",)
     search_fields = ("titulo", "descripcion")
-    ordering = ("-fecha_creacion",)
+    ordering = ("-id_encuesta",)
     inlines = [PreguntaInline]
 
 
@@ -25,12 +25,11 @@ class PreguntaAdmin(admin.ModelAdmin):
         "encuesta",
         "texto_corto",
         "tipo",
-        "orden",
         "obligatoria",
     )
     list_filter = ("tipo", "obligatoria", "encuesta")
     search_fields = ("texto",)
-    ordering = ("encuesta", "orden")
+    ordering = ("encuesta", "id_pregunta")
 
     def texto_corto(self, obj):
         return obj.texto[:50] + "..." if len(obj.texto) > 50 else obj.texto
@@ -52,18 +51,17 @@ class EncuestaRespuestaAdmin(admin.ModelAdmin):
         "cliente",
         "encuesta",
         "estado",
-        "fecha_inicio",
-        "fecha_completada",
+        "fecha_realizacion",
     )
-    list_filter = ("estado", "fecha_inicio", "encuesta")
+    list_filter = ("estado", "encuesta")
     search_fields = (
         "cliente__persona__nombre",
         "cliente__persona__apellido",
         "encuesta__titulo",
     )
-    ordering = ("-fecha_inicio",)
+    ordering = ("-id_encuesta_respuesta",)
     inlines = [RespuestaInline]
-    readonly_fields = ("fecha_inicio",)
+    readonly_fields = ("fecha_realizacion",)
 
     actions = ["completar_encuestas"]
 
@@ -84,10 +82,10 @@ class RespuestaAdmin(admin.ModelAdmin):
         "pregunta_texto",
         "valor_respuesta",
     )
-    list_filter = ("pregunta__tipo", "fecha_creacion")
+    list_filter = ("pregunta__tipo",)
     search_fields = ("pregunta__texto", "valor_texto")
-    ordering = ("-fecha_creacion",)
-    readonly_fields = ("fecha_creacion",)
+    ordering = ("-id_respuesta",)
+    readonly_fields = ()
 
     def pregunta_texto(self, obj):
         return obj.pregunta.texto[:50] + "..." if len(obj.pregunta.texto) > 50 else obj.pregunta.texto

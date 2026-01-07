@@ -14,15 +14,13 @@ class Encuesta(models.Model):
     id_encuesta = models.AutoField(primary_key=True)
     titulo = models.CharField(max_length=200)
     descripcion = models.TextField(blank=True, null=True)
-    fecha_creacion = models.DateTimeField(auto_now_add=True)
-    fecha_actualizacion = models.DateTimeField(auto_now=True)
     activa = models.BooleanField(default=True)
 
     class Meta:
         db_table = "encuesta"
         verbose_name = "Encuesta"
         verbose_name_plural = "Encuestas"
-        ordering = ["-fecha_creacion"]
+        ordering = ["-id_encuesta"]
         constraints = [
             models.UniqueConstraint(
                 fields=["activa"],
@@ -53,7 +51,7 @@ class Encuesta(models.Model):
             return None
         except cls.MultipleObjectsReturned:
             # Si por alguna razón hay múltiples activas, retornar la más reciente
-            return cls.objects.filter(activa=True).order_by("-fecha_creacion").first()
+            return cls.objects.filter(activa=True).order_by("-id_encuesta").first()
 
 
 class Pregunta(models.Model):
@@ -69,7 +67,6 @@ class Pregunta(models.Model):
     id_pregunta = models.AutoField(primary_key=True)
     texto = models.TextField()
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default="texto")
-    orden = models.IntegerField(default=0)
     obligatoria = models.BooleanField(default=True)
     opciones = models.JSONField(
         blank=True,
@@ -88,13 +85,10 @@ class Pregunta(models.Model):
         db_table = "pregunta"
         verbose_name = "Pregunta"
         verbose_name_plural = "Preguntas"
-        ordering = ["encuesta", "orden"]
-        indexes = [
-            models.Index(fields=["encuesta", "orden"]),
-        ]
+        ordering = ["encuesta", "id_pregunta"]
 
     def __str__(self):
-        return f"{self.encuesta.titulo} - Pregunta {self.orden}: {self.texto[:50]}"
+        return f"{self.encuesta.titulo} - Pregunta {self.id_pregunta}: {self.texto[:50]}"
 
 
 class EncuestaRespuesta(models.Model):
@@ -111,8 +105,7 @@ class EncuestaRespuesta(models.Model):
 
     id_encuesta_respuesta = models.AutoField(primary_key=True)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default="iniciada")
-    fecha_inicio = models.DateTimeField(auto_now_add=True)
-    fecha_completada = models.DateTimeField(null=True, blank=True)
+    fecha_realizacion = models.DateTimeField(null=True, blank=True)
 
     # Relaciones según diagrama ER
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name="encuestas_respondidas")
@@ -131,7 +124,7 @@ class EncuestaRespuesta(models.Model):
         verbose_name = "Encuesta Respondida"
         verbose_name_plural = "Encuestas Respondidas"
         unique_together = ["cliente", "encuesta", "reserva"]
-        ordering = ["-fecha_inicio"]
+        ordering = ["-id_encuesta_respuesta"]
         indexes = [
             models.Index(fields=["cliente", "encuesta"]),
             models.Index(fields=["estado"]),
@@ -146,7 +139,7 @@ class EncuestaRespuesta(models.Model):
         from django.utils import timezone
 
         self.estado = "completada"
-        self.fecha_completada = timezone.now()
+        self.fecha_realizacion = timezone.now()
         self.save()
 
 
@@ -160,7 +153,6 @@ class Respuesta(models.Model):
     valor_texto = models.TextField(blank=True, null=True)
     valor_numerico = models.IntegerField(blank=True, null=True)
     valor_boolean = models.BooleanField(blank=True, null=True)
-    fecha_creacion = models.DateTimeField(auto_now_add=True)
 
     # Relaciones según diagrama ER
     encuesta_respuesta = models.ForeignKey(EncuestaRespuesta, on_delete=models.CASCADE, related_name="respuestas")
@@ -171,7 +163,7 @@ class Respuesta(models.Model):
         verbose_name = "Respuesta"
         verbose_name_plural = "Respuestas"
         unique_together = ["encuesta_respuesta", "pregunta"]
-        ordering = ["encuesta_respuesta", "pregunta__orden"]
+        ordering = ["encuesta_respuesta", "pregunta_id"]
 
     def __str__(self):
         valor = self.valor_texto or self.valor_numerico or self.valor_boolean

@@ -73,7 +73,6 @@ const CrearEncuestaModal = ({ show, onClose, onSuccess, encuesta, modoEdicion })
         {
           texto: '',
           tipo: 'escala',
-          orden: prev.preguntas.length + 1,
           obligatoria: true,
           opciones: [],
           impacta_puntuacion: false
@@ -85,10 +84,7 @@ const CrearEncuestaModal = ({ show, onClose, onSuccess, encuesta, modoEdicion })
   const eliminarPregunta = (index) => {
     setFormData(prev => ({
       ...prev,
-      preguntas: prev.preguntas.filter((_, i) => i !== index).map((p, i) => ({
-        ...p,
-        orden: i + 1
-      }))
+      preguntas: prev.preguntas.filter((_, i) => i !== index)
     }));
   };
 

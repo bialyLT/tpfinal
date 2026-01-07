@@ -58,30 +58,6 @@ const VerEncuestaModal = ({ show, onClose, encuesta }) => {
             </div>
           )}
 
-          {/* Metadata */}
-          <div className="mb-6 grid grid-cols-2 gap-4 text-sm">
-            <div className="p-3 bg-gray-700/30 rounded-lg">
-              <p className="text-gray-400">Fecha de Creación</p>
-              <p className="text-white font-medium">
-                {new Date(encuesta.fecha_creacion).toLocaleDateString('es-ES', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}
-              </p>
-            </div>
-            <div className="p-3 bg-gray-700/30 rounded-lg">
-              <p className="text-gray-400">Última Actualización</p>
-              <p className="text-white font-medium">
-                {new Date(encuesta.fecha_actualizacion).toLocaleDateString('es-ES', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}
-              </p>
-            </div>
-          </div>
-
           {/* Preguntas */}
           <div>
             <h3 className="text-lg font-bold text-white mb-4">Preguntas</h3>

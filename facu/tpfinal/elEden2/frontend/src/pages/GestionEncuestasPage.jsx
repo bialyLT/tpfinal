@@ -221,10 +221,6 @@ const GestionEncuestasPage = () => {
                   </div>
                 </div>
 
-                <p className="text-xs text-gray-500 mb-4">
-                  Creada: {new Date(encuesta.fecha_creacion).toLocaleDateString('es-ES')}
-                </p>
-
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleVer(encuesta.id_encuesta)}
