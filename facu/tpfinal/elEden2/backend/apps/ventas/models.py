@@ -228,7 +228,7 @@ class DetalleCompra(models.Model):
         from apps.productos.models import Stock
 
         stock, created = Stock.objects.get_or_create(
-            producto=self.producto, defaults={"cantidad": 0, "cantidad_minima": 10}
+            producto=self.producto, defaults={"cantidad": 0}
         )
 
         if es_nuevo:

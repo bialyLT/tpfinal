@@ -7,22 +7,11 @@ import { error as showError, success as showSuccess } from '../../utils/notifica
 import { useAuth } from '../../context/AuthContext';
 
 const PagoExitoso = () => {
-  // Opciones para mapeo de etiquetas
-  const OBJETIVO_OPCIONES = [
-    { value: 'bajo_mantenimiento', label: 'Bajo Mantenimiento' },
-    { value: 'mucho_color', label: 'Mucho Color' },
-    { value: 'selvatico', label: 'Estilo Selvático' },
-    { value: 'minimalista', label: 'Estilo Minimalista' },
-    { value: 'mascotas', label: 'Espacio para Mascotas' },
-    { value: 'ninos', label: 'Espacio para Niños' },
-    { value: 'huerta', label: 'Huerta' },
-    { value: 'otro', label: 'Otro' }
-  ];
-
-  const NIVEL_INTERVENCION_OPCIONES = [
-    { value: 'remodelacion', label: 'Remodelación Parcial' },
-    { value: 'desde_cero', label: 'Diseño Completo desde Cero' }
-  ];
+  const getNivelIntervencionLabel = (value) => {
+    if (value === true) return 'Diseño Completo desde Cero';
+    if (value === false) return 'Remodelación Parcial';
+    return 'No especificado';
+  };
 
   const PRESUPUESTO_OPCIONES = [
     { value: 'bajo', label: 'Económico / Ajustado' },
@@ -426,7 +415,13 @@ const PagoExitoso = () => {
                   {comprobante.servicio.nombre}
                 </p>
 
-                {comprobante.tipo_servicio_solicitado === 'diseno_completo' ? (
+                {(
+                  comprobante.superficie_aproximada ||
+                  comprobante.objetivo_diseno_nombre ||
+                  comprobante.objetivo_diseno_codigo ||
+                  comprobante.nivel_intervencion !== null ||
+                  comprobante.presupuesto_aproximado
+                ) ? (
                   <div className="mt-3 space-y-2">
                     <div className="flex items-start text-sm">
                       <Ruler className="w-4 h-4 text-green-600 mr-2 mt-0.5" />
@@ -440,7 +435,7 @@ const PagoExitoso = () => {
                       <div>
                         <span className="font-medium text-gray-700">Objetivo:</span>
                         <span className="text-gray-600 ml-1">
-                          {OBJETIVO_OPCIONES.find(o => o.value === comprobante.objetivo_diseno)?.label || comprobante.objetivo_diseno || 'No especificado'}
+                          {comprobante.objetivo_diseno_nombre || comprobante.objetivo_diseno_codigo || 'No especificado'}
                         </span>
                       </div>
                     </div>
@@ -449,7 +444,7 @@ const PagoExitoso = () => {
                       <div>
                         <span className="font-medium text-gray-700">Intervención:</span>
                         <span className="text-gray-600 ml-1">
-                          {NIVEL_INTERVENCION_OPCIONES.find(o => o.value === comprobante.nivel_intervencion)?.label || comprobante.nivel_intervencion || 'No especificado'}
+                          {getNivelIntervencionLabel(comprobante.nivel_intervencion)}
                         </span>
                       </div>
                     </div>

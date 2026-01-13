@@ -7,14 +7,12 @@ class CategoriaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Categoria
         fields = "__all__"
-        read_only_fields = ("fecha_creacion", "fecha_actualizacion")
 
 
 class MarcaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Marca
         fields = "__all__"
-        read_only_fields = ("fecha_creacion", "fecha_actualizacion")
 
 
 class EspecieSerializer(serializers.ModelSerializer):

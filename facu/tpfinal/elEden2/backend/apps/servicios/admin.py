@@ -9,6 +9,8 @@ from .models import (
     ImagenReserva,
     ImagenZona,
     Jardin,
+    ObjetivoDiseno,
+    Pago,
     Reserva,
     ReservaEmpleado,
     Servicio,
@@ -16,39 +18,33 @@ from .models import (
 )
 
 
+@admin.register(ObjetivoDiseno)
+class ObjetivoDisenoAdmin(admin.ModelAdmin):
+    list_display = ("id_objetivo_diseno", "codigo", "nombre", "activo")
+    list_filter = ("activo",)
+    search_fields = ("codigo", "nombre")
+    ordering = ("nombre",)
+
+
 @admin.register(ConfiguracionPago)
 class ConfiguracionPagoAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "monto_sena",
-        "porcentaje_sena",
-        "fecha_actualizacion",
-        "actualizado_por",
     )
-    readonly_fields = ("fecha_actualizacion",)
 
     fieldsets = (
         (
             "Configuración de Seña",
             {
-                "fields": ("monto_sena", "porcentaje_sena"),
+                "fields": ("monto_sena",),
                 "description": (
                     "Configure el monto de seña requerido para las reservas. "
-                    "Use monto fijo O porcentaje (no ambos)."
+                    "Use monto fijo."
                 ),
             },
         ),
-        (
-            "Información",
-            {
-                "fields": ("actualizado_por", "fecha_actualizacion"),
-            },
-        ),
     )
-
-    def save_model(self, request, obj, form, change):
-        obj.actualizado_por = request.user
-        super().save_model(request, obj, form, change)
 
     def has_add_permission(self, request):
         # Solo permitir una configuración
@@ -93,24 +89,14 @@ class ServicioAdmin(admin.ModelAdmin):
         "nombre",
         "activo",
         "reprogramable_por_clima",
-        "fecha_creacion",
     )
     list_filter = ("activo", "reprogramable_por_clima")
     search_fields = ("nombre", "descripcion")
     ordering = ("nombre",)
-    readonly_fields = ("fecha_creacion", "fecha_actualizacion")
-
     fieldsets = (
         (
             "Información Básica",
             {"fields": ("nombre", "descripcion", "activo", "reprogramable_por_clima")},
-        ),
-        (
-            "Fechas",
-            {
-                "fields": ("fecha_creacion", "fecha_actualizacion"),
-                "classes": ("collapse",),
-            },
         ),
     )
 
@@ -121,16 +107,14 @@ class ReservaAdmin(admin.ModelAdmin):
         "id_reserva",
         "cliente",
         "servicio",
-        "fecha_reserva",
+        "fecha_cita",
         "estado",
-        "estado_pago_sena",
-        "estado_pago_final",
+        "estado_pago_sena_val",
+        "estado_pago_final_val",
     )
     list_filter = (
         "estado",
-        "estado_pago_sena",
-        "estado_pago_final",
-        "fecha_reserva",
+        "fecha_cita",
         "fecha_solicitud",
     )
     search_fields = (
@@ -142,47 +126,15 @@ class ReservaAdmin(admin.ModelAdmin):
     inlines = [ImagenReservaInline, ReservaEmpleadoInline]
 
     fieldsets = (
-        ("Reserva", {"fields": ("cliente", "servicio", "fecha_reserva", "direccion")}),
+        (
+            "Reserva",
+            {"fields": ("cliente", "servicio", "fecha_cita", "fecha_inicio", "direccion")},
+        ),
         ("Estado", {"fields": ("estado", "observaciones")}),
-        (
-            "💰 Pago Inicial (Seña)",
-            {
-                "fields": (
-                    "monto_sena",
-                    "estado_pago_sena",
-                    "fecha_pago_sena",
-                    "payment_id_sena",
-                ),
-                "classes": ("collapse",),
-                "description": "Pago inicial requerido para confirmar la solicitud de servicio",
-            },
-        ),
-        (
-            "💰 Pago Final",
-            {
-                "fields": (
-                    "monto_total",
-                    "monto_final",
-                    "estado_pago_final",
-                    "fecha_pago_final",
-                    "payment_id_final",
-                ),
-                "classes": ("collapse",),
-                "description": "Pago final al aceptar la propuesta de diseño (total - seña)",
-            },
-        ),
-        (
-            "⚠️ Estado General",
-            {
-                "fields": ("estado_pago",),
-                "classes": ("collapse",),
-                "description": "Estado general de pago",
-            },
-        ),
         (
             "Fechas",
             {
-                "fields": ("fecha_solicitud", "fecha_creacion", "fecha_actualizacion"),
+                "fields": ("fecha_solicitud",),
                 "classes": ("collapse",),
             },
         ),
@@ -190,12 +142,15 @@ class ReservaAdmin(admin.ModelAdmin):
 
     readonly_fields = (
         "fecha_solicitud",
-        "fecha_creacion",
-        "fecha_actualizacion",
-        "monto_final",
-        "payment_id_sena",
-        "payment_id_final",
     )
+
+    @admin.display(description="Pago seña")
+    def estado_pago_sena_val(self, obj):
+        return getattr(getattr(obj, "pago", None), "estado_pago_sena", None)
+
+    @admin.display(description="Pago final")
+    def estado_pago_final_val(self, obj):
+        return getattr(getattr(obj, "pago", None), "estado_pago_final", None)
 
     actions = ["confirmar_reservas", "cancelar_reservas"]
 
@@ -225,50 +180,41 @@ class DisenoAdmin(admin.ModelAdmin):
         "estado",
         "fecha_creacion",
     )
-    list_filter = ("estado", "fecha_creacion", "fecha_presentacion")
-    search_fields = ("titulo", "descripcion", "servicio__nombre")
-    ordering = ("-fecha_creacion",)
-    inlines = [DisenoProductoInline, ImagenDisenoInline]
+
+
+@admin.register(Pago)
+class PagoAdmin(admin.ModelAdmin):
+    list_display = (
+        "id_pago",
+        "reserva",
+        "monto_sena",
+        "estado_pago_sena",
+        "monto_total",
+        "estado_pago_final",
+        "estado_pago",
+    )
+    list_filter = ("estado_pago_sena", "estado_pago_final", "estado_pago")
+    search_fields = ("reserva__id_reserva", "payment_id_sena", "payment_id_final")
+    ordering = ("-id_pago",)
 
     fieldsets = (
         (
-            "Información Básica",
-            {"fields": ("titulo", "descripcion", "servicio", "disenador")},
-        ),
-        ("Presupuesto y Estado", {"fields": ("presupuesto", "estado")}),
-        (
-            "Observaciones",
-            {
-                "fields": ("observaciones_cliente", "notas_internas"),
-                "classes": ("collapse",),
-            },
+            "Reserva",
+            {"fields": ("reserva",)},
         ),
         (
-            "Fechas",
-            {
-                "fields": ("fecha_creacion", "fecha_presentacion", "fecha_respuesta"),
-                "classes": ("collapse",),
-            },
+            "Seña",
+            {"fields": ("monto_sena", "estado_pago_sena", "payment_id_sena", "fecha_pago_sena")},
+        ),
+        (
+            "Pago final",
+            {"fields": ("monto_total", "estado_pago_final", "payment_id_final", "fecha_pago_final")},
+        ),
+        (
+            "Estado general",
+            {"fields": ("estado_pago",)},
         ),
     )
-
-    readonly_fields = ("fecha_creacion", "fecha_presentacion", "fecha_respuesta")
-
-    actions = ["presentar_disenos", "marcar_aceptados"]
-
-    def presentar_disenos(self, request, queryset):
-        for diseno in queryset:
-            diseno.presentar()
-        self.message_user(request, f"{queryset.count()} diseño(s) presentado(s).")
-
-    presentar_disenos.short_description = "Presentar diseños seleccionados"
-
-    def marcar_aceptados(self, request, queryset):
-        for diseno in queryset:
-            diseno.aceptar()
-        self.message_user(request, f"{queryset.count()} diseño(s) aceptado(s).")
-
-    marcar_aceptados.short_description = "Marcar diseños como aceptados"
 
 
 @admin.register(ImagenDiseno)

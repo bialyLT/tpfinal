@@ -374,14 +374,14 @@ class Command(BaseCommand):
             if not cliente or not servicio:
                 raise CommandError(f"Cliente o servicio no encontrado para {item['identificador']}")
 
-            fecha_reserva = now - timedelta(days=item["days_ago"])
+            fecha_cita = now - timedelta(days=item["days_ago"])
 
             reserva, _ = Reserva.objects.update_or_create(
                 cliente=cliente,
                 servicio=servicio,
                 observaciones=item["identificador"],
                 defaults={
-                    "fecha_reserva": fecha_reserva,
+                    "fecha_cita": fecha_cita,
                     "estado": "completada",
                     "monto_total": item["monto_total"],
                     "monto_sena": item["monto_sena"],
@@ -389,8 +389,8 @@ class Command(BaseCommand):
                     "estado_pago": "pagado",
                     "estado_pago_sena": "pagado",
                     "estado_pago_final": "pagado",
-                    "fecha_pago_sena": fecha_reserva - timedelta(days=5),
-                    "fecha_pago_final": fecha_reserva - timedelta(days=1),
+                    "fecha_pago_sena": fecha_cita - timedelta(days=5),
+                    "fecha_pago_final": fecha_cita - timedelta(days=1),
                     "direccion": (
                         f"{cliente.persona.calle} {cliente.persona.numero}, "
                         f"{cliente.persona.localidad.nombre_localidad}"

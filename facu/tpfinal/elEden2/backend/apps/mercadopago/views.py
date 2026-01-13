@@ -38,6 +38,7 @@ def crear_preferencia_pago_sena(request, reserva_id):
     try:
         # Obtener la reserva
         reserva = Reserva.objects.select_related("cliente__persona", "servicio").get(id_reserva=reserva_id)
+        pago = reserva.obtener_pago()
 
         # Verificar que el usuario sea el dueño de la reserva
         try:
@@ -54,16 +55,16 @@ def crear_preferencia_pago_sena(request, reserva_id):
             )
 
         # Verificar que la seña no esté ya pagada
-        if reserva.estado_pago_sena == "aprobado":
+        if pago.estado_pago_sena == "sena_pagada":
             return Response(
                 {"error": "La seña de esta reserva ya ha sido pagada"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Asignar monto de seña si no está asignado
-        if reserva.monto_sena <= 0:
+        if pago.monto_sena <= 0:
             reserva.asignar_sena()
-            reserva.save()
+            pago = reserva.obtener_pago()
 
         # Crear preferencia de pago de seña usando SDK de MercadoPago
         try:
@@ -76,7 +77,7 @@ def crear_preferencia_pago_sena(request, reserva_id):
                         "title": f"Seña - Reserva #{reserva.id_reserva} - {reserva.servicio.nombre}",
                         "description": f"Pago de seña para reserva de {reserva.servicio.nombre}",
                         "quantity": 1,
-                        "unit_price": float(reserva.monto_sena),
+                        "unit_price": float(pago.monto_sena),
                         "currency_id": "ARS",
                         "category_id": "services",
                     }
@@ -112,10 +113,6 @@ def crear_preferencia_pago_sena(request, reserva_id):
                 "sandbox_init_point": preference.get("sandbox_init_point"),
             }
 
-            # Guardar el ID de preferencia en la reserva
-            reserva.mercadopago_preference_id_sena = preferencia["preference_id"]
-            reserva.save()
-
             logger.info(f"Preferencia de SEÑA creada para reserva {reserva_id}: {preferencia['preference_id']}")
 
             return Response(
@@ -124,7 +121,7 @@ def crear_preferencia_pago_sena(request, reserva_id):
                     "init_point": preferencia["init_point"],
                     "sandbox_init_point": preferencia.get("sandbox_init_point"),
                     "reserva_id": reserva.id_reserva,
-                    "monto_sena": float(reserva.monto_sena),
+                    "monto_sena": float(pago.monto_sena),
                     "tipo_pago": "sena",
                 }
             )
@@ -158,9 +155,10 @@ def crear_preferencia_pago_final(request, reserva_id):
     try:
         # Obtener la reserva
         reserva = Reserva.objects.select_related("cliente__persona", "servicio").get(id_reserva=reserva_id)
+        pago = reserva.obtener_pago()
 
         # Verificar que el pago final no esté ya pagado
-        if reserva.estado_pago_final == "aprobado":
+        if pago.estado_pago_final == "pagado":
             return Response(
                 {"error": "El pago final de esta reserva ya ha sido realizado"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -181,7 +179,7 @@ def crear_preferencia_pago_final(request, reserva_id):
             )
 
         # Verificar que tenga un monto final
-        if reserva.monto_final <= 0:
+        if pago.monto_final <= 0:
             return Response(
                 {"error": "La reserva no tiene un monto final asignado. Contacte al administrador."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -198,7 +196,7 @@ def crear_preferencia_pago_final(request, reserva_id):
                         "title": f"Pago Final - Reserva #{reserva.id_reserva} - {reserva.servicio.nombre}",
                         "description": f"Pago final para reserva de {reserva.servicio.nombre}",
                         "quantity": 1,
-                        "unit_price": float(reserva.monto_final),
+                        "unit_price": float(pago.monto_final),
                         "currency_id": "ARS",
                         "category_id": "services",
                     }
@@ -234,10 +232,6 @@ def crear_preferencia_pago_final(request, reserva_id):
                 "sandbox_init_point": preference.get("sandbox_init_point"),
             }
 
-            # Guardar el ID de preferencia en la reserva
-            reserva.mercadopago_preference_id_final = preferencia["preference_id"]
-            reserva.save()
-
             logger.info(f"Preferencia de PAGO FINAL creada para reserva {reserva_id}: {preferencia['preference_id']}")
 
             return Response(
@@ -246,9 +240,9 @@ def crear_preferencia_pago_final(request, reserva_id):
                     "init_point": preferencia["init_point"],
                     "sandbox_init_point": preferencia.get("sandbox_init_point"),
                     "reserva_id": reserva.id_reserva,
-                    "monto_total": float(reserva.monto_total),
-                    "monto_sena_pagada": float(reserva.monto_sena),
-                    "monto_final": float(reserva.monto_final),
+                    "monto_total": float(pago.monto_total),
+                    "monto_sena_pagada": float(pago.monto_sena),
+                    "monto_final": float(pago.monto_final),
                     "tipo_pago": "final",
                 }
             )
@@ -278,6 +272,7 @@ def verificar_pago(request, reserva_id):
     """
     try:
         reserva = Reserva.objects.get(id_reserva=reserva_id)
+        pago = reserva.obtener_pago()
 
         # Verificar que el usuario sea el dueño de la reserva
         try:
@@ -297,16 +292,16 @@ def verificar_pago(request, reserva_id):
         return Response(
             {
                 "reserva_id": reserva.id_reserva,
-                "estado_pago_sena": reserva.estado_pago_sena,
-                "estado_pago_final": reserva.estado_pago_final,
+                "estado_pago_sena": pago.estado_pago_sena,
+                "estado_pago_final": pago.estado_pago_final,
                 "estado_reserva": reserva.estado,
-                "monto_sena": float(reserva.monto_sena),
-                "monto_total": float(reserva.monto_total),
-                "monto_final": float(reserva.monto_final),
-                "fecha_pago_sena": reserva.fecha_pago_sena,
-                "fecha_pago_final": reserva.fecha_pago_final,
-                "payment_id_sena": reserva.payment_id_sena,
-                "payment_id_final": reserva.payment_id_final,
+                "monto_sena": float(pago.monto_sena),
+                "monto_total": float(pago.monto_total),
+                "monto_final": float(pago.monto_final),
+                "fecha_pago_sena": pago.fecha_pago_sena,
+                "fecha_pago_final": pago.fecha_pago_final,
+                "payment_id_sena": pago.payment_id_sena,
+                "payment_id_final": pago.payment_id_final,
             }
         )
 
@@ -382,16 +377,19 @@ def confirmar_pago_sena(request, reserva_id):
 
         # Verificar que el pago esté aprobado
         if payment_data.get("status") == "approved":
-            # Actualizar la reserva
-            reserva.estado_pago_sena = "aprobado"
-            reserva.payment_id_sena = payment_id
-            reserva.fecha_pago_sena = timezone.now()
+            pago = reserva.obtener_pago()
+
+            # Actualizar el pago de seña
+            pago.estado_pago_sena = "sena_pagada"
+            pago.payment_id_sena = payment_id
+            pago.fecha_pago_sena = timezone.now()
 
             # Actualizar el estado de la reserva si aún está pendiente
             if reserva.estado == "pendiente_pago_sena":
                 reserva.estado = "en_revision"
 
             reserva.save()
+            pago.save()
 
             logger.info(f"✅ Pago de seña confirmado para reserva {reserva_id}")
 
@@ -403,7 +401,7 @@ def confirmar_pago_sena(request, reserva_id):
                     user_name=f"{cliente.persona.nombre} {cliente.persona.apellido}",
                     reserva_id=reserva.id_reserva,
                     servicio_nombre=reserva.servicio.nombre,
-                    monto=reserva.monto_sena,
+                    monto=pago.monto_sena,
                     payment_id=payment_id,
                     tipo_pago="seña",
                 )
@@ -417,9 +415,9 @@ def confirmar_pago_sena(request, reserva_id):
                     reserva_id=reserva.id_reserva,
                     cliente_nombre=f"{cliente.persona.nombre} {cliente.persona.apellido}",
                     servicio_nombre=reserva.servicio.nombre,
-                    monto=reserva.monto_sena,
+                    monto=pago.monto_sena,
                     payment_id=payment_id,
-                    fecha_reserva=reserva.fecha_reserva,
+                    fecha_reserva=reserva.fecha_cita,
                     direccion=reserva.direccion,
                     observaciones=reserva.observaciones,
                     tipo_pago="seña",
@@ -433,7 +431,7 @@ def confirmar_pago_sena(request, reserva_id):
                     "success": True,
                     "message": "Pago de seña confirmado exitosamente",
                     "reserva_id": reserva.id_reserva,
-                    "estado_pago": reserva.estado_pago_sena,
+                    "estado_pago": pago.estado_pago_sena,
                     "estado_reserva": reserva.estado,
                 }
             )
@@ -488,16 +486,19 @@ def confirmar_pago_final(request, reserva_id):
 
             # Verificar que el pago esté aprobado
             if payment_data.get("status") == "approved":
-                # Actualizar la reserva
-                reserva.estado_pago_final = "aprobado"
-                reserva.payment_id_final = payment_id
-                reserva.fecha_pago_final = timezone.now()
+                pago = reserva.obtener_pago()
+
+                # Actualizar el pago final
+                pago.estado_pago_final = "pagado"
+                pago.payment_id_final = payment_id
+                pago.fecha_pago_final = timezone.now()
 
                 # Actualizar el estado de la reserva
                 if reserva.estado == "aprobado":  # Si estaba en aprobado (diseño aceptado)
                     reserva.estado = "en_curso"  # Pasar a en curso
 
                 reserva.save()
+                pago.save()
 
                 logger.info(f"✅ Pago final confirmado para reserva {reserva_id}")
 
@@ -511,7 +512,7 @@ def confirmar_pago_final(request, reserva_id):
                         user_name=f"{cliente.persona.nombre} {cliente.persona.apellido}",
                         reserva_id=reserva.id_reserva,
                         servicio_nombre=reserva.servicio.nombre,
-                        monto=reserva.monto_final,
+                        monto=pago.monto_final,
                         payment_id=payment_id,
                         tipo_pago="final",
                     )
@@ -527,7 +528,7 @@ def confirmar_pago_final(request, reserva_id):
                     for asignacion in empleados_asignados:
                         empleado = asignacion.empleado
                         hora_servicio = (
-                            reserva.fecha_reserva.strftime("%H:%M") if reserva.fecha_reserva else "A confirmar"
+                            reserva.fecha_cita.strftime("%H:%M") if reserva.fecha_cita else "A confirmar"
                         )
 
                         EmailService.send_employee_work_assignment_notification(
@@ -536,7 +537,7 @@ def confirmar_pago_final(request, reserva_id):
                             reserva_id=reserva.id_reserva,
                             cliente_nombre=f"{cliente.persona.nombre} {cliente.persona.apellido}",
                             servicio_nombre=reserva.servicio.nombre,
-                            fecha_servicio=reserva.fecha_reserva,
+                            fecha_servicio=reserva.fecha_cita,
                             hora_servicio=hora_servicio,
                             direccion=reserva.direccion or "No especificada",
                             observaciones=reserva.observaciones,
@@ -560,7 +561,7 @@ def confirmar_pago_final(request, reserva_id):
                         "success": True,
                         "message": "Pago final confirmado exitosamente",
                         "reserva_id": reserva.id_reserva,
-                        "estado_pago": reserva.estado_pago_final,
+                        "estado_pago": pago.estado_pago_final,
                         "estado_reserva": reserva.estado,
                     }
                 )
@@ -604,27 +605,19 @@ def buscar_pago_por_preferencia(request, reserva_id):
         preference_id = request.data.get("preference_id")
         tipo_pago = request.data.get("tipo_pago", "sena")
 
-        if not preference_id:
-            # Intentar obtener del modelo
-            if tipo_pago == "sena":
-                preference_id = reserva.mercadopago_preference_id_sena
-            else:
-                preference_id = reserva.mercadopago_preference_id_final
-
-        if not preference_id:
-            return Response(
-                {"error": "No se encontró el preference_id"},
-                status=status.HTTP_400_BAD_REQUEST,
+        if preference_id:
+            filters = {"preference_id": preference_id}
+            logger.info(f"🔍 Buscando pago para preferencia: {preference_id}")
+        else:
+            external_reference = (
+                f"SENA-{reserva.id_reserva}" if tipo_pago == "sena" else f"FINAL-{reserva.id_reserva}"
             )
-
-        logger.info(f"🔍 Buscando pago para preferencia: {preference_id}")
+            filters = {"external_reference": external_reference}
+            logger.info(f"🔍 Buscando pago por external_reference: {external_reference}")
 
         # Buscar pagos asociados a esta preferencia
         try:
             sdk = mercadopago.SDK(settings.MERCADOPAGO_ACCESS_TOKEN)
-
-            # Buscar pagos por preference_id
-            filters = {"preference_id": preference_id}
 
             search_result = sdk.payment().search(filters=filters)
 
@@ -647,22 +640,24 @@ def buscar_pago_por_preferencia(request, reserva_id):
                 logger.info(f"✅ Pago aprobado encontrado: {payment_id}")
 
                 # Confirmar el pago
+                pago = reserva.obtener_pago()
                 if tipo_pago == "sena":
-                    reserva.estado_pago_sena = "aprobado"
-                    reserva.payment_id_sena = payment_id
-                    reserva.fecha_pago_sena = timezone.now()
+                    pago.estado_pago_sena = "sena_pagada"
+                    pago.payment_id_sena = payment_id
+                    pago.fecha_pago_sena = timezone.now()
 
                     if reserva.estado == "pendiente_pago_sena":
                         reserva.estado = "en_revision"
                 else:
-                    reserva.estado_pago_final = "aprobado"
-                    reserva.payment_id_final = payment_id
-                    reserva.fecha_pago_final = timezone.now()
+                    pago.estado_pago_final = "pagado"
+                    pago.payment_id_final = payment_id
+                    pago.fecha_pago_final = timezone.now()
 
                     if reserva.estado == "aprobado":
                         reserva.estado = "en_curso"
 
                 reserva.save()
+                pago.save()
 
                 # Enviar emails de confirmación
                 try:
@@ -675,7 +670,7 @@ def buscar_pago_por_preferencia(request, reserva_id):
                             user_name=f"{cliente.persona.nombre} {cliente.persona.apellido}",
                             reserva_id=reserva.id_reserva,
                             servicio_nombre=reserva.servicio.nombre,
-                            monto=reserva.monto_sena,
+                            monto=pago.monto_sena,
                             payment_id=payment_id,
                             tipo_pago="seña",
                         )
@@ -684,9 +679,9 @@ def buscar_pago_por_preferencia(request, reserva_id):
                             reserva_id=reserva.id_reserva,
                             cliente_nombre=f"{cliente.persona.nombre} {cliente.persona.apellido}",
                             servicio_nombre=reserva.servicio.nombre,
-                            monto=reserva.monto_sena,
+                            monto=pago.monto_sena,
                             payment_id=payment_id,
-                            fecha_reserva=reserva.fecha_reserva,
+                            fecha_reserva=reserva.fecha_cita,
                             direccion=reserva.direccion,
                             observaciones=reserva.observaciones,
                             tipo_pago="seña",
@@ -698,7 +693,7 @@ def buscar_pago_por_preferencia(request, reserva_id):
                             user_name=f"{cliente.persona.nombre} {cliente.persona.apellido}",
                             reserva_id=reserva.id_reserva,
                             servicio_nombre=reserva.servicio.nombre,
-                            monto=reserva.monto_final,
+                            monto=pago.monto_final,
                             payment_id=payment_id,
                             tipo_pago="final",
                         )
@@ -707,9 +702,9 @@ def buscar_pago_por_preferencia(request, reserva_id):
                             reserva_id=reserva.id_reserva,
                             cliente_nombre=f"{cliente.persona.nombre} {cliente.persona.apellido}",
                             servicio_nombre=reserva.servicio.nombre,
-                            monto=reserva.monto_final,
+                            monto=pago.monto_final,
                             payment_id=payment_id,
-                            fecha_reserva=reserva.fecha_reserva,
+                            fecha_reserva=reserva.fecha_cita,
                             direccion=reserva.direccion,
                             observaciones=reserva.observaciones,
                             tipo_pago="final",
@@ -809,7 +804,7 @@ def crear_preferencia_prereserva(request):
         reserva = Reserva.objects.create(
             cliente=cliente,
             servicio=servicio,
-            fecha_reserva=fecha_preferida if fecha_preferida else timezone.now(),
+            fecha_cita=fecha_preferida if fecha_preferida else timezone.now(),
             observaciones=f"{descripcion}\n\nNotas: {notas_adicionales}",
             direccion=direccion_servicio,
             estado_pago_sena="pendiente_pago_sena",  # Estado especial
@@ -1070,12 +1065,15 @@ def crear_reserva_con_pago(request):
 
         monto_pagado = payment_data.get("transaction_amount")
 
-        # ACTUALIZAR la reserva existente
-        reserva.payment_id_sena = payment_id
-        reserva.estado_pago_sena = "sena_pagada"
-        reserva.fecha_pago_sena = timezone.now()
+        pago = reserva.obtener_pago()
+
+        # ACTUALIZAR el pago de la reserva existente
+        pago.payment_id_sena = payment_id
+        pago.estado_pago_sena = "sena_pagada"
+        pago.fecha_pago_sena = timezone.now()
         reserva.estado = "confirmada"  # Ahora sí está confirmada
         reserva.save()
+        pago.save()
 
         logger.info(f"✅ Reserva #{reserva.id_reserva} ACTUALIZADA con pago confirmado")
         logger.info(f"💳 Payment ID: {payment_id}")
@@ -1085,7 +1083,7 @@ def crear_reserva_con_pago(request):
         # Enviar email de confirmación
         logger.info("📧 Preparando email de confirmación de pago...")
         logger.info(f"   📮 Destinatario: {cliente.persona.email}")
-        logger.info(f"   💰 Monto: ${reserva.monto_sena}")
+        logger.info(f"   💰 Monto: ${pago.monto_sena}")
         logger.info(f"   🔢 Reserva: #{reserva.id_reserva}")
 
         try:
@@ -1094,7 +1092,7 @@ def crear_reserva_con_pago(request):
                 user_name=f"{cliente.persona.nombre} {cliente.persona.apellido}",
                 reserva_id=reserva.id_reserva,
                 servicio_nombre=reserva.servicio.nombre,
-                monto=reserva.monto_sena,
+                monto=pago.monto_sena,
                 payment_id=payment_id,
                 tipo_pago="seña",
             )

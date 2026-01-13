@@ -176,6 +176,34 @@ class ReservaSerializer(serializers.ModelSerializer):
     encuesta_cliente_respuesta_id = serializers.SerializerMethodField()
     localidad_servicio_info = serializers.SerializerMethodField()
 
+    # Campos de pago (ahora están en `Pago`, se exponen aplanados por compatibilidad)
+    monto_sena = serializers.DecimalField(
+        source="pago.monto_sena",
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
+    estado_pago_sena = serializers.CharField(source="pago.estado_pago_sena", read_only=True)
+    payment_id_sena = serializers.CharField(source="pago.payment_id_sena", read_only=True)
+    fecha_pago_sena = serializers.DateTimeField(source="pago.fecha_pago_sena", read_only=True)
+
+    monto_total = serializers.DecimalField(
+        source="pago.monto_total",
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
+    monto_final = serializers.DecimalField(
+        source="pago.monto_final",
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
+    estado_pago_final = serializers.CharField(source="pago.estado_pago_final", read_only=True)
+    payment_id_final = serializers.CharField(source="pago.payment_id_final", read_only=True)
+    fecha_pago_final = serializers.DateTimeField(source="pago.fecha_pago_final", read_only=True)
+    estado_pago = serializers.CharField(source="pago.estado_pago", read_only=True)
+
     class Meta:
         model = Reserva
         fields = "__all__"
@@ -214,7 +242,8 @@ class ReservaSerializer(serializers.ModelSerializer):
             cache[cache_key] = None
             return None
 
-        respuesta = obj.encuestas.filter(cliente=cliente, estado="completada").order_by("-fecha_completada").first()
+        # En la normalización de encuestas, se reemplazó fecha_completada por fecha_realizacion.
+        respuesta = obj.encuestas.filter(cliente=cliente, estado="completada").order_by("-fecha_realizacion").first()
         cache[cache_key] = respuesta
         return respuesta
 
@@ -371,7 +400,7 @@ class DisenoSerializer(serializers.ModelSerializer):
     estado_display = serializers.CharField(source="get_estado_display", read_only=True)
     servicio_nombre = serializers.CharField(source="servicio.nombre", read_only=True)
     reserva_id = serializers.IntegerField(source="reserva.id_reserva", read_only=True)
-    reserva_fecha_reserva = serializers.DateTimeField(source="reserva.fecha_reserva", read_only=True)
+    reserva_fecha_cita = serializers.DateTimeField(source="reserva.fecha_cita", read_only=True)
     cliente_nombre = serializers.SerializerMethodField()
     disenador_id = serializers.IntegerField(source="disenador.id_empleado", read_only=True, allow_null=True)
     disenador_nombre = serializers.SerializerMethodField()
@@ -388,7 +417,7 @@ class DisenoSerializer(serializers.ModelSerializer):
             "estado_display",
             "reserva",
             "reserva_id",
-            "reserva_fecha_reserva",
+            "reserva_fecha_cita",
             "servicio",
             "servicio_nombre",
             "cliente_nombre",
@@ -429,7 +458,7 @@ class DisenoDetalleSerializer(serializers.ModelSerializer):
     estado_display = serializers.CharField(source="get_estado_display", read_only=True)
     servicio_nombre = serializers.CharField(source="servicio.nombre", read_only=True)
     reserva_id = serializers.IntegerField(source="reserva.id_reserva", read_only=True)
-    reserva_fecha_reserva = serializers.DateTimeField(source="reserva.fecha_reserva", read_only=True)
+    reserva_fecha_cita = serializers.DateTimeField(source="reserva.fecha_cita", read_only=True)
     cliente_nombre = serializers.SerializerMethodField()
     disenador_nombre = serializers.SerializerMethodField()
     productos = DisenoProductoSerializer(many=True, read_only=True)
@@ -448,7 +477,7 @@ class DisenoDetalleSerializer(serializers.ModelSerializer):
             "estado_display",
             "reserva",
             "reserva_id",
-            "reserva_fecha_reserva",
+            "reserva_fecha_cita",
             "servicio",
             "servicio_nombre",
             "cliente_nombre",
@@ -468,14 +497,12 @@ class DisenoDetalleSerializer(serializers.ModelSerializer):
             "fecha_fin",
             "hora_fin",
             "tareas_diseno",
-            "fecha_actualizacion",
         ]
         read_only_fields = [
             "id_diseno",
             "fecha_creacion",
             "fecha_presentacion",
             "fecha_respuesta",
-            "fecha_actualizacion",
         ]
 
     def get_cliente_nombre(self, obj):

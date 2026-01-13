@@ -51,7 +51,7 @@ class WeatherEndpointTests(TestCase):
     def _create_reserva(self, servicio, estado="pendiente", fecha=None):
         fecha = fecha or (timezone.now() + timedelta(days=2))
         return Reserva.objects.create(
-            fecha_reserva=fecha,
+            fecha_cita=fecha,
             cliente=self.cliente,
             servicio=servicio,
             estado=estado,
@@ -67,7 +67,7 @@ class WeatherEndpointTests(TestCase):
             patch("apps.emails.services.EmailService.send_weather_alert_notification") as mock_send_email,
         ):
             mock_forecast.return_value = ForecastResult(
-                date=reserva.fecha_reserva,
+                date=reserva.fecha_cita,
                 precipitation_mm=Decimal("5.00"),
                 precipitation_probability=80,
                 latitude=Decimal("10.12345"),

@@ -1,4 +1,3 @@
-from django.db.models import F
 import json
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
@@ -152,22 +151,11 @@ class ProductoViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     @action(detail=False, methods=["get"])
-    def stock_bajo(self, request):
-        """Obtiene productos con stock bajo"""
-        productos_stock_bajo = []
-        for producto in self.get_queryset():
-            if hasattr(producto, "stock") and producto.stock.necesita_reposicion:
-                productos_stock_bajo.append(producto)
-
-        serializer = self.get_serializer(productos_stock_bajo, many=True)
-        return Response(serializer.data)
-
-    @action(detail=False, methods=["get"])
     def sin_stock(self, request):
         """Obtiene productos sin stock"""
         productos_sin_stock = []
         for producto in self.get_queryset():
-            if hasattr(producto, "stock") and producto.stock.cantidad_actual <= 0:
+            if hasattr(producto, "stock") and producto.stock.cantidad <= 0:
                 productos_sin_stock.append(producto)
 
         serializer = self.get_serializer(productos_sin_stock, many=True)
@@ -185,7 +173,7 @@ class ProductoViewSet(viewsets.ModelViewSet):
             )
 
         stock_data = request.data.copy()
-        stock_data["producto"] = producto.id
+        stock_data["producto"] = producto.id_producto
 
         serializer = StockSerializer(data=stock_data)
         if serializer.is_valid():
@@ -198,16 +186,9 @@ class StockViewSet(viewsets.ModelViewSet):
     queryset = Stock.objects.select_related("producto").all()
     serializer_class = StockSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    search_fields = ["producto__nombre", "producto__codigo", "ubicacion"]
-    ordering_fields = ["cantidad_actual", "cantidad_minima"]
+    search_fields = ["producto__nombre"]
+    ordering_fields = ["cantidad"]
     ordering = ["producto__nombre"]
-
-    @action(detail=False, methods=["get"])
-    def alertas(self, request):
-        """Obtiene todos los stocks que necesitan reposición"""
-        stocks_criticos = self.get_queryset().filter(cantidad_actual__lte=F("cantidad_minima"))
-        serializer = self.get_serializer(stocks_criticos, many=True)
-        return Response(serializer.data)
 
     @action(detail=False, methods=["get"])
     def resumen(self, request):
@@ -216,9 +197,7 @@ class StockViewSet(viewsets.ModelViewSet):
 
         resumen = {
             "total_productos": queryset.count(),
-            "sin_stock": queryset.filter(cantidad_actual=0).count(),
-            "stock_critico": queryset.filter(cantidad_actual__lte=F("cantidad_minima")).count(),
-            "stock_normal": queryset.filter(cantidad_actual__gt=F("cantidad_minima")).count(),
+            "sin_stock": queryset.filter(cantidad=0).count(),
         }
 
         return Response(resumen)

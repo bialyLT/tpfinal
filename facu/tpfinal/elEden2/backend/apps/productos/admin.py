@@ -34,8 +34,7 @@ class TareaAdmin(admin.ModelAdmin):
 class StockInline(admin.TabularInline):
     model = Stock
     extra = 0
-    fields = ("cantidad", "cantidad_minima")
-    readonly_fields = ("cantidad",)
+    fields = ("cantidad",)
 
 
 @admin.register(Producto)
@@ -66,8 +65,7 @@ class ProductoAdmin(admin.ModelAdmin):
 
 @admin.register(Stock)
 class StockAdmin(admin.ModelAdmin):
-    list_display = ("id_stock", "get_producto_nombre", "cantidad", "cantidad_minima")
-    list_filter = ("cantidad_minima",)
+    list_display = ("id_stock", "get_producto_nombre", "cantidad")
     search_fields = ("producto__nombre",)
     ordering = ("producto__nombre",)
 

@@ -57,7 +57,8 @@ class WeatherAlertSerializer(serializers.ModelSerializer):
         reserva = obj.reserva
         return {
             "id_reserva": reserva.id_reserva,
-            "fecha_reserva": reserva.fecha_reserva,
+            # Mantener la clave `fecha_reserva` por compatibilidad, pero usar el nuevo campo.
+            "fecha_reserva": getattr(reserva, "fecha_cita", None),
             "fecha_reprogramada_sugerida": reserva.fecha_reprogramada_sugerida,
             "fecha_reprogramada_confirmada": reserva.fecha_reprogramada_confirmada,
             "estado": reserva.estado,

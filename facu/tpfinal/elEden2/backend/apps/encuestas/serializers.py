@@ -227,7 +227,7 @@ class RespuestaImpactoSerializer(serializers.ModelSerializer):
         return {
             "id_reserva": reserva.id_reserva,
             "servicio": servicio,
-            "fecha_reserva": reserva.fecha_reserva,
+            "fecha_reserva": reserva.fecha_cita,
         }
 
     def get_cliente(self, obj):

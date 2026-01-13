@@ -144,9 +144,9 @@ def google_login(request):
 
             # Crear Persona y Cliente asociados
             try:
-                # Obtener valores por defecto
-                genero_default = Genero.objects.filter(genero="Prefiero no decir").first() or Genero.objects.first()
-                tipo_doc_default = TipoDocumento.objects.filter(tipo="DNI").first() or TipoDocumento.objects.first()
+                # Obtener/crear valores por defecto (evita fallas si no se cargaron datos iniciales)
+                genero_default, _ = Genero.objects.get_or_create(genero="Prefiero no decir")
+                tipo_doc_default, _ = TipoDocumento.objects.get_or_create(tipo="DNI")
                 localidad_default = None
                 if normalized_address:
                     localidad_default = get_or_create_localidad(normalized_address)

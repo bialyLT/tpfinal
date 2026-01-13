@@ -545,7 +545,8 @@ El sistema de alertas de El Edén
         subject = f"[Clima] Posible lluvia para reserva #{reserva.id_reserva}"
         cliente = reserva.cliente.persona if reserva.cliente_id else None
         cliente_nombre = f"{cliente.nombre} {cliente.apellido}" if cliente else "Cliente"
-        fecha_texto = reserva.fecha_reserva.strftime("%d/%m/%Y %H:%M") if reserva.fecha_reserva else "sin fecha"
+        fecha_cita = getattr(reserva, "fecha_cita", None) or getattr(reserva, "fecha_reserva", None)
+        fecha_texto = fecha_cita.strftime("%d/%m/%Y %H:%M") if fecha_cita else "sin fecha"
         message = f"""
 Se detectó una alerta de clima para la reserva #{reserva.id_reserva}.
 
@@ -1206,8 +1207,8 @@ El equipo de El Edén
 
             puntuacion_promedio_fmt = puntuacion_promedio.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             servicio_nombre = getattr(getattr(reserva, "servicio", None), "nombre", "(sin servicio)")
-            fecha_reserva = getattr(reserva, "fecha_reserva", None)
-            fecha_reserva_str = fecha_reserva.strftime("%d/%m/%Y %H:%M") if fecha_reserva else "(sin fecha)"
+            fecha_cita = getattr(reserva, "fecha_cita", None) or getattr(reserva, "fecha_reserva", None)
+            fecha_reserva_str = fecha_cita.strftime("%d/%m/%Y %H:%M") if fecha_cita else "(sin fecha)"
 
             subject = f"Nueva calificación recibida - Reserva #{reserva.id_reserva}"
 

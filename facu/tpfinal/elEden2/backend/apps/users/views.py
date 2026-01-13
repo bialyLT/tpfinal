@@ -139,6 +139,12 @@ class CurrentUserView(APIView):
             except Persona.DoesNotExist:
                 pass
 
+        # Si encontramos Persona pero no está vinculada al User, persistimos el vínculo.
+        # Esto evita que el resto del sistema "no vea" las relaciones cliente/empleado.
+        if persona and persona.user_id is None:
+            persona.user = user
+            persona.save(update_fields=["user"])
+
         if persona:
             # Construir dirección completa
             direccion_partes = [persona.calle, persona.numero]

@@ -73,13 +73,12 @@ const SolicitarServicioPage = () => {
     imagenes_jardin: [],
     imagenes_ideas: [],
     // Nuevos campos
-    tipo_servicio_solicitado: 'diseno_completo', // Default
     superficie_aproximada: '',
-    objetivo_diseno: '',
-    nivel_intervencion: '',
+    objetivo_diseno: '', // id del objetivo (FK)
+    nivel_intervencion: '', // 'true' | 'false' (se envía como boolean)
     presupuesto_aproximado: ''
   });
-  const [referenceData, setReferenceData] = useState({ localidades: [] });
+  const [referenceData, setReferenceData] = useState({ localidades: [], objetivos_diseno: [] });
   const [addressSearch, setAddressSearch] = useState('');
   const [addressInfo, setAddressInfo] = useState(null);
   const [addressError, setAddressError] = useState('');
@@ -120,21 +119,9 @@ const SolicitarServicioPage = () => {
     { id: 4, title: 'Confirmación', icon: CheckCircle }
   ];
 
-  // Opciones para selectores
-  const OBJETIVO_OPCIONES = [
-    { value: 'bajo_mantenimiento', label: 'Bajo Mantenimiento' },
-    { value: 'mucho_color', label: 'Mucho Color' },
-    { value: 'selvatico', label: 'Estilo Selvático' },
-    { value: 'minimalista', label: 'Estilo Minimalista' },
-    { value: 'mascotas', label: 'Espacio para Mascotas' },
-    { value: 'ninos', label: 'Espacio para Niños' },
-    { value: 'huerta', label: 'Huerta' },
-    { value: 'otro', label: 'Otro' }
-  ];
-
   const NIVEL_INTERVENCION_OPCIONES = [
-    { value: 'remodelacion', label: 'Remodelación Parcial' },
-    { value: 'desde_cero', label: 'Diseño Completo desde Cero' }
+    { value: 'false', label: 'Remodelación Parcial' },
+    { value: 'true', label: 'Diseño Completo desde Cero' }
   ];
 
   const PRESUPUESTO_OPCIONES = [
@@ -438,11 +425,13 @@ const SolicitarServicioPage = () => {
   };
 
   const isDisenoCompleto = () => {
-    return formData.tipo_servicio_solicitado === 'diseno_completo';
+    const disenoService = getDisenoService();
+    return disenoService && String(formData.servicio) === String(disenoService.id_servicio);
   };
 
   const isConsultaExpress = () => {
-    return formData.tipo_servicio_solicitado === 'consulta_express';
+    // Ya no diferenciamos express/completo por un campo; el flujo se define por el servicio seleccionado.
+    return false;
   };
 
   // Selección de servicio con auto-avance
@@ -468,7 +457,7 @@ const SolicitarServicioPage = () => {
     setFormData(prev => ({
       ...prev,
       servicio: serviceId,
-      tipo_servicio_solicitado: tipo
+      // reset opcional cuando cambia el servicio
     }));
 
     // Auto-avance
@@ -561,18 +550,24 @@ const SolicitarServicioPage = () => {
       let observacionesCompletas = '';
 
       if (isDisenoCompleto()) {
+        const objetivoSeleccionado = (referenceData.objetivos_diseno || []).find(
+          (o) => String(o.id) === String(formData.objetivo_diseno)
+        );
+        const objetivoLabel = objetivoSeleccionado?.nombre || 'No especificado';
+
         observacionesCompletas = `SOLICITUD DE DISEÑO COMPLETO
 Superficie: ${formData.superficie_aproximada || 'A medir en visita'} m2
-Objetivo: ${OBJETIVO_OPCIONES.find(o => o.value === formData.objetivo_diseno)?.label}
+Objetivo: ${objetivoLabel}
 Intervención: ${NIVEL_INTERVENCION_OPCIONES.find(o => o.value === formData.nivel_intervencion)?.label}
 Presupuesto: ${PRESUPUESTO_OPCIONES.find(o => o.value === formData.presupuesto_aproximado)?.label}
 
 Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
 
-        formDataToSend.append('tipo_servicio_solicitado', 'diseno_completo');
         if (formData.superficie_aproximada) formDataToSend.append('superficie_aproximada', formData.superficie_aproximada);
+        // objetivo_diseno ahora es FK: enviamos el id
         formDataToSend.append('objetivo_diseno', formData.objetivo_diseno);
-        formDataToSend.append('nivel_intervencion', formData.nivel_intervencion);
+        // nivel_intervencion ahora es boolean
+        formDataToSend.append('nivel_intervencion', formData.nivel_intervencion === 'true');
         formDataToSend.append('presupuesto_aproximado', formData.presupuesto_aproximado);
 
       } else {
@@ -580,11 +575,6 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
         observacionesCompletas = formData.notas_adicionales
           ? `${formData.descripcion}\n\nNotas adicionales: ${formData.notas_adicionales}`
           : formData.descripcion;
-
-        if (isConsultaExpress()) {
-          formDataToSend.append('tipo_servicio_solicitado', 'consulta_express');
-        }
-        // Para mantenimiento no enviamos tipo_servicio_solicitado específico (o podríamos agregar uno 'mantenimiento' si el backend lo soporta, pero por ahora null o default)
       }
 
       const ubicacionExtra = [
@@ -665,10 +655,6 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
   };
 
   const getSelectedServiceName = () => {
-    if (isDisenoCompleto()) return "Diseño Completo de Jardín";
-    if (isConsultaExpress()) return "Consulta Express";
-    if (formData.tipo_servicio_solicitado === 'mantenimiento') return "Mantenimiento de Jardín";
-
     const s = serviciosDisponibles.find(s => s.id_servicio === parseInt(formData.servicio));
     return s ? s.nombre : 'Servicio';
   };
@@ -853,8 +839,8 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
                           className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
                         >
                           <option value="">Seleccione un objetivo...</option>
-                          {OBJETIVO_OPCIONES.map(op => (
-                            <option key={op.value} value={op.value}>{op.label}</option>
+                          {(referenceData.objetivos_diseno || []).map((op) => (
+                            <option key={op.id} value={op.id}>{op.nombre}</option>
                           ))}
                         </select>
                       </div>
@@ -910,10 +896,7 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
                       value={formData.descripcion}
                       onChange={handleChange}
                       rows={4}
-                      placeholder={isConsultaExpress()
-                        ? "Cuéntenos brevemente su idea o consulta..."
-                        : "Describa el mantenimiento que necesita (poda, corte de pasto, limpieza, etc.)..."
-                      }
+                      placeholder="Describa el servicio que necesita (poda, corte de pasto, limpieza, etc.)..."
                       className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
                     />
                   </div>
@@ -1143,7 +1126,7 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
                   </div>
 
                   {/* Imágenes de ideas (Solo para diseño) */}
-                  {(isDisenoCompleto() || isConsultaExpress()) && (
+                  {isDisenoCompleto() && (
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-3">
                         <Image className="w-4 h-4 inline mr-2 text-purple-400" />
@@ -1293,7 +1276,7 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
                         <span className="text-gray-300">Detalles del Diseño: </span>
                         <ul className="text-white list-disc list-inside mt-1">
                           <li>Superficie: {formData.superficie_aproximada || 'A medir'} m²</li>
-                          <li>Objetivo: {OBJETIVO_OPCIONES.find(o => o.value === formData.objetivo_diseno)?.label}</li>
+                          <li>Objetivo: {(referenceData.objetivos_diseno || []).find(o => String(o.id) === String(formData.objetivo_diseno))?.nombre}</li>
                           <li>Intervención: {NIVEL_INTERVENCION_OPCIONES.find(o => o.value === formData.nivel_intervencion)?.label}</li>
                           <li>Presupuesto: {PRESUPUESTO_OPCIONES.find(o => o.value === formData.presupuesto_aproximado)?.label}</li>
                         </ul>

@@ -75,7 +75,7 @@ class EncuestaEmailNotificationTests(TestCase):
 
     def test_responder_encuesta_notifica_a_empleados_asignados(self):
         reserva = Reserva.objects.create(
-            fecha_reserva=timezone.now() + timedelta(days=1),
+            fecha_cita=timezone.now() + timedelta(days=1),
             cliente=self.cliente,
             servicio=self.servicio,
             estado="completada",

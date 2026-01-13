@@ -365,7 +365,7 @@ class WeatherAlertService:
 
         while dias_buscados < self.max_employee_search_days:
             reservas_en_fecha = Reserva.objects.filter(
-                fecha_reserva__date=fecha_candidata.date(),
+                fecha_cita__date=fecha_candidata.date(),
                 estado__in=["confirmada", "en_curso"],
             ).values_list("id_reserva", flat=True)
 
@@ -384,10 +384,10 @@ class WeatherAlertService:
         return fecha_inicial + timedelta(days=7)
 
     def _suggest_reprogramming_date(self, reserva: Reserva) -> Optional[datetime]:
-        if not reserva or not reserva.fecha_reserva:
+        if not reserva or not reserva.fecha_cita:
             return None
         empleados_necesarios = self._determine_empleados_requeridos(reserva)
-        return self._find_next_available_slot(reserva.fecha_reserva, empleados_necesarios)
+        return self._find_next_available_slot(reserva.fecha_cita, empleados_necesarios)
 
     def evaluate_reserva(
         self,
@@ -397,9 +397,9 @@ class WeatherAlertService:
         auto_create_alert: bool = True,
     ) -> dict:
         fecha_objetivo = (
-            reserva.fecha_reserva.astimezone(datetime_timezone.utc)
-            if timezone.is_aware(reserva.fecha_reserva)
-            else reserva.fecha_reserva
+            reserva.fecha_cita.astimezone(datetime_timezone.utc)
+            if timezone.is_aware(reserva.fecha_cita)
+            else reserva.fecha_cita
         )
         latitude, longitude, localidad_info = self._get_coordinates(reserva, latitude, longitude)
         forecast = self.client.get_daily_forecast(latitude, longitude, fecha_objetivo)
@@ -501,7 +501,7 @@ class WeatherAlertService:
     ) -> WeatherAlert:
         if not reserva.servicio.reprogramable_por_clima:
             raise ValueError("El servicio asociado no permite reprogramaciones automáticas por clima")
-        fecha = alert_date or reserva.fecha_reserva
+        fecha = alert_date or reserva.fecha_cita
         precipitation = precipitation_mm or self.threshold
         forecast, created = WeatherForecast.objects.get_or_create(
             date=fecha.date(),
@@ -630,7 +630,7 @@ class WeatherAlertService:
             group["reservas"].append(
                 {
                     "id_reserva": reserva.id_reserva,
-                    "fecha_reserva": reserva.fecha_reserva,
+                    "fecha_reserva": reserva.fecha_cita,
                     "servicio": getattr(reserva.servicio, "nombre", None),
                     "cliente": (
                         f"{reserva.cliente.persona.nombre} {reserva.cliente.persona.apellido}"

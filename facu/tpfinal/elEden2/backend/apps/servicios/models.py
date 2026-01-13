@@ -16,21 +16,6 @@ class ConfiguracionPago(models.Model):
         validators=[MinValueValidator(Decimal("0"))],
         help_text="Monto de seña requerido para realizar una reserva",
     )
-    porcentaje_sena = models.DecimalField(
-        max_digits=5,
-        decimal_places=2,
-        default=Decimal("0"),
-        validators=[MinValueValidator(Decimal("0"))],
-        help_text="Porcentaje de seña sobre el total (0 para usar monto fijo)",
-    )
-    fecha_actualizacion = models.DateTimeField(auto_now=True)
-    actualizado_por = models.ForeignKey(
-        "auth.User",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="configuraciones_pago",
-    )
 
     class Meta:
         verbose_name = "Configuración de Pago"
@@ -38,8 +23,6 @@ class ConfiguracionPago(models.Model):
         db_table = "configuracion_pago"
 
     def __str__(self):
-        if self.porcentaje_sena > 0:
-            return f"Seña: {self.porcentaje_sena}% del total"
         return f"Seña: ${self.monto_sena}"
 
     @classmethod
@@ -52,23 +35,18 @@ class ConfiguracionPago(models.Model):
         """
         Calcula el monto de seña según configuración.
         - Si no hay monto_total (reserva inicial): usa monto fijo
-        - Si hay monto_total y porcentaje_sena > 0: calcula porcentaje
-        - Si hay monto_total y porcentaje_sena = 0: usa monto fijo
+        - Si hay monto_total (reserva inicial o luego): usa monto fijo
         """
-        if self.porcentaje_sena > 0 and monto_total and monto_total > 0:
-            return (monto_total * self.porcentaje_sena / Decimal("100")).quantize(Decimal("0.01"))
         return self.monto_sena
 
 
 class Servicio(models.Model):
-    """Modelo para servicios según diagrama ER"""
+    """Modelo para servicios"""
 
     id_servicio = models.AutoField(primary_key=True)
     nombre = models.CharField(max_length=200)
     descripcion = models.TextField(blank=True, null=True)
     activo = models.BooleanField(default=True)
-    fecha_creacion = models.DateTimeField(auto_now_add=True)
-    fecha_actualizacion = models.DateTimeField(auto_now=True)
     reprogramable_por_clima = models.BooleanField(
         default=True,
         help_text="Indica si este servicio puede reagendarse automáticamente ante mal clima",
@@ -88,8 +66,26 @@ class Servicio(models.Model):
         return self.nombre
 
 
+class ObjetivoDiseno(models.Model):
+    """Catálogo configurable de objetivos de diseño (no hardcodeado)."""
+
+    id_objetivo_diseno = models.AutoField(primary_key=True)
+    codigo = models.CharField(max_length=50, unique=True)
+    nombre = models.CharField(max_length=120, unique=True)
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Objetivo de Diseño"
+        verbose_name_plural = "Objetivos de Diseño"
+        db_table = "objetivo_diseno"
+        ordering = ["nombre"]
+
+    def __str__(self):
+        return self.nombre
+
+
 class Reserva(models.Model):
-    """Modelo para reservas de servicios según diagrama ER"""
+    """Modelo para reservas de servicios"""
 
     ESTADO_CHOICES = [
         ("pendiente", "Pendiente"),
@@ -111,28 +107,6 @@ class Reserva(models.Model):
         ("cancelado", "Cancelado"),
     ]
 
-    # Nuevas opciones para el flujo de solicitud mejorado
-    TIPO_SERVICIO_SOLICITADO_CHOICES = [
-        ("diseno_completo", "Diseño Completo de Jardín"),
-        ("consulta_express", "Consulta Express / Idea Preliminar"),
-    ]
-
-    OBJETIVO_DISENO_CHOICES = [
-        ("bajo_mantenimiento", "Bajo Mantenimiento"),
-        ("mucho_color", "Mucho Color"),
-        ("selvatico", "Estilo Selvático"),
-        ("minimalista", "Estilo Minimalista"),
-        ("mascotas", "Espacio para Mascotas"),
-        ("ninos", "Espacio para Niños"),
-        ("huerta", "Huerta"),
-        ("otro", "Otro"),
-    ]
-
-    NIVEL_INTERVENCION_CHOICES = [
-        ("remodelacion", "Remodelación Parcial"),
-        ("desde_cero", "Diseño Completo desde Cero"),
-    ]
-
     PRESUPUESTO_CHOICES = [
         ("bajo", "Económico / Ajustado"),
         ("medio", "Intermedio / Flexible"),
@@ -140,8 +114,18 @@ class Reserva(models.Model):
     ]
 
     id_reserva = models.AutoField(primary_key=True)
-    fecha_reserva = models.DateTimeField()
     fecha_solicitud = models.DateTimeField(auto_now_add=True)
+    fecha_cita = models.DateTimeField()
+    fecha_inicio = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Fecha y hora real de inicio del servicio",
+    )
+    fecha_finalizacion = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Fecha y hora real en que se completó el servicio",
+    )
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default="pendiente")
     observaciones = models.TextField(blank=True, null=True)
     direccion = models.CharField(
@@ -151,13 +135,7 @@ class Reserva(models.Model):
         help_text="Dirección donde se realizará el servicio",
     )
 
-    # Nuevos campos estructurados para la solicitud
-    tipo_servicio_solicitado = models.CharField(
-        max_length=50,
-        choices=TIPO_SERVICIO_SOLICITADO_CHOICES,
-        default="consulta_express",
-        help_text="Tipo de servicio seleccionado por el cliente",
-    )
+    # Campos estructurados para la solicitud
     superficie_aproximada = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -165,19 +143,18 @@ class Reserva(models.Model):
         blank=True,
         help_text="Superficie aproximada en m2",
     )
-    objetivo_diseno = models.CharField(
-        max_length=50,
-        choices=OBJETIVO_DISENO_CHOICES,
+    objetivo_diseno = models.ForeignKey(
+        "servicios.ObjetivoDiseno",
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
+        related_name="reservas",
         help_text="Objetivo principal del diseño",
     )
-    nivel_intervencion = models.CharField(
-        max_length=50,
-        choices=NIVEL_INTERVENCION_CHOICES,
+    nivel_intervencion = models.BooleanField(
         null=True,
         blank=True,
-        help_text="Nivel de intervención requerido",
+        help_text="Nivel de intervención requerido (True=desde cero, False=remodelación)",
     )
     presupuesto_aproximado = models.CharField(
         max_length=50,
@@ -187,61 +164,10 @@ class Reserva(models.Model):
         help_text="Rango de presupuesto estimado por el cliente",
     )
 
-    # Campos de pago simplificados - MercadoPago.js manejará el frontend
-    monto_sena = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=Decimal("0"),
-        validators=[MinValueValidator(Decimal("0"))],
-        help_text="Monto de seña para confirmar la reserva",
-    )
-    estado_pago_sena = models.CharField(
-        max_length=20,
-        choices=ESTADO_PAGO_CHOICES,
-        default="pendiente",
-        help_text="Estado del pago de seña",
-    )
-    payment_id_sena = models.CharField(
-        max_length=200,
-        blank=True,
-        null=True,
-        help_text="ID de pago de MercadoPago para la seña",
-    )
-    fecha_pago_sena = models.DateTimeField(blank=True, null=True)
+    # Pago asociado: una reserva tiene un solo pago (seña + pago final)
+    # Relación definida en el modelo `Pago` con related_name='pago'.
 
-    # Campos de pago final
-    monto_total = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=Decimal("0"),
-        validators=[MinValueValidator(Decimal("0"))],
-        help_text="Monto total del servicio",
-    )
-    monto_final = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=Decimal("0"),
-        validators=[MinValueValidator(Decimal("0"))],
-        help_text="Monto final a pagar (total - seña)",
-    )
-    estado_pago_final = models.CharField(
-        max_length=20,
-        choices=ESTADO_PAGO_CHOICES,
-        default="pendiente",
-        help_text="Estado del pago final",
-    )
-    payment_id_final = models.CharField(
-        max_length=200,
-        blank=True,
-        null=True,
-        help_text="ID de pago de MercadoPago para el pago final",
-    )
-    fecha_pago_final = models.DateTimeField(blank=True, null=True)
-
-    # Campo de pago general (para compatibilidad)
-    estado_pago = models.CharField(max_length=20, choices=ESTADO_PAGO_CHOICES, default="pendiente")
-
-    # Relaciones según diagrama ER
+    # Relaciones
     cliente = models.ForeignKey("users.Cliente", on_delete=models.PROTECT, related_name="reservas")
     servicio = models.ForeignKey(Servicio, on_delete=models.PROTECT, related_name="reservas")
     empleados = models.ManyToManyField(
@@ -272,10 +198,6 @@ class Reserva(models.Model):
     alerta_clima_payload = models.JSONField(default=dict, blank=True)
     reprogramacion_fuente = models.CharField(max_length=50, blank=True, null=True)
 
-    # Metadatos
-    fecha_creacion = models.DateTimeField(auto_now_add=True)
-    fecha_actualizacion = models.DateTimeField(auto_now=True)
-    # Token único para acceso público a encuesta de satisfacción (link por email)
     # Token único para acceso público a encuesta de satisfacción (link por email)
     encuesta_token = models.UUIDField(
         unique=True,
@@ -284,20 +206,13 @@ class Reserva(models.Model):
         help_text="Token público para responder la encuesta de la reserva",
     )
 
-    # Fecha real de finalización del servicio
-    fecha_realizacion = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="Fecha y hora real en que se completó el servicio",
-    )
-
     class Meta:
         verbose_name = "Reserva"
         verbose_name_plural = "Reservas"
         db_table = "reserva"
-        ordering = ["-fecha_reserva"]
+        ordering = ["-fecha_cita"]
         indexes = [
-            models.Index(fields=["fecha_reserva"]),
+            models.Index(fields=["fecha_cita"]),
             models.Index(fields=["estado"]),
             models.Index(fields=["cliente"]),
         ]
@@ -305,28 +220,16 @@ class Reserva(models.Model):
     def __str__(self):
         return f"Reserva {self.id_reserva} - {self.cliente.persona.nombre_completo} - {self.servicio.nombre}"
 
-    def calcular_monto_final(self):
-        """Calcula el monto final a pagar (total - seña)"""
-        if self.monto_total > 0:
-            self.monto_final = max(Decimal("0"), self.monto_total - self.monto_sena)
-        else:
-            self.monto_final = Decimal("0")
-        return self.monto_final
+    def obtener_pago(self):
+        """Devuelve el `Pago` asociado, creándolo si no existe."""
+        pago, _ = Pago.objects.get_or_create(reserva=self)
+        return pago
 
     def asignar_sena(self):
-        """
-        Asigna el monto de seña según configuración.
-        - En creación de reserva (sin monto_total): usa monto fijo
-        - Cuando se define monto_total: recalcula si es porcentaje
-        """
-        config = ConfiguracionPago.obtener_configuracion()
-        # Si no hay monto_total o es 0, siempre usa monto fijo
-        if not self.monto_total or self.monto_total == 0:
-            self.monto_sena = config.monto_sena
-        else:
-            # Si hay monto_total, usa calcular_sena (que puede ser fijo o porcentaje)
-            self.monto_sena = config.calcular_sena(self.monto_total)
-        self.calcular_monto_final()
+        """Asigna/recalcula la seña en el pago asociado según configuración."""
+        pago = self.obtener_pago()
+        pago.asignar_sena()
+        pago.save(update_fields=["monto_sena"])
 
     def confirmar(self):
         """Confirmar la reserva"""
@@ -390,16 +293,95 @@ class Reserva(models.Model):
         self.motivo_reprogramacion = motivo
 
         if confirmar:
-            self.fecha_reserva = nueva_fecha
+            self.fecha_cita = nueva_fecha
             self.fecha_reprogramada_confirmada = nueva_fecha
             self.requiere_reprogramacion = False
-            update_fields.extend(["fecha_reserva", "fecha_reprogramada_confirmada"])
+            update_fields.extend(["fecha_cita", "fecha_reprogramada_confirmada"])
         else:
             self.fecha_reprogramada_confirmada = None
             self.requiere_reprogramacion = True
             update_fields.append("fecha_reprogramada_confirmada")
 
         self.save(update_fields=update_fields)
+
+
+class Pago(models.Model):
+    """Pago asociado a una reserva (seña + pago final en la misma instancia)."""
+
+    id_pago = models.AutoField(primary_key=True)
+    reserva = models.OneToOneField(
+        "servicios.Reserva",
+        on_delete=models.CASCADE,
+        related_name="pago",
+    )
+
+    # Seña
+    monto_sena = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0"),
+        validators=[MinValueValidator(Decimal("0"))],
+        help_text="Monto de seña para confirmar la reserva",
+    )
+    estado_pago_sena = models.CharField(
+        max_length=20,
+        choices=Reserva.ESTADO_PAGO_CHOICES,
+        default="pendiente",
+        help_text="Estado del pago de seña",
+    )
+    payment_id_sena = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="ID de pago de MercadoPago para la seña",
+    )
+    fecha_pago_sena = models.DateTimeField(blank=True, null=True)
+
+    # Totales y pago final
+    monto_total = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0"),
+        validators=[MinValueValidator(Decimal("0"))],
+        help_text="Monto total del servicio (sin descontar la seña)",
+    )
+    estado_pago_final = models.CharField(
+        max_length=20,
+        choices=Reserva.ESTADO_PAGO_CHOICES,
+        default="pendiente",
+        help_text="Estado del pago final",
+    )
+    payment_id_final = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="ID de pago de MercadoPago para el pago final",
+    )
+    fecha_pago_final = models.DateTimeField(blank=True, null=True)
+
+    # Estado general (compatibilidad)
+    estado_pago = models.CharField(max_length=20, choices=Reserva.ESTADO_PAGO_CHOICES, default="pendiente")
+
+    class Meta:
+        verbose_name = "Pago"
+        verbose_name_plural = "Pagos"
+        db_table = "pago_reserva"
+
+    def __str__(self):
+        return f"Pago {self.id_pago} - Reserva {self.reserva_id}"
+
+    @property
+    def monto_final(self):
+        """Monto final a pagar (total - seña) sin persistirlo."""
+        return max(Decimal("0"), (self.monto_total or Decimal("0")) - (self.monto_sena or Decimal("0")))
+
+    def asignar_sena(self):
+        """Asigna/recalcula el monto de seña según configuración."""
+        config = ConfiguracionPago.obtener_configuracion()
+        if not self.monto_total or self.monto_total == 0:
+            self.monto_sena = config.monto_sena
+        else:
+            self.monto_sena = config.calcular_sena(self.monto_total)
 
 
 class ReservaEmpleado(models.Model):
@@ -633,9 +615,10 @@ class Diseno(models.Model):
         if self.reserva:
             # Asignar el monto total del presupuesto a la reserva
             if self.presupuesto and self.presupuesto > 0:
-                self.reserva.monto_total = self.presupuesto
-                self.reserva.calcular_monto_final()
-                self.reserva.save()
+                pago = self.reserva.obtener_pago()
+                pago.monto_total = self.presupuesto
+                pago.asignar_sena()
+                pago.save(update_fields=["monto_total", "monto_sena"])
 
             # El pago final se procesará cuando el cliente haga el pago
             # La reserva se confirmará cuando el pago final sea aprobado

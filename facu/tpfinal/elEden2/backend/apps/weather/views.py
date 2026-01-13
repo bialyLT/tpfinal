@@ -36,7 +36,7 @@ class WeatherCheckAPIView(APIView):
             latitude = float(data["latitude"])
             longitude = float(data["longitude"])
             dummy_reserva = Reserva(
-                fecha_reserva=datetime.combine(fecha, datetime.min.time(), tzinfo=timezone.utc),
+                fecha_cita=datetime.combine(fecha, datetime.min.time(), tzinfo=timezone.utc),
                 servicio=None,
             )
             result = service.evaluate_reserva(
@@ -62,7 +62,7 @@ class WeatherSimulateAPIView(APIView):
             alert_datetime = timezone.make_aware(alert_datetime, timezone.get_current_timezone())
 
         reservas_qs = Reserva.objects.select_related("servicio", "cliente__persona").filter(
-            fecha_reserva__date=alert_datetime.date(),
+            fecha_cita__date=alert_datetime.date(),
             servicio__reprogramable_por_clima=True,
             estado__in=["pendiente", "confirmada", "en_curso"],
         )
@@ -185,16 +185,16 @@ class EligibleReservationsAPIView(APIView):
         reservas = (
             Reserva.objects.select_related("cliente__persona", "servicio")
             .filter(
-                fecha_reserva__gte=ahora,
+                fecha_cita__gte=ahora,
                 servicio__reprogramable_por_clima=True,
                 estado__in=["pendiente", "confirmada", "en_curso"],
             )
-            .order_by("fecha_reserva")[:25]
+            .order_by("fecha_cita")[:25]
         )
         data = [
             {
                 "id_reserva": reserva.id_reserva,
-                "fecha_reserva": reserva.fecha_reserva,
+                "fecha_reserva": reserva.fecha_cita,
                 "cliente": f"{reserva.cliente.persona.nombre} {reserva.cliente.persona.apellido}",
                 "servicio": reserva.servicio.nombre,
                 "direccion": reserva.direccion,
@@ -288,10 +288,10 @@ class ReservationForecastSummaryAPIView(APIView):
         reservas = (
             Reserva.objects.select_related("servicio", "cliente__persona", "localidad_servicio")
             .filter(
-                fecha_reserva__gte=now,
-                fecha_reserva__lte=max_reserva_date,
+                fecha_cita__gte=now,
+                fecha_cita__lte=max_reserva_date,
             )
-            .order_by("fecha_reserva")
+            .order_by("fecha_cita")
         )
 
         service = WeatherAlertService()

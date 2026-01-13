@@ -1,6 +1,7 @@
 ﻿import logging
 from datetime import datetime
 
+import django_filters
 from django.db import transaction
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -61,21 +62,32 @@ class ServicioViewSet(viewsets.ModelViewSet):
 
 class ReservaViewSet(viewsets.ModelViewSet):
     queryset = (
-        Reserva.objects.select_related("cliente__persona", "servicio", "localidad_servicio")
+        Reserva.objects.select_related("cliente__persona", "servicio", "localidad_servicio", "pago")
         .prefetch_related("encuestas__cliente__persona", "encuestas__encuesta")
         .all()
     )
     serializer_class = ReservaSerializer
     pagination_class = SmallResultsSetPagination  # 5 items por página (para "Mis Reservas")
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = {
-        "estado": ["exact"],
-        "servicio": ["exact"],
-        "fecha_solicitud": ["date", "range"],
-        "fecha_realizacion": ["date", "range"],
-        "estado_pago_sena": ["exact"],
-        "estado_pago_final": ["exact"],
-    }
+
+    class ReservaFilter(django_filters.FilterSet):
+        estado_pago_sena = django_filters.CharFilter(field_name="pago__estado_pago_sena")
+        estado_pago_final = django_filters.CharFilter(field_name="pago__estado_pago_final")
+        fecha_solicitud = django_filters.DateFromToRangeFilter(field_name="fecha_solicitud")
+        fecha_finalizacion = django_filters.DateFromToRangeFilter(field_name="fecha_finalizacion")
+
+        class Meta:
+            model = Reserva
+            fields = [
+                "estado",
+                "servicio",
+                "fecha_solicitud",
+                "fecha_finalizacion",
+                "estado_pago_sena",
+                "estado_pago_final",
+            ]
+
+    filterset_class = ReservaFilter
     search_fields = [
         "cliente__persona__nombre",
         "cliente__persona__apellido",
@@ -95,16 +107,16 @@ class ReservaViewSet(viewsets.ModelViewSet):
 
         # Si es staff, mostrar solo reservas con seña pagada
         if user.is_staff:
-            return Reserva.objects.select_related("cliente__persona", "servicio", "localidad_servicio").filter(
-                estado_pago_sena__in=["sena_pagada", "aprobado"]
+            return Reserva.objects.select_related("cliente__persona", "servicio", "localidad_servicio", "pago").filter(
+                pago__estado_pago_sena__in=["sena_pagada", "aprobado"]
             )
 
         # Verificar si es empleado
         try:
             Empleado.objects.get(persona__email=user.email)
             # Empleados también solo ven reservas con seña pagada
-            return Reserva.objects.select_related("cliente__persona", "servicio", "localidad_servicio").filter(
-                estado_pago_sena__in=["sena_pagada", "aprobado"]
+            return Reserva.objects.select_related("cliente__persona", "servicio", "localidad_servicio", "pago").filter(
+                pago__estado_pago_sena__in=["sena_pagada", "aprobado"]
             )
         except Empleado.DoesNotExist:
             pass
@@ -112,7 +124,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
         # Si es cliente, filtrar solo sus reservas (sin restricción de estado)
         try:
             cliente = Cliente.objects.get(persona__email=user.email)
-            return Reserva.objects.select_related("cliente__persona", "servicio", "localidad_servicio").filter(
+            return Reserva.objects.select_related("cliente__persona", "servicio", "localidad_servicio", "pago").filter(
                 cliente=cliente
             )
         except Cliente.DoesNotExist:
@@ -139,6 +151,9 @@ class ReservaViewSet(viewsets.ModelViewSet):
         Crear una reserva de un servicio del catálogo
         """
         data = request.data.copy()
+
+        # Campos legacy (normalización): si el frontend los manda, los ignoramos
+        data.pop("tipo_servicio_solicitado", None)
 
         # Obtener el cliente actual basado en el email del usuario autenticado
         try:
@@ -250,11 +265,12 @@ class ReservaViewSet(viewsets.ModelViewSet):
             )
 
         # Preparar respuesta con información de pago
+        pago = reserva.obtener_pago()
         response_data = dict(serializer.data)
         response_data["pago_info"] = {
-            "monto_sena": str(reserva.monto_sena),
-            "estado_pago_sena": reserva.estado_pago_sena,
-            "mensaje": f"Reserva creada. Monto de seña: ${reserva.monto_sena}",
+            "monto_sena": str(pago.monto_sena),
+            "estado_pago_sena": pago.estado_pago_sena,
+            "mensaje": f"Reserva creada. Monto de seña: ${pago.monto_sena}",
         }
 
         headers = self.get_success_headers(response_data)
@@ -372,10 +388,11 @@ class ReservaViewSet(viewsets.ModelViewSet):
             return Response({"error": "payment_id es requerido"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Actualizar estado de pago
-        reserva.payment_id_sena = payment_id
-        reserva.estado_pago_sena = "sena_pagada"
-        reserva.fecha_pago_sena = timezone.now()
-        reserva.save()
+        pago = reserva.obtener_pago()
+        pago.payment_id_sena = payment_id
+        pago.estado_pago_sena = "sena_pagada"
+        pago.fecha_pago_sena = timezone.now()
+        pago.save(update_fields=["payment_id_sena", "estado_pago_sena", "fecha_pago_sena"])
 
         logger.info(f"✅ Pago de seña confirmado para reserva {reserva.id_reserva}: payment_id={payment_id}")
 
@@ -390,7 +407,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
                 user_name=f"{cliente.persona.nombre} {cliente.persona.apellido}",
                 reserva_id=reserva.id_reserva,
                 servicio_nombre=reserva.servicio.nombre,
-                monto=reserva.monto_sena,
+                monto=pago.monto_sena,
                 payment_id=payment_id,
                 tipo_pago="seña",
             )
@@ -410,9 +427,9 @@ class ReservaViewSet(viewsets.ModelViewSet):
                 reserva_id=reserva.id_reserva,
                 cliente_nombre=f"{cliente.persona.nombre} {cliente.persona.apellido}",
                 servicio_nombre=reserva.servicio.nombre,
-                monto=reserva.monto_sena,
+                monto=pago.monto_sena,
                 payment_id=payment_id,
-                fecha_reserva=reserva.fecha_reserva,
+                fecha_reserva=reserva.fecha_cita,
                 direccion=reserva.direccion,
                 observaciones=reserva.observaciones,
                 tipo_pago="seña",
@@ -449,10 +466,11 @@ class ReservaViewSet(viewsets.ModelViewSet):
             return Response({"error": "payment_id es requerido"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Actualizar estado de pago
-        reserva.payment_id_final = payment_id
-        reserva.estado_pago_final = "pagado"
-        reserva.fecha_pago_final = timezone.now()
-        reserva.save()
+        pago = reserva.obtener_pago()
+        pago.payment_id_final = payment_id
+        pago.estado_pago_final = "pagado"
+        pago.fecha_pago_final = timezone.now()
+        pago.save(update_fields=["payment_id_final", "estado_pago_final", "fecha_pago_final"])
 
         logger.info(f"Pago final confirmado para reserva {reserva.id_reserva}: payment_id={payment_id}")
 
@@ -464,7 +482,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
                 user_name=f"{cliente.persona.nombre} {cliente.persona.apellido}",
                 reserva_id=reserva.id_reserva,
                 servicio_nombre=reserva.servicio.nombre,
-                monto=reserva.monto_final,
+                monto=pago.monto_final,
                 payment_id=payment_id,
                 tipo_pago="final",
             )
@@ -556,13 +574,19 @@ class ReservaViewSet(viewsets.ModelViewSet):
         from django.conf import settings
 
         reserva = self.get_object()
+        pago = reserva.obtener_pago()
 
         # Validar que no haya sido pagada ya
-        if reserva.estado_pago_sena == "sena_pagada":
+        if pago.estado_pago_sena == "sena_pagada":
             return Response(
                 {"error": "Esta seña ya ha sido pagada"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        # Si por alguna razón no hay seña asignada todavía, asignarla ahora
+        if not pago.monto_sena or pago.monto_sena == 0:
+            reserva.asignar_sena()
+            pago = reserva.obtener_pago()
 
         try:
             sdk = mercadopago.SDK(settings.MERCADOPAGO_ACCESS_TOKEN)
@@ -574,7 +598,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
                         "title": f"Seña - Reserva #{reserva.id_reserva} - {reserva.servicio.nombre}",
                         "description": f"Pago de seña para reserva de {reserva.servicio.nombre}",
                         "quantity": 1,
-                        "unit_price": float(reserva.monto_sena),
+                        "unit_price": float(pago.monto_sena),
                         "currency_id": "ARS",
                         "category_id": "services",
                     }
@@ -598,7 +622,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
             }
 
             logger.info(f"🔵 Creando preferencia de MercadoPago para reserva {reserva.id_reserva}")
-            logger.info(f"💰 Monto: ${reserva.monto_sena}")
+            logger.info(f"💰 Monto: ${pago.monto_sena}")
             logger.info(f"👤 Cliente: {reserva.cliente.persona.email}")
 
             preference_response = sdk.preference().create(preference_data)
@@ -620,7 +644,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
                     "preference_id": preference.get("id"),
                     "init_point": preference.get("init_point"),
                     "sandbox_init_point": preference.get("sandbox_init_point"),
-                    "monto": str(reserva.monto_sena),
+                    "monto": str(pago.monto_sena),
                 },
                 status=status.HTTP_200_OK,
             )
@@ -637,23 +661,24 @@ class ReservaViewSet(viewsets.ModelViewSet):
         from django.conf import settings
 
         reserva = self.get_object()
+        pago = reserva.obtener_pago()
 
         # Validar que la seña haya sido pagada
-        if reserva.estado_pago_sena != "sena_pagada":
+        if pago.estado_pago_sena != "sena_pagada":
             return Response(
                 {"error": "Primero debe pagarse la seña"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Validar que no haya sido pagado ya
-        if reserva.estado_pago_final == "pagado":
+        if pago.estado_pago_final == "pagado":
             return Response(
                 {"error": "Este pago final ya ha sido completado"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Validar que exista un monto final
-        if reserva.monto_final <= 0:
+        if pago.monto_final <= 0:
             return Response(
                 {"error": "No hay monto final a pagar"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -667,7 +692,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
                     {
                         "title": f"Pago Final - Reserva #{reserva.id_reserva} - {reserva.servicio.nombre}",
                         "quantity": 1,
-                        "unit_price": float(reserva.monto_final),
+                        "unit_price": float(pago.monto_final),
                         "currency_id": "ARS",
                     }
                 ],
@@ -694,7 +719,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
                     "preference_id": preference["id"],
                     "init_point": preference["init_point"],
                     "sandbox_init_point": preference.get("sandbox_init_point"),
-                    "monto": str(reserva.monto_final),
+                    "monto": str(pago.monto_final),
                 },
                 status=status.HTTP_200_OK,
             )
@@ -733,7 +758,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
 
         # Obtener reservas activas en esa fecha
         reservas_en_fecha = Reserva.objects.filter(
-            fecha_reserva__date=fecha, estado__in=["confirmada", "en_curso"]
+            fecha_cita__date=fecha, estado__in=["confirmada", "en_curso"]
         ).values_list("id_reserva", flat=True)
 
         # Obtener empleados asignados como operadores en esas reservas
@@ -819,7 +844,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
         while current_date <= fecha_fin:
             # Contar reservas activas en esta fecha
             reservas_en_fecha = Reserva.objects.filter(
-                fecha_reserva__date=current_date, estado__in=["confirmada", "en_curso"]
+                fecha_cita__date=current_date, estado__in=["confirmada", "en_curso"]
             ).values_list("id_reserva", flat=True)
 
             # Contar empleados ocupados
@@ -893,7 +918,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
         from django.utils import timezone
 
         reserva.estado = "completada"
-        reserva.fecha_realizacion = timezone.now()
+        reserva.fecha_finalizacion = timezone.now()
         reserva.save()
         # Enviar email al cliente con la encuesta de satisfacción (sin token público)
         try:
@@ -931,6 +956,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
         Query params: tipo (sena|final)
         """
         reserva = self.get_object()
+        pago = reserva.obtener_pago()
         tipo = request.query_params.get("tipo", "sena")
 
         # Validar que el usuario sea el dueño de la reserva
@@ -947,7 +973,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
 
         # Preparar datos del comprobante según el tipo
         if tipo == "sena":
-            if not reserva.payment_id_sena:
+            if not pago.payment_id_sena:
                 return Response(
                     {"error": "No hay pago de seña registrado para esta reserva"},
                     status=status.HTTP_404_NOT_FOUND,
@@ -957,13 +983,13 @@ class ReservaViewSet(viewsets.ModelViewSet):
                 "reserva_id": reserva.id_reserva,
                 "tipo_pago": "sena",
                 "tipo_pago_display": "Seña Inicial",
-                "monto": str(reserva.monto_sena),
-                "estado": reserva.estado_pago_sena,
-                "fecha_pago": reserva.fecha_pago_sena,
-                "payment_id": reserva.payment_id_sena,
+                "monto": str(pago.monto_sena),
+                "estado": pago.estado_pago_sena,
+                "fecha_pago": pago.fecha_pago_sena,
+                "payment_id": pago.payment_id_sena,
             }
         elif tipo == "final":
-            if not reserva.payment_id_final:
+            if not pago.payment_id_final:
                 return Response(
                     {"error": "No hay pago final registrado para esta reserva"},
                     status=status.HTTP_404_NOT_FOUND,
@@ -973,10 +999,10 @@ class ReservaViewSet(viewsets.ModelViewSet):
                 "reserva_id": reserva.id_reserva,
                 "tipo_pago": "final",
                 "tipo_pago_display": "Pago Final",
-                "monto": str(reserva.monto_final),
-                "estado": reserva.estado_pago_final,
-                "fecha_pago": reserva.fecha_pago_final,
-                "payment_id": reserva.payment_id_final,
+                "monto": str(pago.monto_final),
+                "estado": pago.estado_pago_final,
+                "fecha_pago": pago.fecha_pago_final,
+                "payment_id": pago.payment_id_final,
             }
         else:
             return Response(
@@ -997,11 +1023,16 @@ class ReservaViewSet(viewsets.ModelViewSet):
                     "descripcion": reserva.servicio.descripcion,
                 },
                 "fecha_solicitud": reserva.fecha_solicitud,
-                "fecha_reserva": reserva.fecha_reserva,
+                "fecha_reserva": reserva.fecha_cita,
                 "observaciones": reserva.observaciones,
-                "tipo_servicio_solicitado": reserva.tipo_servicio_solicitado,
                 "superficie_aproximada": reserva.superficie_aproximada,
-                "objetivo_diseno": reserva.objetivo_diseno,
+                "objetivo_diseno": reserva.objetivo_diseno_id,
+                "objetivo_diseno_nombre": reserva.objetivo_diseno.nombre
+                if reserva.objetivo_diseno_id
+                else None,
+                "objetivo_diseno_codigo": reserva.objetivo_diseno.codigo
+                if reserva.objetivo_diseno_id
+                else None,
                 "nivel_intervencion": reserva.nivel_intervencion,
                 "presupuesto_aproximado": reserva.presupuesto_aproximado,
             }
@@ -1048,7 +1079,7 @@ class DisenoViewSet(viewsets.ModelViewSet):
         "reserva": ["exact"],
         "fecha_creacion": ["date", "range"],
         "reserva__fecha_solicitud": ["date", "range"],
-        "reserva__fecha_realizacion": ["date", "range"],
+        "reserva__fecha_finalizacion": ["date", "range"],
         "reserva__estado": ["exact"],
     }
     search_fields = [
@@ -1272,6 +1303,8 @@ class DisenoViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             diseno.reserva.estado = "confirmada"
+            # Normalización: persistir fecha/hora de inicio real desde "crear diseño"
+            diseno.reserva.fecha_inicio = start_local
             diseno.reserva.save()
 
         from apps.productos.models import Stock
@@ -1511,6 +1544,11 @@ class DisenoViewSet(viewsets.ModelViewSet):
             diseno.fecha_fin = end_local.date()
             diseno.hora_fin = end_local.time().replace(tzinfo=None)
 
+            # Normalización: persistir en la reserva el inicio real del servicio
+            if diseno.reserva_id:
+                diseno.reserva.fecha_inicio = start_local
+                diseno.reserva.save(update_fields=["fecha_inicio"])
+
         diseno.save()
 
         # Retornar el diseño actualizado con todos sus detalles
@@ -1598,7 +1636,7 @@ class DisenoViewSet(viewsets.ModelViewSet):
         while dias_buscados < max_dias_busqueda:
             # Obtener reservas activas en esa fecha
             reservas_en_fecha = Reserva.objects.filter(
-                fecha_reserva__date=fecha_candidata.date(),
+                fecha_cita__date=fecha_candidata.date(),
                 estado__in=["confirmada", "en_curso"],
             ).values_list("id_reserva", flat=True)
 
@@ -1657,7 +1695,7 @@ class DisenoViewSet(viewsets.ModelViewSet):
                 if diseno.fecha_propuesta:
                     diseno.fecha_propuesta = nueva_fecha
                 if diseno.reserva:
-                    diseno.reserva.fecha_reserva = nueva_fecha
+                    diseno.reserva.fecha_cita = nueva_fecha
                     diseno.reserva.save()
                 diseno.save()
 
@@ -1692,7 +1730,7 @@ class DisenoViewSet(viewsets.ModelViewSet):
         # Si hay stock insuficiente Y NO acepta reagendamiento
         if stock_insuficiente and not acepta_reagendamiento:
             # Primera vez que se detecta falta de stock
-            fecha_servicio = diseno.fecha_propuesta or diseno.reserva.fecha_reserva
+            fecha_servicio = diseno.fecha_propuesta or diseno.reserva.fecha_cita
             hoy = timezone.now()
             una_semana = hoy + timedelta(days=7)
 
@@ -1743,20 +1781,20 @@ class DisenoViewSet(viewsets.ModelViewSet):
         if diseno.reserva:
             from apps.servicios.models import ReservaEmpleado
 
-            # Actualizar fecha_reserva con fecha_propuesta si existe
+            # Actualizar fecha_cita con fecha_propuesta si existe
             if diseno.fecha_propuesta:
-                diseno.reserva.fecha_reserva = diseno.fecha_propuesta
+                diseno.reserva.fecha_cita = diseno.fecha_propuesta
 
             diseno.reserva.estado = "en_curso"
             diseno.reserva.save()
 
             # Asignar empleados disponibles automáticamente
-            fecha_reserva = diseno.reserva.fecha_reserva.date()
+            fecha_reserva = diseno.reserva.fecha_cita.date()
 
             # Obtener reservas activas en esa fecha
             reservas_en_fecha = (
                 Reserva.objects.filter(
-                    fecha_reserva__date=fecha_reserva,
+                    fecha_cita__date=fecha_reserva,
                     estado__in=["confirmada", "en_curso"],
                 )
                 .exclude(id_reserva=diseno.reserva.id_reserva)
@@ -1809,7 +1847,8 @@ class DisenoViewSet(viewsets.ModelViewSet):
 
         # Informar sobre el pago final
         if diseno.reserva:
-            mensaje += f" Procede al pago final de ${diseno.reserva.monto_final} para confirmar la reserva."
+            pago = diseno.reserva.obtener_pago()
+            mensaje += f" Procede al pago final de ${pago.monto_final} para confirmar la reserva."
 
         serializer = self.get_serializer(diseno)
         response_data = {
@@ -1817,9 +1856,11 @@ class DisenoViewSet(viewsets.ModelViewSet):
             "diseno": serializer.data,
             "empleados_asignados": empleados_asignados,
             "pago_info": {
-                "monto_final": (str(diseno.reserva.monto_final) if diseno.reserva else "0"),
-                "monto_sena": str(diseno.reserva.monto_sena) if diseno.reserva else "0",
-                "estado_pago_sena": (diseno.reserva.estado_pago_sena if diseno.reserva else "pendiente"),
+                "monto_final": (str(diseno.reserva.obtener_pago().monto_final) if diseno.reserva else "0"),
+                "monto_sena": (str(diseno.reserva.obtener_pago().monto_sena) if diseno.reserva else "0"),
+                "estado_pago_sena": (
+                    diseno.reserva.obtener_pago().estado_pago_sena if diseno.reserva else "pendiente"
+                ),
             },
         }
 

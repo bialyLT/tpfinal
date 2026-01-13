@@ -12,6 +12,9 @@ echo "PostgreSQL está listo!"
 echo "Ejecutando migraciones..."
 python manage.py migrate --noinput
 
+echo "Cargando datos iniciales (géneros, tipos de documento, localidades)..."
+python manage.py load_initial_data
+
 echo "Recolectando archivos estáticos..."
 python manage.py collectstatic --noinput --clear || true
 

@@ -124,7 +124,7 @@ class EmpleadoPrioridadTests(APITestCase):
         tercero = self.crear_empleado("tercero2", "tercero2@example.com", "3.00", 5, dias_hace=1)
 
         reserva = Reserva.objects.create(
-            fecha_reserva=timezone.now(),
+            fecha_cita=timezone.now(),
             cliente=self.cliente,
             servicio=self.servicio,
             estado="confirmada",

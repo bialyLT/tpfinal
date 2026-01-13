@@ -3,7 +3,7 @@ from django.db import models
 
 
 class Categoria(models.Model):
-    """Modelo para categorías de productos según diagrama ER"""
+    """Modelo para categorías de productos"""
 
     id_categoria = models.AutoField(primary_key=True)
     nombre_categoria = models.CharField(max_length=100, unique=True)
@@ -20,7 +20,7 @@ class Categoria(models.Model):
 
 
 class Marca(models.Model):
-    """Modelo para marcas de productos según diagrama ER"""
+    """Modelo para marcas de productos"""
 
     id_marca = models.AutoField(primary_key=True)
     nombre_marca = models.CharField(max_length=100, unique=True)
@@ -208,12 +208,6 @@ class Stock(models.Model):
     id_stock = models.AutoField(primary_key=True)
     producto = models.OneToOneField(Producto, on_delete=models.CASCADE, related_name="stock")
     cantidad = models.IntegerField(default=0, validators=[MinValueValidator(0)])
-    cantidad_minima = models.IntegerField(
-        default=0,
-        validators=[MinValueValidator(0)],
-        help_text="Stock mínimo para alertas",
-    )
-    fecha_actualizacion = models.DateTimeField(auto_now=True)
 
     class Meta:
         verbose_name = "Stock"
@@ -222,19 +216,3 @@ class Stock(models.Model):
 
     def __str__(self):
         return f"Stock de {self.producto.nombre}: {self.cantidad}"
-
-    @property
-    def necesita_reposicion(self):
-        """Indica si el stock está por debajo del mínimo"""
-        return self.cantidad <= self.cantidad_minima
-
-    @property
-    def estado_stock(self):
-        """Devuelve el estado del stock"""
-        if self.cantidad <= 0:
-            return "sin_stock"
-        elif self.cantidad <= self.cantidad_minima:
-            return "critico"
-        elif self.cantidad <= (self.cantidad_minima * 1.5):
-            return "bajo"
-        return "normal"

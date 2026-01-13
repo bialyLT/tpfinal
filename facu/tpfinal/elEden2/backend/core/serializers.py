@@ -10,25 +10,37 @@ User = get_user_model()
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     """Serializer personalizado para JWT que acepta email en lugar de username"""
 
+    username = serializers.CharField(required=False, allow_blank=True)
+    # El frontend usa el campo "email" como identificador de login.
+    # Para admins suele enviarse un username (sin @), así que NO validamos formato email.
+    email = serializers.CharField(required=False, allow_blank=True)
+
     username_field = "username"  # Mantenemos el campo como username en la validación
 
     def validate(self, attrs):
-        # Obtener username o email
-        username = attrs.get("username")
+        # El frontend envía el email dentro del campo "username" (por compatibilidad SimpleJWT).
+        # También aceptamos "email" para compatibilidad.
+        identifier = (attrs.get("username") or attrs.get("email") or "").strip()
         password = attrs.get("password")
 
-        # Intentar autenticar con username
-        user = authenticate(username=username, password=password)
+        if not identifier:
+            raise serializers.ValidationError(
+                {
+                    "email": "Este campo es requerido si no se envía username.",
+                    "username": "Este campo es requerido si no se envía email.",
+                }
+            )
 
-        # Si no funciona, intentar con email
-        if user is None:
-            try:
-                user_obj = User.objects.get(email=username)
-                user = authenticate(username=user_obj.username, password=password)
-            except User.DoesNotExist:
-                pass
+        if not password:
+            raise serializers.ValidationError({"password": "Este campo es requerido."})
 
-        if user is None:
+        # Autenticación por email (insensible a mayúsculas), con fallback por username.
+        user = (
+            User.objects.filter(email__iexact=identifier).first()
+            or User.objects.filter(username__iexact=identifier).first()
+        )
+
+        if not user or not user.check_password(password) or not user.is_active:
             raise serializers.ValidationError("Credenciales inválidas")
 
         # Usar el método parent para generar los tokens
@@ -138,8 +150,8 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         try:
             # Obtener las relaciones (con valores por defecto)
-            genero = Genero.objects.filter(genero="Prefiero no decir").first() or Genero.objects.first()
-            tipo_documento = TipoDocumento.objects.filter(tipo="DNI").first() or TipoDocumento.objects.first()
+            genero, _ = Genero.objects.get_or_create(genero="Prefiero no decir")
+            tipo_documento, _ = TipoDocumento.objects.get_or_create(tipo="DNI")
             localidad = Localidad.objects.get(id_localidad=localidad_id)
 
             # Crear Persona (manteniendo email por compatibilidad con la BD actual)

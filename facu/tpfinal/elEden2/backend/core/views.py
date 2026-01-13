@@ -85,6 +85,7 @@ class ReferenceDataView(APIView):
 
     def get(self, request):
         from apps.users.models import Genero, Localidad, TipoDocumento
+        from apps.servicios.models import ObjetivoDiseno
 
         generos = [{"id": g.id_genero, "nombre": g.genero} for g in Genero.objects.all()]
         tipos_documento = [{"id": t.id_tipo_documento, "nombre": t.tipo} for t in TipoDocumento.objects.all()]
@@ -99,11 +100,17 @@ class ReferenceDataView(APIView):
             for loc in Localidad.objects.all()
         ]
 
+        objetivos_diseno = [
+            {"id": o.id_objetivo_diseno, "codigo": o.codigo, "nombre": o.nombre}
+            for o in ObjetivoDiseno.objects.filter(activo=True)
+        ]
+
         return Response(
             {
                 "generos": generos,
                 "tipos_documento": tipos_documento,
                 "localidades": localidades,
+                "objetivos_diseno": objetivos_diseno,
             }
         )
 
