@@ -16,13 +16,13 @@ from django.utils import timezone
 from apps.servicios.models import Reserva, ReservaEmpleado
 from apps.users.models import Empleado
 
-from .models import WeatherAlert, WeatherForecast
+from .models import AlertaClimatica, PronosticoClima
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class ForecastResult:
+class ResultadoPronostico:
     date: datetime
     precipitation_mm: Decimal
     precipitation_probability: Optional[int]
@@ -38,7 +38,7 @@ class ForecastResult:
 
 
 @dataclass
-class DailyForecastSummary:
+class ResumenPronosticoDiario:
     date: datetime
     temperature_max: Optional[float]
     temperature_min: Optional[float]
@@ -47,7 +47,7 @@ class DailyForecastSummary:
     weather_code: Optional[int]
 
 
-class WeatherClient:
+class ClienteClima:
     """Lightweight client for Open-Meteo (or compatible) weather APIs."""
 
     def __init__(self, base_url: Optional[str] = None):
@@ -78,7 +78,7 @@ class WeatherClient:
             "end_date": end_str,
         }
 
-    def get_daily_forecast(self, latitude: float, longitude: float, target_date: datetime) -> ForecastResult:
+    def get_daily_forecast(self, latitude: float, longitude: float, target_date: datetime) -> ResultadoPronostico:
         cache_key = f"weather:{latitude}:{longitude}:{target_date:%Y-%m-%d}"
         cached = cache.get(cache_key)
         if cached:
@@ -103,7 +103,7 @@ class WeatherClient:
             except (TypeError, ValueError):
                 weather_code = None
 
-        result = ForecastResult(
+        result = ResultadoPronostico(
             date=target_date,
             precipitation_mm=precipitation,
             precipitation_probability=probability,
@@ -121,7 +121,7 @@ class WeatherClient:
         longitude: float,
         start_date: datetime,
         days: int = 7,
-    ) -> List[DailyForecastSummary]:
+    ) -> List[ResumenPronosticoDiario]:
         days = max(1, min(days, 7))
         end_date = start_date + timedelta(days=days - 1)
         cache_key = f"weather:range:{latitude}:{longitude}:{start_date:%Y-%m-%d}:{days}"
@@ -148,7 +148,7 @@ class WeatherClient:
         precipitation_sum = daily.get("precipitation_sum", [])
         weather_codes = daily.get("weathercode", [])
 
-        results: List[DailyForecastSummary] = []
+        results: List[ResumenPronosticoDiario] = []
         for index, date_str in enumerate(dates):
             try:
                 date_obj = datetime.strptime(date_str, "%Y-%m-%d")
@@ -166,7 +166,7 @@ class WeatherClient:
                 except (TypeError, ValueError):
                     weather_code = None
             results.append(
-                DailyForecastSummary(
+                ResumenPronosticoDiario(
                     date=date_obj,
                     temperature_max=temp_max,
                     temperature_min=temp_min,
@@ -180,9 +180,9 @@ class WeatherClient:
         return results
 
 
-class WeatherAlertService:
-    def __init__(self, client: Optional[WeatherClient] = None):
-        self.client = client or WeatherClient()
+class ServicioAlertasClimaticas:
+    def __init__(self, client: Optional[ClienteClima] = None):
+        self.client = client or ClienteClima()
         self.drizzle_threshold = Decimal(str(getattr(settings, "WEATHER_DRIZZLE_THRESHOLD_MM", 0.5)))
         self.threshold = Decimal(str(getattr(settings, "WEATHER_ALERT_THRESHOLD_MM", 2.0)))
         self.low_probability_threshold = int(getattr(settings, "WEATHER_LOW_PROBABILITY_THRESHOLD", 40))
@@ -266,46 +266,46 @@ class WeatherAlertService:
         latitude: float,
         longitude: float,
         target_date: datetime,
-        raw_forecast: ForecastResult,
-    ) -> WeatherForecast:
-        forecast, created = WeatherForecast.objects.get_or_create(
-            date=target_date.date(),
-            latitude=Decimal(str(latitude)),
-            longitude=Decimal(str(longitude)),
-            source="open-meteo",
+        raw_forecast: ResultadoPronostico,
+    ) -> PronosticoClima:
+        forecast, created = PronosticoClima.objects.get_or_create(
+            fecha=target_date.date(),
+            latitud=Decimal(str(latitude)),
+            longitud=Decimal(str(longitude)),
+            fuente="open-meteo",
             defaults={
-                "precipitation_mm": raw_forecast.precipitation_mm,
-                "precipitation_probability": raw_forecast.precipitation_probability,
-                "summary": raw_forecast.summary,
-                "raw_payload": raw_forecast.raw,
+                "precipitacion_mm": raw_forecast.precipitation_mm,
+                "probabilidad_precipitacion": raw_forecast.precipitation_probability,
+                "resumen": raw_forecast.summary,
+                "payload_crudo": raw_forecast.raw,
             },
         )
         if not created:
             needs_update = False
-            if forecast.raw_payload in (None, {}):
-                forecast.raw_payload = raw_forecast.raw
+            if forecast.payload_crudo in (None, {}):
+                forecast.payload_crudo = raw_forecast.raw
                 needs_update = True
-            if forecast.summary != raw_forecast.summary:
-                forecast.summary = raw_forecast.summary
+            if forecast.resumen != raw_forecast.summary:
+                forecast.resumen = raw_forecast.summary
                 needs_update = True
-            if forecast.precipitation_mm != raw_forecast.precipitation_mm:
-                forecast.precipitation_mm = raw_forecast.precipitation_mm
+            if forecast.precipitacion_mm != raw_forecast.precipitation_mm:
+                forecast.precipitacion_mm = raw_forecast.precipitation_mm
                 needs_update = True
-            if forecast.precipitation_probability != raw_forecast.precipitation_probability:
-                forecast.precipitation_probability = raw_forecast.precipitation_probability
+            if forecast.probabilidad_precipitacion != raw_forecast.precipitation_probability:
+                forecast.probabilidad_precipitacion = raw_forecast.precipitation_probability
                 needs_update = True
             if needs_update:
                 forecast.save(
                     update_fields=[
-                        "raw_payload",
-                        "summary",
-                        "precipitation_mm",
-                        "precipitation_probability",
+                        "payload_crudo",
+                        "resumen",
+                        "precipitacion_mm",
+                        "probabilidad_precipitacion",
                     ]
                 )
         return forecast
 
-    def _evaluate_weather_rules(self, forecast: ForecastResult) -> dict:
+    def _evaluate_weather_rules(self, forecast: ResultadoPronostico) -> dict:
         precipitation = forecast.precipitation_mm or Decimal("0")
         probability = forecast.precipitation_probability or 0
         weather_code = forecast.weather_code
@@ -454,13 +454,13 @@ class WeatherAlertService:
     def _create_alert_from_forecast(
         self,
         reserva: Reserva,
-        forecast: WeatherForecast,
+        forecast: PronosticoClima,
         suggested_date: Optional[datetime] = None,
         decision: Optional[dict] = None,
         is_simulated: bool = False,
         message: Optional[str] = None,
-    ) -> WeatherAlert:
-        raw_payload = getattr(forecast, "raw_payload", None)
+    ) -> AlertaClimatica:
+        raw_payload = getattr(forecast, "payload_crudo", None)
         payload = dict(raw_payload) if isinstance(raw_payload, dict) else {}
         if decision:
             payload["decision"] = {
@@ -472,22 +472,22 @@ class WeatherAlertService:
             payload["suggested_reprogramming"] = suggested_date.isoformat()
         reason = message or (decision["reason"] if decision else "Lluvia pronosticada: se sugiere reprogramar")
         trigger = decision["trigger"] if decision else "weather"
-        alerta = WeatherAlert.objects.create(
+        alerta = AlertaClimatica.objects.create(
             reserva=reserva,
             servicio=reserva.servicio,
-            forecast=forecast,
-            alert_date=forecast.date,
-            latitude=forecast.latitude,
-            longitude=forecast.longitude,
-            precipitation_mm=forecast.precipitation_mm,
-            precipitation_threshold=self.threshold,
-            probability_percentage=forecast.precipitation_probability,
-            is_simulated=is_simulated,
-            requires_reprogramming=reserva.servicio.reprogramable_por_clima,
-            message=reason,
-            payload=payload,
-            source=forecast.source if hasattr(forecast, "source") else "open-meteo",
-            triggered_by=trigger,
+            pronostico=forecast,
+            fecha_alerta=forecast.fecha,
+            latitud=forecast.latitud,
+            longitud=forecast.longitud,
+            precipitacion_mm=forecast.precipitacion_mm,
+            umbral_precipitacion=self.threshold,
+            porcentaje_probabilidad=forecast.probabilidad_precipitacion,
+            es_simulada=is_simulated,
+            requiere_reprogramacion=reserva.servicio.reprogramable_por_clima,
+            mensaje=reason,
+            payload_alerta=payload,
+            fuente=forecast.fuente if hasattr(forecast, "fuente") else "open-meteo",
+            disparada_por=trigger,
         )
         self._mark_reserva_requires_reprogramming(reserva, alerta, suggested_date, reason, trigger)
         return alerta
@@ -498,21 +498,21 @@ class WeatherAlertService:
         alert_date: Optional[datetime] = None,
         precipitation_mm: Optional[Decimal] = None,
         message: Optional[str] = None,
-    ) -> WeatherAlert:
+    ) -> AlertaClimatica:
         if not reserva.servicio.reprogramable_por_clima:
             raise ValueError("El servicio asociado no permite reprogramaciones automáticas por clima")
         fecha = alert_date or reserva.fecha_cita
         precipitation = precipitation_mm or self.threshold
-        forecast, created = WeatherForecast.objects.get_or_create(
-            date=fecha.date(),
-            latitude=Decimal(str(getattr(settings, "WEATHER_DEFAULT_LAT", -27.3667))),
-            longitude=Decimal(str(getattr(settings, "WEATHER_DEFAULT_LON", -55.9000))),
-            source="simulated",
+        forecast, created = PronosticoClima.objects.get_or_create(
+            fecha=fecha.date(),
+            latitud=Decimal(str(getattr(settings, "WEATHER_DEFAULT_LAT", -27.3667))),
+            longitud=Decimal(str(getattr(settings, "WEATHER_DEFAULT_LON", -55.9000))),
+            fuente="simulated",
             defaults={
-                "precipitation_mm": precipitation,
-                "precipitation_probability": 100,
-                "summary": "Simulación de lluvia",
-                "raw_payload": {
+                "precipitacion_mm": precipitation,
+                "probabilidad_precipitacion": 100,
+                "resumen": "Simulación de lluvia",
+                "payload_crudo": {
                     "simulated": True,
                     "message": message or "Simulación manual",
                 },
@@ -520,22 +520,22 @@ class WeatherAlertService:
         )
         if not created:
             # Actualizar si ya existe
-            forecast.precipitation_mm = precipitation
-            forecast.precipitation_probability = 100
-            forecast.summary = "Simulación de lluvia"
-            forecast.raw_payload = {
+            forecast.precipitacion_mm = precipitation
+            forecast.probabilidad_precipitacion = 100
+            forecast.resumen = "Simulación de lluvia"
+            forecast.payload_crudo = {
                 "simulated": True,
                 "message": message or "Simulación manual",
             }
             forecast.save()
-        simulated_forecast = ForecastResult(
+        simulated_forecast = ResultadoPronostico(
             date=fecha,
             precipitation_mm=Decimal(str(precipitation)),
             precipitation_probability=100,
-            latitude=forecast.latitude,
-            longitude=forecast.longitude,
+            latitude=forecast.latitud,
+            longitude=forecast.longitud,
             weather_code=None,
-            raw=getattr(forecast, "raw_payload", {}) or {},
+            raw=getattr(forecast, "payload_crudo", {}) or {},
         )
 
         decision = self._evaluate_weather_rules(simulated_forecast)
@@ -554,22 +554,22 @@ class WeatherAlertService:
         if suggested_date:
             payload["suggested_reprogramming"] = suggested_date.isoformat()
 
-        alerta = WeatherAlert.objects.create(
+        alerta = AlertaClimatica.objects.create(
             reserva=reserva,
             servicio=reserva.servicio,
-            forecast=forecast,
-            alert_date=fecha.date(),
-            latitude=forecast.latitude,
-            longitude=forecast.longitude,
-            precipitation_mm=precipitation,
-            precipitation_threshold=self.threshold,
-            probability_percentage=100,
-            is_simulated=True,
-            requires_reprogramming=bool(should_reassign and reserva.servicio.reprogramable_por_clima),
-            message=reason_message,
-            payload=payload,
-            source="simulated",
-            triggered_by=decision["trigger"],
+            pronostico=forecast,
+            fecha_alerta=fecha.date(),
+            latitud=forecast.latitud,
+            longitud=forecast.longitud,
+            precipitacion_mm=precipitation,
+            umbral_precipitacion=self.threshold,
+            porcentaje_probabilidad=100,
+            es_simulada=True,
+            requiere_reprogramacion=bool(should_reassign and reserva.servicio.reprogramable_por_clima),
+            mensaje=reason_message,
+            payload_alerta=payload,
+            fuente="simulated",
+            disparada_por=decision["trigger"],
         )
         if should_reassign:
             self._mark_reserva_requires_reprogramming(
@@ -580,13 +580,13 @@ class WeatherAlertService:
     def _mark_reserva_requires_reprogramming(
         self,
         reserva: Reserva,
-        alerta: WeatherAlert,
+        alerta: AlertaClimatica,
         suggested_date: Optional[datetime] = None,
         motivo: Optional[str] = None,
         fuente: str = "weather",
     ):
         reserva.weather_alert = alerta
-        reserva.alerta_clima_payload = alerta.payload or {}
+        reserva.alerta_clima_payload = alerta.payload_alerta or {}
         if reserva.servicio.reprogramable_por_clima:
             reserva.requiere_reprogramacion = True
             reserva.motivo_reprogramacion = motivo or "Clima: lluvia pronosticada"

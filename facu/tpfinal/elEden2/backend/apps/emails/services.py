@@ -553,8 +553,8 @@ Se detectó una alerta de clima para la reserva #{reserva.id_reserva}.
 Cliente: {cliente_nombre}
 Servicio: {reserva.servicio.nombre if reserva.servicio_id else 'N/D'}
 Fecha original: {fecha_texto}
-Probabilidad de lluvia: {alerta.probability_percentage or 'sin dato'}%
-Precipitación estimada: {alerta.precipitation_mm} mm (umbral {alerta.precipitation_threshold} mm)
+Probabilidad de lluvia: {alerta.porcentaje_probabilidad or 'sin dato'}%
+Precipitación estimada: {alerta.precipitacion_mm} mm (umbral {alerta.umbral_precipitacion} mm)
 
 Se marcó la reserva como pendiente de reprogramación.
 """.strip()

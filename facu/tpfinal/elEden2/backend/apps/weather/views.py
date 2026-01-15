@@ -11,22 +11,22 @@ from rest_framework.views import APIView
 
 from apps.servicios.models import Reserva
 
-from .models import WeatherAlert
+from .models import AlertaClimatica
 from .serializers import (
-    WeatherAlertSerializer,
-    WeatherCheckSerializer,
-    WeatherSimulationSerializer,
+    AlertaClimaticaSerializer,
+    ChequeoClimaSerializer,
+    SimulacionClimaSerializer,
 )
-from .services import WeatherAlertService
+from .services import ServicioAlertasClimaticas
 
 
-class WeatherCheckAPIView(APIView):
+class ChequeoClimaAPIView(APIView):
 
     def post(self, request):
-        serializer = WeatherCheckSerializer(data=request.data)
+        serializer = ChequeoClimaSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        service = WeatherAlertService()
+        service = ServicioAlertasClimaticas()
 
         if data.get("reserva_id"):
             reserva = Reserva.objects.select_related("servicio", "cliente__persona").get(id_reserva=data["reserva_id"])
@@ -49,10 +49,10 @@ class WeatherCheckAPIView(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
-class WeatherSimulateAPIView(APIView):
+class SimulacionClimaAPIView(APIView):
 
     def post(self, request):
-        serializer = WeatherSimulationSerializer(data=request.data)
+        serializer = SimulacionClimaSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
@@ -79,7 +79,7 @@ class WeatherSimulateAPIView(APIView):
                 status=status.HTTP_200_OK,
             )
 
-        service = WeatherAlertService()
+        service = ServicioAlertasClimaticas()
         alerts = []
         for reserva in reservas:
             try:
@@ -93,7 +93,7 @@ class WeatherSimulateAPIView(APIView):
             except ValueError:
                 continue
 
-        serialized_alerts = WeatherAlertSerializer(alerts, many=True).data
+        serialized_alerts = AlertaClimaticaSerializer(alerts, many=True).data
         status_code = status.HTTP_201_CREATED if alerts else status.HTTP_200_OK
         return Response(
             {
@@ -106,31 +106,31 @@ class WeatherSimulateAPIView(APIView):
         )
 
 
-class PendingWeatherAlertsAPIView(APIView):
+class AlertasClimaticasPendientesAPIView(APIView):
 
     def get(self, request):
         alertas = (
-            WeatherAlert.objects.select_related("reserva__servicio", "reserva__cliente__persona")
-            .filter(status="pending", reserva__servicio__reprogramable_por_clima=True)
-            .order_by("alert_date")
+            AlertaClimatica.objects.select_related("reserva__servicio", "reserva__cliente__persona")
+            .filter(estado="pending", reserva__servicio__reprogramable_por_clima=True)
+            .order_by("fecha_alerta")
         )
-        serializer = WeatherAlertSerializer(alertas, many=True)
+        serializer = AlertaClimaticaSerializer(alertas, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-class DismissWeatherAlertAPIView(APIView):
+class DescartarAlertaClimaticaAPIView(APIView):
     permission_classes = [IsAdminUser]
 
     def post(self, request, alert_id):
         try:
-            alerta = WeatherAlert.objects.select_related("reserva").get(pk=alert_id)
-        except WeatherAlert.DoesNotExist:
+            alerta = AlertaClimatica.objects.select_related("reserva").get(pk=alert_id)
+        except AlertaClimatica.DoesNotExist:
             return Response({"detail": "Alerta no encontrada"}, status=status.HTTP_404_NOT_FOUND)
 
         comentario = (
             request.data.get("comentario") or request.data.get("motivo") or "Alerta descartada sin reprogramación"
         )
-        payload = alerta.payload or {}
+        payload = alerta.payload_alerta or {}
         payload["manual_resolution"] = {
             "comment": comentario,
             "action": "dismissed",
@@ -138,18 +138,18 @@ class DismissWeatherAlertAPIView(APIView):
             "user_id": request.user.id,
             "user_email": request.user.email,
         }
-        alerta.payload = payload
-        alerta.status = "resolved"
-        alerta.requires_reprogramming = False
-        alerta.resolved_at = timezone.now()
-        alerta.resolved_by = request.user
+        alerta.payload_alerta = payload
+        alerta.estado = "resolved"
+        alerta.requiere_reprogramacion = False
+        alerta.resuelta_en = timezone.now()
+        alerta.resuelta_por = request.user
         alerta.save(
             update_fields=[
-                "payload",
-                "status",
-                "requires_reprogramming",
-                "resolved_at",
-                "resolved_by",
+                "payload_alerta",
+                "estado",
+                "requiere_reprogramacion",
+                "resuelta_en",
+                "resuelta_por",
             ]
         )
 
@@ -168,7 +168,7 @@ class DismissWeatherAlertAPIView(APIView):
                 ]
             )
 
-        serializer = WeatherAlertSerializer(alerta)
+        serializer = AlertaClimaticaSerializer(alerta)
         return Response(
             {
                 "mensaje": "Alerta descartada, se mantiene la fecha original.",
@@ -178,7 +178,7 @@ class DismissWeatherAlertAPIView(APIView):
         )
 
 
-class EligibleReservationsAPIView(APIView):
+class ReservasElegiblesAPIView(APIView):
 
     def get(self, request):
         ahora = timezone.now()
@@ -204,7 +204,7 @@ class EligibleReservationsAPIView(APIView):
         return Response(data, status=status.HTTP_200_OK)
 
 
-class CurrentTemperatureAPIView(APIView):
+class TemperaturaActualAPIView(APIView):
     """
     Obtiene la temperatura actual desde Open-Meteo.
     """
@@ -272,7 +272,7 @@ class CurrentTemperatureAPIView(APIView):
             )
 
 
-class ReservationForecastSummaryAPIView(APIView):
+class ResumenPronosticoReservasAPIView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
@@ -294,6 +294,6 @@ class ReservationForecastSummaryAPIView(APIView):
             .order_by("fecha_cita")
         )
 
-        service = WeatherAlertService()
+        service = ServicioAlertasClimaticas()
         summaries = service.build_locality_forecasts(reservas, days)
         return Response({"results": summaries, "count": len(summaries)}, status=status.HTTP_200_OK)

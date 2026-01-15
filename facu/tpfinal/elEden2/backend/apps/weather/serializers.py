@@ -1,12 +1,27 @@
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import WeatherAlert, WeatherForecast
+from .models import AlertaClimatica, PronosticoClima
 
 
-class WeatherForecastSerializer(serializers.ModelSerializer):
+class PronosticoClimaSerializer(serializers.ModelSerializer):
+    date = serializers.DateField(source="fecha", read_only=True)
+    latitude = serializers.DecimalField(max_digits=8, decimal_places=5, source="latitud", read_only=True)
+    longitude = serializers.DecimalField(max_digits=8, decimal_places=5, source="longitud", read_only=True)
+    precipitation_mm = serializers.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        source="precipitacion_mm",
+        read_only=True,
+        allow_null=True,
+    )
+    precipitation_probability = serializers.IntegerField(source="probabilidad_precipitacion", read_only=True)
+    summary = serializers.CharField(source="resumen", read_only=True)
+    source = serializers.CharField(source="fuente", read_only=True)
+    raw_payload = serializers.JSONField(source="payload_crudo", read_only=True)
+
     class Meta:
-        model = WeatherForecast
+        model = PronosticoClima
         fields = [
             "id",
             "date",
@@ -21,12 +36,41 @@ class WeatherForecastSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class WeatherAlertSerializer(serializers.ModelSerializer):
+    class AlertaClimaticaSerializer(serializers.ModelSerializer):
+    alert_date = serializers.DateField(source="fecha_alerta", read_only=True)
+    alert_type = serializers.CharField(source="tipo_alerta", read_only=True)
+    status = serializers.CharField(source="estado", read_only=True)
+    message = serializers.CharField(source="mensaje", read_only=True)
+    source = serializers.CharField(source="fuente", read_only=True)
+    latitude = serializers.DecimalField(max_digits=8, decimal_places=5, source="latitud", read_only=True)
+    longitude = serializers.DecimalField(max_digits=8, decimal_places=5, source="longitud", read_only=True)
+    precipitation_mm = serializers.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        source="precipitacion_mm",
+        read_only=True,
+        allow_null=True,
+    )
+    precipitation_threshold = serializers.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        source="umbral_precipitacion",
+        read_only=True,
+    )
+    probability_percentage = serializers.IntegerField(source="porcentaje_probabilidad", read_only=True)
+    is_simulated = serializers.BooleanField(source="es_simulada", read_only=True)
+    requires_reprogramming = serializers.BooleanField(source="requiere_reprogramacion", read_only=True)
+    payload = serializers.JSONField(source="payload_alerta", read_only=True)
+    triggered_by = serializers.CharField(source="disparada_por", read_only=True)
+    resolved_at = serializers.DateTimeField(source="resuelta_en", read_only=True, allow_null=True)
+    resolved_by = serializers.PrimaryKeyRelatedField(source="resuelta_por", read_only=True)
+    created_at = serializers.DateTimeField(source="creada_en", read_only=True)
+
     reserva_detalle = serializers.SerializerMethodField()
     servicio_nombre = serializers.SerializerMethodField()
 
     class Meta:
-        model = WeatherAlert
+        model = AlertaClimatica
         fields = [
             "id",
             "alert_date",
@@ -47,6 +91,8 @@ class WeatherAlertSerializer(serializers.ModelSerializer):
             "servicio_nombre",
             "reserva_detalle",
             "triggered_by",
+            "resolved_at",
+            "resolved_by",
             "created_at",
         ]
         read_only_fields = fields
@@ -78,7 +124,7 @@ class WeatherAlertSerializer(serializers.ModelSerializer):
         return None
 
 
-class WeatherSimulationSerializer(serializers.Serializer):
+class SimulacionClimaSerializer(serializers.Serializer):
     alert_date = serializers.DateField(required=True)
     message = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
@@ -88,7 +134,7 @@ class WeatherSimulationSerializer(serializers.Serializer):
         return value
 
 
-class WeatherCheckSerializer(serializers.Serializer):
+class ChequeoClimaSerializer(serializers.Serializer):
     reserva_id = serializers.IntegerField(required=False)
     date = serializers.DateField(required=False)
     latitude = serializers.DecimalField(max_digits=8, decimal_places=5, required=False)

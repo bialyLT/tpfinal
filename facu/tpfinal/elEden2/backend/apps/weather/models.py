@@ -4,8 +4,8 @@ from django.conf import settings
 from django.db import models
 
 
-class WeatherForecast(models.Model):
-    """Forecast cache entry for a specific day and coordinates."""
+class PronosticoClima(models.Model):
+    """Entrada de caché de pronóstico para una fecha y coordenadas."""
 
     SOURCE_CHOICES = (
         ("open-meteo", "Open-Meteo"),
@@ -13,29 +13,35 @@ class WeatherForecast(models.Model):
         ("other", "Otro"),
     )
 
-    date = models.DateField()
-    latitude = models.DecimalField(max_digits=8, decimal_places=5)
-    longitude = models.DecimalField(max_digits=8, decimal_places=5)
-    precipitation_mm = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
-    precipitation_probability = models.PositiveIntegerField(null=True, blank=True)
-    summary = models.CharField(max_length=255, blank=True)
-    raw_payload = models.JSONField(default=dict, blank=True)
-    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default="open-meteo")
-    created_at = models.DateTimeField(auto_now_add=True)
+    fecha = models.DateField(db_column="date")
+    latitud = models.DecimalField(max_digits=8, decimal_places=5, db_column="latitude")
+    longitud = models.DecimalField(max_digits=8, decimal_places=5, db_column="longitude")
+    precipitacion_mm = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        db_column="precipitation_mm",
+    )
+    probabilidad_precipitacion = models.PositiveIntegerField(null=True, blank=True, db_column="precipitation_probability")
+    resumen = models.CharField(max_length=255, blank=True, db_column="summary")
+    payload_crudo = models.JSONField(default=dict, blank=True, db_column="raw_payload")
+    fuente = models.CharField(max_length=20, choices=SOURCE_CHOICES, default="open-meteo", db_column="source")
+    creado_en = models.DateTimeField(auto_now_add=True, db_column="created_at")
 
     class Meta:
         verbose_name = "Pronóstico meteorológico"
         verbose_name_plural = "Pronósticos meteorológicos"
         db_table = "weather_forecast"
-        unique_together = ("date", "latitude", "longitude", "source")
-        ordering = ["-date"]
+        unique_together = ("fecha", "latitud", "longitud", "fuente")
+        ordering = ["-fecha"]
 
     def __str__(self):
-        return f"Pronóstico {self.date} ({self.latitude}, {self.longitude})"
+        return f"Pronóstico {self.fecha} ({self.latitud}, {self.longitud})"
 
 
-class WeatherAlert(models.Model):
-    """Alert raised when rain probability exceeds threshold for a reservation/service."""
+class AlertaClimatica(models.Model):
+    """Alerta generada cuando el pronóstico supera el umbral configurado."""
 
     ALERT_TYPES = (
         ("rain", "Lluvia"),
@@ -62,50 +68,58 @@ class WeatherAlert(models.Model):
         blank=True,
         related_name="alertas_clima",
     )
-    forecast = models.ForeignKey(
-        WeatherForecast,
+    pronostico = models.ForeignKey(
+        PronosticoClima,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="alertas_generadas",
+        db_column="forecast_id",
     )
-    alert_date = models.DateField()
-    alert_type = models.CharField(max_length=20, choices=ALERT_TYPES, default="rain")
-    latitude = models.DecimalField(max_digits=8, decimal_places=5)
-    longitude = models.DecimalField(max_digits=8, decimal_places=5)
-    precipitation_mm = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
-    precipitation_threshold = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("1.00"))
-    probability_percentage = models.PositiveIntegerField(null=True, blank=True)
-    is_simulated = models.BooleanField(default=False)
-    requires_reprogramming = models.BooleanField(default=True)
-    message = models.CharField(max_length=255, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
-    payload = models.JSONField(default=dict, blank=True)
-    source = models.CharField(max_length=20, default="open-meteo")
-    triggered_by = models.CharField(max_length=50, blank=True)
-    resolved_at = models.DateTimeField(null=True, blank=True)
-    resolved_by = models.ForeignKey(
+    fecha_alerta = models.DateField(db_column="alert_date")
+    tipo_alerta = models.CharField(max_length=20, choices=ALERT_TYPES, default="rain", db_column="alert_type")
+    latitud = models.DecimalField(max_digits=8, decimal_places=5, db_column="latitude")
+    longitud = models.DecimalField(max_digits=8, decimal_places=5, db_column="longitude")
+    precipitacion_mm = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        db_column="precipitation_mm",
+    )
+    umbral_precipitacion = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("1.00"), db_column="precipitation_threshold")
+    porcentaje_probabilidad = models.PositiveIntegerField(null=True, blank=True, db_column="probability_percentage")
+    es_simulada = models.BooleanField(default=False, db_column="is_simulated")
+    requiere_reprogramacion = models.BooleanField(default=True, db_column="requires_reprogramming")
+    mensaje = models.CharField(max_length=255, blank=True, db_column="message")
+    estado = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending", db_column="status")
+    payload_alerta = models.JSONField(default=dict, blank=True, db_column="payload")
+    fuente = models.CharField(max_length=20, default="open-meteo", db_column="source")
+    disparada_por = models.CharField(max_length=50, blank=True, db_column="triggered_by")
+    resuelta_en = models.DateTimeField(null=True, blank=True, db_column="resolved_at")
+    resuelta_por = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="weather_alerts_resueltas",
+        related_name="alertas_climaticas_resueltas",
+        db_column="resolved_by_id",
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    creada_en = models.DateTimeField(auto_now_add=True, db_column="created_at")
+    actualizada_en = models.DateTimeField(auto_now=True, db_column="updated_at")
 
     class Meta:
         verbose_name = "Alerta climática"
         verbose_name_plural = "Alertas climáticas"
         db_table = "weather_alert"
-        ordering = ["status", "alert_date"]
+        ordering = ["estado", "fecha_alerta"]
 
     def __str__(self):
         destino = f"Reserva {self.reserva_id}" if self.reserva_id else "General"
-        return f"Alerta {self.get_alert_type_display()} {self.alert_date} - {destino}"
+        return f"Alerta {self.get_tipo_alerta_display()} {self.fecha_alerta} - {destino}"
 
     @property
     def rain_expected(self):
-        if self.precipitation_mm is None:
+        if self.precipitacion_mm is None:
             return False
-        return self.precipitation_mm >= (self.precipitation_threshold or Decimal("1.00"))
+        return self.precipitacion_mm >= (self.umbral_precipitacion or Decimal("1.00"))

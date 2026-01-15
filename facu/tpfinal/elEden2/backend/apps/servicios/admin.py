@@ -240,10 +240,10 @@ class FormaTerrenoAdmin(admin.ModelAdmin):
 
 @admin.register(ImagenZona)
 class ImagenZonaAdmin(admin.ModelAdmin):
-    list_display = ("id_imagen_zona", "zona", "descripcion", "orden", "fecha_subida")
-    list_filter = ("fecha_subida",)
+    list_display = ("id_imagen_zona", "zona", "descripcion")
+    list_filter = ()
     search_fields = ("zona__nombre", "descripcion")
-    ordering = ("zona", "orden")
+    ordering = ("zona", "id_imagen_zona")
 
 
 class ZonaJardinInline(admin.TabularInline):
@@ -255,7 +255,7 @@ class ZonaJardinInline(admin.TabularInline):
 
 @admin.register(Jardin)
 class JardinAdmin(admin.ModelAdmin):
-    list_display = ("id_jardin", "reserva", "fecha_creacion")
+    list_display = ("id_jardin", "reserva")
     list_filter = ()
     search_fields = (
         "reserva__cliente__persona__nombre",

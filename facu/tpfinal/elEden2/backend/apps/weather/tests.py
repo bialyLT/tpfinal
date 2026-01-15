@@ -9,8 +9,8 @@ from django.utils import timezone
 
 from apps.servicios.models import Reserva, Servicio
 from apps.users.models import Cliente, Genero, Localidad, Persona, TipoDocumento
-from apps.weather.models import WeatherAlert
-from apps.weather.services import ForecastResult
+from apps.weather.models import AlertaClimatica
+from apps.weather.services import ResultadoPronostico
 
 
 class WeatherEndpointTests(TestCase):
@@ -63,15 +63,16 @@ class WeatherEndpointTests(TestCase):
 
         reserva = self._create_reserva(servicio=self.reprogramable_service)
         with (
-            patch("apps.weather.services.WeatherClient.get_daily_forecast") as mock_forecast,
+            patch("apps.weather.services.ClienteClima.get_daily_forecast") as mock_forecast,
             patch("apps.emails.services.EmailService.send_weather_alert_notification") as mock_send_email,
         ):
-            mock_forecast.return_value = ForecastResult(
+            mock_forecast.return_value = ResultadoPronostico(
                 date=reserva.fecha_cita,
                 precipitation_mm=Decimal("5.00"),
                 precipitation_probability=80,
                 latitude=Decimal("10.12345"),
                 longitude=Decimal("-65.12345"),
+                weather_code=None,
                 raw={"source": "test"},
             )
             payload = {"reserva_id": reserva.id_reserva}
@@ -81,8 +82,8 @@ class WeatherEndpointTests(TestCase):
         data = response.json()
         self.assertTrue(data["rain_expected"])
         self.assertIn("alert_id", data)
-        alert = WeatherAlert.objects.get(id=data["alert_id"])
-        self.assertFalse(alert.is_simulated)
+        alert = AlertaClimatica.objects.get(id=data["alert_id"])
+        self.assertFalse(alert.es_simulada)
         self.assertEqual(alert.reserva, reserva)
         mock_send_email.assert_called_once()
 
@@ -101,56 +102,56 @@ class WeatherEndpointTests(TestCase):
         self.assertEqual(response.status_code, 201)
         body = response.json()
         self.assertTrue(body["is_simulated"])
-        alert = WeatherAlert.objects.get(reserva=reserva)
-        self.assertTrue(alert.is_simulated)
-        self.assertEqual(str(alert.precipitation_mm), "8.50")
-        self.assertEqual(body["message"], alert.message)
+        alert = AlertaClimatica.objects.get(reserva=reserva)
+        self.assertTrue(alert.es_simulada)
+        self.assertEqual(str(alert.precipitacion_mm), "8.50")
+        self.assertEqual(body["message"], alert.mensaje)
         mock_send_email.assert_called_once()
 
     def test_pending_alerts_endpoint_returns_pending_only(self):
         """Pending alerts should only return reprogrammable pendings."""
 
-        WeatherAlert.objects.create(
+        AlertaClimatica.objects.create(
             reserva=self._create_reserva(servicio=self.reprogramable_service),
             servicio=self.reprogramable_service,
-            alert_date=timezone.now().date(),
-            latitude=Decimal("0.00000"),
-            longitude=Decimal("0.00000"),
-            precipitation_mm=Decimal("5.00"),
-            precipitation_threshold=Decimal("1.00"),
-            probability_percentage=60,
-            message="Alerta pendiente",
-            payload={},
-            source="test",
-            status="pending",
+            fecha_alerta=timezone.now().date(),
+            latitud=Decimal("0.00000"),
+            longitud=Decimal("0.00000"),
+            precipitacion_mm=Decimal("5.00"),
+            umbral_precipitacion=Decimal("1.00"),
+            porcentaje_probabilidad=60,
+            mensaje="Alerta pendiente",
+            payload_alerta={},
+            fuente="test",
+            estado="pending",
         )
-        WeatherAlert.objects.create(
+        AlertaClimatica.objects.create(
             reserva=self._create_reserva(servicio=self.non_reprogramable_service),
             servicio=self.non_reprogramable_service,
-            alert_date=timezone.now().date(),
-            latitude=Decimal("1.00000"),
-            longitude=Decimal("1.00000"),
-            precipitation_mm=Decimal("2.00"),
-            precipitation_threshold=Decimal("1.00"),
-            probability_percentage=20,
-            message="No reprogramable",
-            payload={},
-            source="test",
-            status="pending",
+            fecha_alerta=timezone.now().date(),
+            latitud=Decimal("1.00000"),
+            longitud=Decimal("1.00000"),
+            precipitacion_mm=Decimal("2.00"),
+            umbral_precipitacion=Decimal("1.00"),
+            porcentaje_probabilidad=20,
+            mensaje="No reprogramable",
+            payload_alerta={},
+            fuente="test",
+            estado="pending",
         )
-        WeatherAlert.objects.create(
+        AlertaClimatica.objects.create(
             reserva=self._create_reserva(servicio=self.reprogramable_service),
             servicio=self.reprogramable_service,
-            alert_date=timezone.now().date(),
-            latitude=Decimal("2.00000"),
-            longitude=Decimal("2.00000"),
-            precipitation_mm=Decimal("3.00"),
-            precipitation_threshold=Decimal("1.00"),
-            probability_percentage=40,
-            message="Ya resuelta",
-            payload={},
-            source="test",
-            status="resolved",
+            fecha_alerta=timezone.now().date(),
+            latitud=Decimal("2.00000"),
+            longitud=Decimal("2.00000"),
+            precipitacion_mm=Decimal("3.00"),
+            umbral_precipitacion=Decimal("1.00"),
+            porcentaje_probabilidad=40,
+            mensaje="Ya resuelta",
+            payload_alerta={},
+            fuente="test",
+            estado="resolved",
         )
 
         response = self.client.get(reverse("weather-alerts-pending"))

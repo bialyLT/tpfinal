@@ -27,6 +27,7 @@ from apps.users.services.address_service import (
 from .models import (
     Diseno,
     DisenoProducto,
+    DisenoTarea,
     FormaTerreno,
     ImagenDiseno,
     ImagenReserva,
@@ -361,7 +362,6 @@ class ReservaViewSet(viewsets.ModelViewSet):
                         zona=zona_obj,
                         imagen=file,
                         descripcion=descripcion,
-                        orden=file_idx,
                     )
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
@@ -535,10 +535,10 @@ class ReservaViewSet(viewsets.ModelViewSet):
 
         reserva.aplicar_reprogramacion(nueva_fecha, motivo="clima", confirmar=True)
 
-        if reserva.weather_alert:
-            reserva.weather_alert.status = "resolved"
-            reserva.weather_alert.resolved_at = timezone.now()
-            reserva.weather_alert.save(update_fields=["status", "resolved_at"])
+                if reserva.weather_alert:
+                        reserva.weather_alert.estado = "resolved"
+                        reserva.weather_alert.resuelta_en = timezone.now()
+                        reserva.weather_alert.save(update_fields=["estado", "resuelta_en"])
 
         from apps.emails.services import EmailService
 
@@ -1238,7 +1238,7 @@ class DisenoViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         productos_data = serializer.validated_data.get("productos") or []
-        tareas_diseno_ids = serializer.validated_data.get("tareas_diseno") or []
+        tareas_diseno_items = serializer.validated_data.get("tareas_diseno") or []
 
         # Calcular duración total desde tareas asociadas a productos
         from apps.servicios.scheduling import compute_work_schedule
@@ -1260,9 +1260,10 @@ class DisenoViewSet(viewsets.ModelViewSet):
                     qty = 0
                 total_minutes += int(duracion_por_producto.get(int(pid), 0)) * qty
 
-        if tareas_diseno_ids:
-            tareas_qs = Tarea.objects.filter(id_tarea__in=tareas_diseno_ids)
-            total_minutes += sum(int(t.duracion_base or 0) for t in tareas_qs)
+        if tareas_diseno_items:
+            qty_by_id = {int(i["tarea_id"]): int(i.get("cantidad") or 1) for i in tareas_diseno_items}
+            tareas_qs = Tarea.objects.filter(id_tarea__in=list(qty_by_id.keys()))
+            total_minutes += sum(int(t.duracion_base or 0) * int(qty_by_id.get(t.id_tarea, 1)) for t in tareas_qs)
 
         schedule = compute_work_schedule(serializer.validated_data.get("fecha_propuesta"), total_minutes)
         start_local = schedule.start_local
@@ -1286,8 +1287,18 @@ class DisenoViewSet(viewsets.ModelViewSet):
             estado="borrador",
         )
 
-        if tareas_diseno_ids:
-            diseno.tareas_diseno.set(tareas_diseno_ids)
+        if tareas_diseno_items:
+            DisenoTarea.objects.filter(diseno=diseno).delete()
+            DisenoTarea.objects.bulk_create(
+                [
+                    DisenoTarea(
+                        diseno=diseno,
+                        tarea_id=int(item["tarea_id"]),
+                        cantidad=int(item.get("cantidad") or 1),
+                    )
+                    for item in tareas_diseno_items
+                ]
+            )
 
         # Si hay reserva asociada, cambiar su estado a 'confirmada'
         if diseno.reserva:
@@ -1444,7 +1455,7 @@ class DisenoViewSet(viewsets.ModelViewSet):
                     notas=prod.get("notas", ""),
                 )
 
-        # Actualizar tareas del diseño (M2M)
+        # Actualizar tareas del diseño (tabla intermedia con cantidad)
         tareas_diseno_payload = None
         if "tareas_diseno" in request.data:
             raw = request.data.get("tareas_diseno")
@@ -1459,24 +1470,59 @@ class DisenoViewSet(viewsets.ModelViewSet):
                 if len(raw) == 1 and isinstance(raw[0], str) and raw[0].strip().startswith("["):
                     tareas_diseno_payload = json.loads(raw[0])
                 else:
-                    tareas_diseno_payload = [int(v) for v in raw if str(v).strip() != ""]
+                    tareas_diseno_payload = raw
             elif raw is None:
                 tareas_diseno_payload = []
 
-            tareas_diseno_payload = [int(v) for v in (tareas_diseno_payload or [])]
-            existentes = set(
-                Tarea.objects.filter(id_tarea__in=tareas_diseno_payload).values_list(
-                    "id_tarea", flat=True
-                )
-            )
-            faltantes = [i for i in tareas_diseno_payload if i not in existentes]
+            # Normalizar a lista de {tarea_id, cantidad}
+            merged = {}
+            for item in (tareas_diseno_payload or []):
+                if isinstance(item, (int, str)):
+                    tarea_id = int(item)
+                    qty = 1
+                elif isinstance(item, dict):
+                    tarea_id = item.get("tarea_id", item.get("id_tarea", item.get("tarea")))
+                    if tarea_id is None:
+                        return Response(
+                            {"error": "Cada tarea debe tener 'tarea_id' (o 'id_tarea' / 'tarea')"},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    tarea_id = int(tarea_id)
+                    qty = int(item.get("cantidad", 1))
+                else:
+                    return Response(
+                        {"error": "Formato inválido de tareas_diseno"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                if qty < 1:
+                    return Response(
+                        {"error": "La cantidad de una tarea debe ser >= 1"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                merged[tarea_id] = merged.get(tarea_id, 0) + qty
+
+            tareas_items = [{"tarea_id": tid, "cantidad": qty} for tid, qty in merged.items()]
+            ids = [i["tarea_id"] for i in tareas_items]
+            existentes = set(Tarea.objects.filter(id_tarea__in=ids).values_list("id_tarea", flat=True))
+            faltantes = [i for i in ids if i not in existentes]
             if faltantes:
                 return Response(
                     {"error": f"Tareas inexistentes: {faltantes}"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            diseno.tareas_diseno.set(tareas_diseno_payload)
+            DisenoTarea.objects.filter(diseno=diseno).delete()
+            DisenoTarea.objects.bulk_create(
+                [
+                    DisenoTarea(
+                        diseno=diseno,
+                        tarea_id=int(it["tarea_id"]),
+                        cantidad=int(it.get("cantidad") or 1),
+                    )
+                    for it in tareas_items
+                ]
+            )
 
         # Agregar nuevas imágenes (no eliminar las existentes)
         imagenes = request.FILES.getlist("imagenes_diseño")
@@ -1526,12 +1572,38 @@ class DisenoViewSet(viewsets.ModelViewSet):
                             qty = 0
                         total_minutes += int(duracion_por_producto.get(int(pid), 0)) * qty
 
-            # Sumar tareas propias del diseño
+            # Sumar tareas propias del diseño (con repetición/cantidad)
             if tareas_diseno_payload is None:
-                tareas_qs = diseno.tareas_diseno.all()
+                items = list(diseno.diseno_tareas.values("tarea_id", "cantidad"))
+                qty_by_id = {int(i["tarea_id"]): int(i.get("cantidad") or 1) for i in items}
             else:
-                tareas_qs = Tarea.objects.filter(id_tarea__in=(tareas_diseno_payload or []))
-            total_minutes += sum(int(t.duracion_base or 0) for t in tareas_qs)
+                # tareas_diseno_payload puede ser list[int|dict]
+                merged = {}
+                for item in (tareas_diseno_payload or []):
+                    if isinstance(item, (int, str)):
+                        tarea_id = int(item)
+                        qty = 1
+                    elif isinstance(item, dict):
+                        tarea_id = item.get("tarea_id", item.get("id_tarea", item.get("tarea")))
+                        if tarea_id is None:
+                            tarea_id = None
+                        else:
+                            tarea_id = int(tarea_id)
+                        qty = int(item.get("cantidad", 1))
+                    else:
+                        continue
+                    if tarea_id is None:
+                        continue
+                    if qty < 1:
+                        qty = 1
+                    merged[tarea_id] = merged.get(tarea_id, 0) + qty
+                qty_by_id = merged
+
+            if qty_by_id:
+                tareas_qs = Tarea.objects.filter(id_tarea__in=list(qty_by_id.keys()))
+                total_minutes += sum(
+                    int(t.duracion_base or 0) * int(qty_by_id.get(t.id_tarea, 1)) for t in tareas_qs
+                )
 
             schedule = compute_work_schedule(diseno.fecha_propuesta, total_minutes)
             start_local = schedule.start_local

@@ -118,7 +118,11 @@ class ZonaJardinSerializer(serializers.ModelSerializer):
 
     def get_imagenes(self, obj):
         request = self.context.get("request")
-        serializer = ImagenZonaSerializer(obj.imagenes.all(), many=True, context={"request": request})
+        serializer = ImagenZonaSerializer(
+            obj.imagenes.order_by("id_imagen_zona"),
+            many=True,
+            context={"request": request},
+        )
         return serializer.data
 
 
@@ -328,10 +332,8 @@ class ImagenZonaSerializer(serializers.ModelSerializer):
             "imagen",
             "imagen_url",
             "descripcion",
-            "orden",
-            "fecha_subida",
         ]
-        read_only_fields = ["id_imagen_zona", "fecha_subida"]
+        read_only_fields = ["id_imagen_zona"]
 
     def get_imagen_url(self, obj):
         if obj.imagen:
@@ -361,7 +363,11 @@ class ZonaJardinSerializer(serializers.ModelSerializer):
 
     def get_imagenes(self, obj):
         request = self.context.get("request")
-        serializer = ImagenZonaSerializer(obj.imagenes.all(), many=True, context={"request": request})
+        serializer = ImagenZonaSerializer(
+            obj.imagenes.order_by("id_imagen_zona"),
+            many=True,
+            context={"request": request},
+        )
         return serializer.data
 
 
@@ -405,6 +411,7 @@ class DisenoSerializer(serializers.ModelSerializer):
     disenador_id = serializers.IntegerField(source="disenador.id_empleado", read_only=True, allow_null=True)
     disenador_nombre = serializers.SerializerMethodField()
     tareas_diseno = TareaSerializer(many=True, read_only=True)
+    tareas_diseno_items = serializers.SerializerMethodField()
 
     class Meta:
         model = Diseno
@@ -433,6 +440,7 @@ class DisenoSerializer(serializers.ModelSerializer):
             "fecha_fin",
             "hora_fin",
             "tareas_diseno",
+            "tareas_diseno_items",
         ]
         read_only_fields = [
             "id_diseno",
@@ -451,6 +459,18 @@ class DisenoSerializer(serializers.ModelSerializer):
             return f"{obj.disenador.persona.nombre} {obj.disenador.persona.apellido}"
         return None
 
+    def get_tareas_diseno_items(self, obj):
+        items = obj.diseno_tareas.select_related("tarea").all()
+        return [
+            {
+                "tarea_id": it.tarea_id,
+                "tarea_nombre": getattr(it.tarea, "nombre", None),
+                "duracion_base": getattr(it.tarea, "duracion_base", None),
+                "cantidad": it.cantidad,
+            }
+            for it in items
+        ]
+
 
 class DisenoDetalleSerializer(serializers.ModelSerializer):
     """Serializer completo con productos e imágenes"""
@@ -465,6 +485,7 @@ class DisenoDetalleSerializer(serializers.ModelSerializer):
     imagenes = ImagenDisenoSerializer(many=True, read_only=True)
     total_productos = serializers.SerializerMethodField()
     tareas_diseno = TareaSerializer(many=True, read_only=True)
+    tareas_diseno_items = serializers.SerializerMethodField()
 
     class Meta:
         model = Diseno
@@ -497,6 +518,7 @@ class DisenoDetalleSerializer(serializers.ModelSerializer):
             "fecha_fin",
             "hora_fin",
             "tareas_diseno",
+            "tareas_diseno_items",
         ]
         read_only_fields = [
             "id_diseno",
@@ -519,6 +541,18 @@ class DisenoDetalleSerializer(serializers.ModelSerializer):
         """Calcular el total de todos los productos"""
         return sum(p.subtotal for p in obj.productos.all())
 
+    def get_tareas_diseno_items(self, obj):
+        items = obj.diseno_tareas.select_related("tarea").all()
+        return [
+            {
+                "tarea_id": it.tarea_id,
+                "tarea_nombre": getattr(it.tarea, "nombre", None),
+                "duracion_base": getattr(it.tarea, "duracion_base", None),
+                "cantidad": it.cantidad,
+            }
+            for it in items
+        ]
+
 
 class CrearDisenoSerializer(serializers.Serializer):
     """Serializer para crear un diseño completo con productos e imágenes"""
@@ -532,8 +566,11 @@ class CrearDisenoSerializer(serializers.Serializer):
     notas_internas = serializers.CharField(required=False, allow_blank=True)
     fecha_propuesta = serializers.DateTimeField(required=False, allow_null=True)
 
-    # Tareas propias del diseño (lista de IDs)
-    tareas_diseno = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=True)
+    # Tareas propias del diseño.
+    # Acepta dos formatos para compatibilidad:
+    # - [1,2,3] (lista de IDs) => cantidad=1
+    # - [{"tarea_id": 1, "cantidad": 3}, ...]
+    tareas_diseno = serializers.ListField(child=serializers.JSONField(), required=False, allow_empty=True)
 
     # Productos como lista de diccionarios
     productos = serializers.ListField(child=serializers.DictField(), required=False, allow_empty=True)
@@ -558,9 +595,33 @@ class CrearDisenoSerializer(serializers.Serializer):
     def validate_tareas_diseno(self, value):
         if not value:
             return []
-        ids = [int(v) for v in value]
+
+        # Normalizar a lista de {tarea_id, cantidad}
+        merged: dict[int, int] = {}
+        for raw in value:
+            if isinstance(raw, (int, str)):
+                tarea_id = int(raw)
+                qty = 1
+            elif isinstance(raw, dict):
+                tarea_id = raw.get("tarea_id", raw.get("id_tarea", raw.get("tarea")))
+                if tarea_id is None:
+                    raise serializers.ValidationError(
+                        "Cada tarea debe tener 'tarea_id' (o 'id_tarea' / 'tarea')"
+                    )
+                tarea_id = int(tarea_id)
+                qty = int(raw.get("cantidad", 1))
+            else:
+                raise serializers.ValidationError("Formato inválido de tareas_diseno")
+
+            if qty < 1:
+                raise serializers.ValidationError("La cantidad de una tarea debe ser >= 1")
+
+            merged[tarea_id] = merged.get(tarea_id, 0) + qty
+
+        ids = list(merged.keys())
         existentes = set(Tarea.objects.filter(id_tarea__in=ids).values_list("id_tarea", flat=True))
         faltantes = [i for i in ids if i not in existentes]
         if faltantes:
             raise serializers.ValidationError(f"Tareas inexistentes: {faltantes}")
-        return ids
+
+        return [{"tarea_id": tid, "cantidad": qty} for tid, qty in merged.items()]

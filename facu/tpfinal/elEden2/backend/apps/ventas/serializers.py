@@ -1,6 +1,6 @@
 ﻿from rest_framework import serializers
 
-from .models import Compra, DetalleCompra, DetalleVenta, Pago, Venta
+from .models import Compra, DetalleCompra, Pago
 
 
 class PagoSerializer(serializers.ModelSerializer):
@@ -87,24 +87,3 @@ class CompraCreateSerializer(serializers.ModelSerializer):
             producto.calcular_precio_desde_compras(porcentaje_ganancia=porcentaje_ganancia)
 
         return compra
-
-
-class DetalleVentaSerializer(serializers.ModelSerializer):
-    producto_nombre = serializers.CharField(source="producto.nombre", read_only=True)
-
-    class Meta:
-        model = DetalleVenta
-        fields = "__all__"
-        read_only_fields = ["subtotal"]
-
-
-class VentaSerializer(serializers.ModelSerializer):
-    cliente_nombre = serializers.CharField(source="cliente.persona.nombre", read_only=True)
-    cliente_apellido = serializers.CharField(source="cliente.persona.apellido", read_only=True)
-    pago_tipo = serializers.CharField(source="pago.tipo", read_only=True)
-    detalles = DetalleVentaSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = Venta
-        fields = "__all__"
-        read_only_fields = ["total"]

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { FileText, RefreshCw } from 'lucide-react';
-import { serviciosService, ventasService, detallesVentaService } from '../services';
+import { serviciosService } from '../services';
 
 const DEFAULT_PAGE_SIZE = 100;
 const TOP_N = 5;
@@ -79,9 +79,6 @@ const TableCard = ({ title, children }) => (
 const EstadisticasPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  const [ventas, setVentas] = useState([]);
-  const [detallesVenta, setDetallesVenta] = useState([]);
   const [reservas, setReservas] = useState([]);
   const [disenosDetalles, setDisenosDetalles] = useState([]);
 
@@ -89,14 +86,10 @@ const EstadisticasPage = () => {
     setLoading(true);
     setError('');
     try {
-      const [ventasAll, detallesVentaAll, reservasAll] = await Promise.all([
-        fetchAllPages((params) => ventasService.getVentas(params)),
-        fetchAllPages((params) => detallesVentaService.getDetalles(params)),
+      const [reservasAll] = await Promise.all([
         fetchAllPages((params) => serviciosService.getReservas(params)),
       ]);
 
-      setVentas(ventasAll);
-      setDetallesVenta(detallesVentaAll);
       setReservas(reservasAll);
 
       // Para "productos usados en servicios" tomamos productos desde diseños.
@@ -134,9 +127,6 @@ const EstadisticasPage = () => {
   }, []);
 
   const computed = useMemo(() => {
-    const ventasTotal = ventas.reduce((acc, v) => acc + safeNumber(v?.total), 0);
-    const ventasCantidad = ventas.length;
-
     const serviciosCantidad = reservas.length;
     const serviciosPorTipo = new Map();
     const empleadosPorServicios = new Map();
@@ -164,24 +154,6 @@ const EstadisticasPage = () => {
       .sort((a, b) => b.count - a.count)
       .slice(0, TOP_N);
 
-    // Top productos por ventas (detalle-venta)
-    const productosPorVenta = new Map();
-    detallesVenta.forEach((d) => {
-      const productoId = d?.producto;
-      const productoNombre = d?.producto_nombre || `Producto ${productoId ?? ''}`.trim();
-      const key = productoId ?? productoNombre;
-      const prev = productosPorVenta.get(key) || { id: productoId, nombre: productoNombre, cantidad: 0, subtotal: 0 };
-      productosPorVenta.set(key, {
-        ...prev,
-        cantidad: prev.cantidad + safeNumber(d?.cantidad),
-        subtotal: prev.subtotal + safeNumber(d?.subtotal),
-      });
-    });
-
-    const topProductosVenta = Array.from(productosPorVenta.values())
-      .sort((a, b) => b.cantidad - a.cantidad)
-      .slice(0, TOP_N);
-
     // Top productos usados en diseños (servicios)
     const productosPorDiseno = new Map();
     disenosDetalles.forEach((dd) => {
@@ -204,15 +176,12 @@ const EstadisticasPage = () => {
       .slice(0, TOP_N);
 
     return {
-      ventasTotal,
-      ventasCantidad,
       serviciosCantidad,
       topTipoServicio,
       topEmpleados,
-      topProductosVenta,
       topProductosServicio,
     };
-  }, [ventas, detallesVenta, reservas, disenosDetalles]);
+  }, [reservas, disenosDetalles]);
 
   return (
     <div className="min-h-screen bg-gray-900 p-6">
@@ -240,16 +209,6 @@ const EstadisticasPage = () => {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-          <StatCard
-            title="Total ventas"
-            value={formatCurrencyARS(computed.ventasTotal)}
-            icon={<FileText className="text-emerald-400" size={24} />}
-          />
-          <StatCard
-            title="Cantidad de ventas"
-            value={computed.ventasCantidad}
-            icon={<FileText className="text-emerald-400" size={24} />}
-          />
           <StatCard
             title="Cantidad de servicios"
             value={computed.serviciosCantidad}
@@ -315,36 +274,8 @@ const EstadisticasPage = () => {
             )}
           </TableCard>
 
-          <TableCard title={`Productos más vendidos (por detalle de venta) - Top ${TOP_N}`}>
-            {computed.topProductosVenta.length === 0 ? (
-              <p className="text-gray-400">Sin datos.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-gray-400 border-b border-gray-700">
-                      <th className="text-left py-2">Producto</th>
-                      <th className="text-right py-2">Cantidad</th>
-                      <th className="text-right py-2">Subtotal</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {computed.topProductosVenta.map((p) => (
-                      <tr key={p.id ?? p.nombre} className="border-b border-gray-800">
-                        <td className="py-2 text-white">{p.nombre}</td>
-                        <td className="py-2 text-right text-white">{p.cantidad}</td>
-                        <td className="py-2 text-right text-white">{formatCurrencyARS(p.subtotal)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </TableCard>
-
           <TableCard title="Notas">
             <ul className="text-gray-300 text-sm space-y-2">
-              <li>• Ventas: se calculan sumando el campo <span className="text-white">total</span> de cada venta.</li>
               <li>• Servicios: se cuentan desde <span className="text-white">reservas</span>.</li>
               <li>• Productos usados en servicios: se agregan desde los <span className="text-white">productos</span> de cada diseño asociado.</li>
             </ul>

@@ -1,14 +1,12 @@
 ﻿from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, viewsets
 
-from .models import Compra, DetalleCompra, DetalleVenta, Pago, Venta
+from .models import Compra, DetalleCompra, Pago
 from .serializers import (
     CompraCreateSerializer,
     CompraSerializer,
     DetalleCompraSerializer,
-    DetalleVentaSerializer,
     PagoSerializer,
-    VentaSerializer,
 )
 
 
@@ -58,38 +56,6 @@ class DetalleCompraViewSet(viewsets.ModelViewSet):
         filters.OrderingFilter,
     ]
     filterset_fields = ["compra", "producto"]
-    search_fields = ["producto__nombre"]
-    ordering_fields = ["fecha_creacion"]
-    ordering = ["-fecha_creacion"]
-
-
-class VentaViewSet(viewsets.ModelViewSet):
-    queryset = Venta.objects.select_related("cliente", "pago").prefetch_related("detalles").all()
-    serializer_class = VentaSerializer
-    filter_backends = [
-        DjangoFilterBackend,
-        filters.SearchFilter,
-        filters.OrderingFilter,
-    ]
-    filterset_fields = ["cliente", "pago", "fecha"]
-    search_fields = [
-        "cliente__persona__nombre",
-        "cliente__persona__apellido",
-        "observaciones",
-    ]
-    ordering_fields = ["fecha", "total"]
-    ordering = ["-fecha"]
-
-
-class DetalleVentaViewSet(viewsets.ModelViewSet):
-    queryset = DetalleVenta.objects.select_related("venta", "producto").all()
-    serializer_class = DetalleVentaSerializer
-    filter_backends = [
-        DjangoFilterBackend,
-        filters.SearchFilter,
-        filters.OrderingFilter,
-    ]
-    filterset_fields = ["venta", "producto"]
     search_fields = ["producto__nombre"]
     ordering_fields = ["fecha_creacion"]
     ordering = ["-fecha_creacion"]

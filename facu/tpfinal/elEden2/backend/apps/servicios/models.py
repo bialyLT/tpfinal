@@ -134,8 +134,16 @@ class Reserva(models.Model):
         null=True,
         help_text="Dirección donde se realizará el servicio",
     )
+    
+    localidad_servicio = models.ForeignKey(
+        "users.Localidad",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reservas_programadas",
+        help_text="Localidad donde se realizará el servicio",
+    )
 
-    # Campos estructurados para la solicitud
     superficie_aproximada = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -143,14 +151,7 @@ class Reserva(models.Model):
         blank=True,
         help_text="Superficie aproximada en m2",
     )
-    objetivo_diseno = models.ForeignKey(
-        "servicios.ObjetivoDiseno",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="reservas",
-        help_text="Objetivo principal del diseño",
-    )
+    
     nivel_intervencion = models.BooleanField(
         null=True,
         blank=True,
@@ -164,12 +165,16 @@ class Reserva(models.Model):
         help_text="Rango de presupuesto estimado por el cliente",
     )
 
-    # Pago asociado: una reserva tiene un solo pago (seña + pago final)
-    # Relación definida en el modelo `Pago` con related_name='pago'.
-
-    # Relaciones
-    cliente = models.ForeignKey("users.Cliente", on_delete=models.PROTECT, related_name="reservas")
+    objetivo_diseno = models.ForeignKey(
+        "servicios.ObjetivoDiseno",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reservas",
+        help_text="Objetivo principal del diseño",
+    )
     servicio = models.ForeignKey(Servicio, on_delete=models.PROTECT, related_name="reservas")
+    cliente = models.ForeignKey("users.Cliente", on_delete=models.PROTECT, related_name="reservas")
     empleados = models.ManyToManyField(
         "users.Empleado",
         through="ReservaEmpleado",
@@ -177,25 +182,18 @@ class Reserva(models.Model):
         blank=True,
     )
     weather_alert = models.ForeignKey(
-        "weather.WeatherAlert",
+        "weather.AlertaClimatica",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="reservas_afectadas",
     )
-    localidad_servicio = models.ForeignKey(
-        "users.Localidad",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="reservas_programadas",
-        help_text="Localidad donde se realizará el servicio",
-    )
+    alerta_clima_payload = models.JSONField(default=dict, blank=True)
+
     requiere_reprogramacion = models.BooleanField(default=False)
     motivo_reprogramacion = models.CharField(max_length=255, blank=True, null=True)
     fecha_reprogramada_sugerida = models.DateTimeField(null=True, blank=True)
     fecha_reprogramada_confirmada = models.DateTimeField(null=True, blank=True)
-    alerta_clima_payload = models.JSONField(default=dict, blank=True)
     reprogramacion_fuente = models.CharField(max_length=50, blank=True, null=True)
 
     # Token único para acceso público a encuesta de satisfacción (link por email)
@@ -264,7 +262,7 @@ class Reserva(models.Model):
 
     def marcar_alerta_climatica(self, alerta, sugerencia=None):
         self.weather_alert = alerta
-        self.alerta_clima_payload = alerta.payload or {}
+        self.alerta_clima_payload = alerta.payload_alerta or {}
         if self.servicio.reprogramable_por_clima:
             self.requiere_reprogramacion = True
             self.motivo_reprogramacion = "Clima: lluvia pronosticada"
@@ -422,7 +420,7 @@ class ReservaEmpleado(models.Model):
 
 
 class FormaTerreno(models.Model):
-    """Formas de terreno configurables en admin"""
+    """Formas de terreno"""
 
     id_forma = models.AutoField(primary_key=True)
     nombre = models.CharField(max_length=100, unique=True)
@@ -442,8 +440,6 @@ class Jardin(models.Model):
     id_jardin = models.AutoField(primary_key=True)
     reserva = models.OneToOneField(Reserva, on_delete=models.CASCADE, related_name="jardin")
     descripcion = models.TextField(blank=True, null=True)
-    fecha_creacion = models.DateTimeField(auto_now_add=True)
-    fecha_actualizacion = models.DateTimeField(auto_now=True)
 
     class Meta:
         verbose_name = "Jardín"
@@ -489,17 +485,15 @@ class ImagenZona(models.Model):
     zona = models.ForeignKey(ZonaJardin, on_delete=models.CASCADE, related_name="imagenes")
     imagen = models.ImageField(upload_to="zonas/%Y/%m/", help_text="Imagen de la zona")
     descripcion = models.CharField(max_length=200, blank=True, null=True, help_text="Descripción de la imagen")
-    orden = models.IntegerField(default=0, help_text="Orden de visualización de la imagen")
-    fecha_subida = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name = "Imagen de Zona"
         verbose_name_plural = "Imágenes de Zona"
         db_table = "imagen_zona"
-        indexes = [models.Index(fields=["zona"]), models.Index(fields=["orden"])]
+        indexes = [models.Index(fields=["zona"])]
 
     def __str__(self):
-        return f"Imagen {self.orden} - Zona {self.zona.id_zona}"
+        return f"Imagen Zona {self.id_imagen_zona} - Zona {self.zona.id_zona}"
 
 
 class Diseno(models.Model):
@@ -683,6 +677,12 @@ class DisenoTarea(models.Model):
     id_diseno_tarea = models.AutoField(primary_key=True)
     diseno = models.ForeignKey(Diseno, on_delete=models.CASCADE, related_name="diseno_tareas")
     tarea = models.ForeignKey("productos.Tarea", on_delete=models.CASCADE, related_name="tarea_disenos")
+
+    cantidad = models.IntegerField(
+        validators=[MinValueValidator(1)],
+        default=1,
+        help_text="Cantidad de veces que se repite la tarea en el diseño",
+    )
 
     class Meta:
         verbose_name = "Diseño-Tarea"
