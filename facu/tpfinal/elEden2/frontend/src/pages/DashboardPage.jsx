@@ -501,43 +501,6 @@ const DashboardPage = () => {
               </div>
             </div>
           )}
-
-          <div>
-            <h2 className="text-lg font-semibold text-white mb-4">Actividad Reciente</h2>
-            <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left text-gray-400">
-                  <thead className="text-xs text-gray-400 uppercase bg-gray-700">
-                    <tr>
-                      <th scope="col" className="px-6 py-3">Nro. Servicio</th>
-                      <th scope="col" className="px-6 py-3">Fecha</th>
-                      <th scope="col" className="px-6 py-3">Cliente</th>
-                      <th scope="col" className="px-6 py-3">Servicio</th>
-                      <th scope="col" className="px-6 py-3">Estado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentActivity.map((activity) => (
-                      <tr key={activity.id} className="bg-gray-800 border-b border-gray-700 hover:bg-gray-600">
-                        <th scope="row" className="px-6 py-4 font-medium text-white whitespace-nowrap">
-                          {activity.id}
-                        </th>
-                        <td className="px-6 py-4">{activity.date}</td>
-                        <td className="px-6 py-4">{activity.customer}</td>
-                        <td className="px-6 py-4">{activity.service}</td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center">
-                            <div className={`h-2.5 w-2.5 rounded-full ${activity.statusColor} mr-2`}></div>
-                            {activity.status}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
         </main>
       </div>
     </div>

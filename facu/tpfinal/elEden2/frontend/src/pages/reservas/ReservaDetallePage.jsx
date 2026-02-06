@@ -43,6 +43,11 @@ const ReservaDetallePage = () => {
   const [loading, setLoading] = useState(true);
   const [procesandoPago, setProcesandoPago] = useState(false);
 
+  const [editEmpleadosOpen, setEditEmpleadosOpen] = useState(false);
+  const [empleadosCatalogo, setEmpleadosCatalogo] = useState([]);
+  const [empleadosSeleccionados, setEmpleadosSeleccionados] = useState([]);
+  const [guardandoEmpleados, setGuardandoEmpleados] = useState(false);
+
   const [surveyState, setSurveyState] = useState({
     loading: false,
     encuesta: null,
@@ -65,6 +70,19 @@ const ReservaDetallePage = () => {
   const numericReservaId = Number(reservaId);
   const apiReservaId = Number.isNaN(numericReservaId) ? reservaId : numericReservaId;
 
+  const puedeEditarEmpleados = Boolean(
+    isAdmin && (
+      (reserva?.puede_editar_empleados_admin === true) ||
+      (
+        reserva?.puede_editar_empleados_admin == null &&
+        (reserva?.estado === 'confirmada' || reserva?.estado === 'en_curso') &&
+        reserva?.estado !== 'completada' &&
+        reserva?.estado !== 'cancelada' &&
+        (reserva?.estado_pago_final === 'pagado' || Boolean(reserva?.payment_id_final))
+      )
+    )
+  );
+
   useEffect(() => {
     const fetchReserva = async () => {
       try {
@@ -83,6 +101,60 @@ const ReservaDetallePage = () => {
 
     fetchReserva();
   }, [reservaId]);
+
+  useEffect(() => {
+    if (!editEmpleadosOpen || !puedeEditarEmpleados) {
+      return;
+    }
+
+    const cargarEmpleados = async () => {
+      try {
+        const data = await serviciosService.getEmpleadosCatalogo();
+        const list = data?.results || [];
+        setEmpleadosCatalogo(list);
+      } catch (error) {
+        handleApiError(error, 'No pudimos cargar el listado de empleados');
+      }
+    };
+
+    cargarEmpleados();
+  }, [editEmpleadosOpen, puedeEditarEmpleados]);
+
+  useEffect(() => {
+    if (!editEmpleadosOpen) {
+      return;
+    }
+
+    const ids = (reserva?.empleados_asignados || [])
+      .map((a) => Number(a.empleado))
+      .filter((id) => !Number.isNaN(id));
+    setEmpleadosSeleccionados(ids);
+  }, [editEmpleadosOpen, reserva]);
+
+  const toggleEmpleadoSeleccionado = (empleadoId) => {
+    setEmpleadosSeleccionados((prev) => {
+      const id = Number(empleadoId);
+      if (prev.includes(id)) {
+        return prev.filter((x) => x !== id);
+      }
+      return [...prev, id];
+    });
+  };
+
+  const guardarEmpleadosAsignados = async () => {
+    try {
+      setGuardandoEmpleados(true);
+      await serviciosService.updateReservaEmpleados(apiReservaId, empleadosSeleccionados);
+      success('Empleados actualizados correctamente');
+      const data = await serviciosService.getReservaById(reservaId);
+      setReserva(data);
+      setEditEmpleadosOpen(false);
+    } catch (error) {
+      handleApiError(error, 'No pudimos actualizar los empleados de la reserva');
+    } finally {
+      setGuardandoEmpleados(false);
+    }
+  };
 
   useEffect(() => {
     if (!reserva || !isCliente) {
@@ -545,17 +617,35 @@ const ReservaDetallePage = () => {
                       </span>
                     </div>
                   )}
-                  {reserva.fecha_reserva && (
+                  {(reserva.fecha_cita || reserva.fecha_reserva) && (
                     <div className="flex items-center space-x-2">
                       <Calendar className="w-4 h-4 text-gray-400" />
                       <span className="text-gray-300">
-                        Fecha programada: {new Date(reserva.fecha_reserva).toLocaleString('es-AR', {
+                        Fecha de cita: {new Date(reserva.fecha_cita || reserva.fecha_reserva).toLocaleString('es-AR', {
                           year: 'numeric',
                           month: 'long',
                           day: 'numeric',
                           hour: '2-digit',
                           minute: '2-digit',
                         })}
+                      </span>
+                    </div>
+                  )}
+
+                  {reserva.fecha_realizacion && (
+                    <div className="flex items-center space-x-2">
+                      <Calendar className="w-4 h-4 text-gray-400" />
+                      <span className="text-gray-300">
+                        Fecha de realización: {new Date(reserva.fecha_realizacion).toLocaleString('es-AR')}
+                      </span>
+                    </div>
+                  )}
+
+                  {reserva.fecha_finalizacion && (
+                    <div className="flex items-center space-x-2">
+                      <Calendar className="w-4 h-4 text-gray-400" />
+                      <span className="text-gray-300">
+                        Fecha de finalización: {new Date(reserva.fecha_finalizacion).toLocaleString('es-AR')}
                       </span>
                     </div>
                   )}
@@ -966,9 +1056,21 @@ const ReservaDetallePage = () => {
 
             {!isCliente && reserva.empleados_asignados && reserva.empleados_asignados.length > 0 && (
               <section className="bg-gray-900 rounded-xl border border-gray-700 p-6">
-                <div className="flex items-center mb-4">
-                  <User className="w-6 h-6 text-emerald-400 mr-2" />
-                  <h2 className="text-xl font-semibold text-white">Empleados asignados</h2>
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <div className="flex items-center">
+                    <User className="w-6 h-6 text-emerald-400 mr-2" />
+                    <h2 className="text-xl font-semibold text-white">Empleados asignados</h2>
+                  </div>
+
+                  {puedeEditarEmpleados && (
+                    <button
+                      type="button"
+                      onClick={() => setEditEmpleadosOpen(true)}
+                      className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold"
+                    >
+                      Editar
+                    </button>
+                  )}
                 </div>
                 <div className="space-y-3">
                   {reserva.empleados_asignados.map((empleado) => (
@@ -1017,6 +1119,102 @@ const ReservaDetallePage = () => {
                   ))}
                 </div>
               </section>
+            )}
+
+            {!isCliente && puedeEditarEmpleados && (!reserva.empleados_asignados || reserva.empleados_asignados.length === 0) && (
+              <section className="bg-gray-900 rounded-xl border border-gray-700 p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center">
+                    <User className="w-6 h-6 text-emerald-400 mr-2" />
+                    <h2 className="text-xl font-semibold text-white">Empleados asignados</h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditEmpleadosOpen(true)}
+                    className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold"
+                  >
+                    Editar
+                  </button>
+                </div>
+                <p className="text-gray-400 mt-3">No hay empleados asignados actualmente.</p>
+              </section>
+            )}
+
+            {editEmpleadosOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                <div className="w-full max-w-2xl bg-gray-900 border border-gray-700 rounded-xl overflow-hidden">
+                  <div className="p-5 border-b border-gray-700 flex items-center justify-between">
+                    <h3 className="text-white font-semibold text-lg">Editar empleados asignados</h3>
+                    <button
+                      type="button"
+                      onClick={() => setEditEmpleadosOpen(false)}
+                      className="text-gray-400 hover:text-white"
+                      aria-label="Cerrar"
+                    >
+                      <XCircle className="w-6 h-6" />
+                    </button>
+                  </div>
+
+                  <div className="p-5 max-h-[60vh] overflow-y-auto">
+                    <p className="text-sm text-gray-400 mb-4">
+                      Solo administradores pueden editar esto. Se ajustan las asignaciones (rol operador).
+                    </p>
+
+                    {empleadosCatalogo.length === 0 ? (
+                      <div className="text-gray-400">Cargando empleados...</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {empleadosCatalogo.map((emp) => {
+                          const empId = Number(emp.id);
+                          const checked = empleadosSeleccionados.includes(empId);
+                          return (
+                            <label
+                              key={emp.id}
+                              className="flex items-start gap-3 bg-gray-800 border border-gray-700 rounded-lg p-3 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                className="mt-1"
+                                checked={checked}
+                                onChange={() => toggleEmpleadoSeleccionado(empId)}
+                              />
+                              <div className="flex-1">
+                                <div className="text-white font-medium">
+                                  {`${emp.nombre || ''} ${emp.apellido || ''}`.trim() || `Empleado #${emp.id}`}
+                                </div>
+                                {emp.email && <div className="text-xs text-gray-400">{emp.email}</div>}
+                              </div>
+                              <div className="text-right text-xs text-gray-400">
+                                <div>{formatPuntuacion(emp.puntuacion_promedio)}</div>
+                                <div>{`${emp.puntuacion_cantidad ?? 0} eval.`}</div>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-5 border-t border-gray-700 flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setEditEmpleadosOpen(false)}
+                      className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-white"
+                      disabled={guardandoEmpleados}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={guardarEmpleadosAsignados}
+                      className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold"
+                      disabled={guardandoEmpleados}
+                    >
+                      {guardandoEmpleados ? 'Guardando...' : 'Guardar'}
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
 
             <section id="encuesta" className="bg-gray-900 rounded-xl border border-gray-700 p-6">

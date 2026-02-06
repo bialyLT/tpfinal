@@ -78,6 +78,7 @@ services:
     environment:
       - VITE_API_URL=http://localhost:8000/api/v1
       - VITE_MERCADOPAGO_PUBLIC_KEY=${MERCADOPAGO_PUBLIC_KEY}
+      - VITE_DISABLE_OPTIMIZE_DEPS=true
     depends_on:
       - backend
     networks:
@@ -98,6 +99,7 @@ services:
       - frontend
     networks:
       - eleden_network
+
 
 networks:
   eleden_network:

@@ -11,6 +11,7 @@ import requests
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.servicios.models import Reserva, ReservaEmpleado
@@ -364,10 +365,14 @@ class ServicioAlertasClimaticas:
         dias_buscados = 0
 
         while dias_buscados < self.max_employee_search_days:
-            reservas_en_fecha = Reserva.objects.filter(
-                fecha_cita__date=fecha_candidata.date(),
-                estado__in=["confirmada", "en_curso"],
-            ).values_list("id_reserva", flat=True)
+            reservas_en_fecha = (
+                Reserva.objects.filter(
+                    Q(fecha_realizacion__date=fecha_candidata.date())
+                    | (Q(fecha_realizacion__isnull=True) & Q(fecha_cita__date=fecha_candidata.date())),
+                    estado__in=["confirmada", "en_curso"],
+                )
+                .values_list("id_reserva", flat=True)
+            )
 
             empleados_ocupados = ReservaEmpleado.objects.filter(reserva_id__in=reservas_en_fecha).values_list(
                 "empleado_id", flat=True
@@ -384,10 +389,11 @@ class ServicioAlertasClimaticas:
         return fecha_inicial + timedelta(days=7)
 
     def _suggest_reprogramming_date(self, reserva: Reserva) -> Optional[datetime]:
-        if not reserva or not reserva.fecha_cita:
+        if not reserva or not (reserva.fecha_realizacion or reserva.fecha_cita):
             return None
         empleados_necesarios = self._determine_empleados_requeridos(reserva)
-        return self._find_next_available_slot(reserva.fecha_cita, empleados_necesarios)
+        fecha_base = reserva.fecha_realizacion or reserva.fecha_cita
+        return self._find_next_available_slot(fecha_base, empleados_necesarios)
 
     def evaluate_reserva(
         self,
@@ -396,11 +402,11 @@ class ServicioAlertasClimaticas:
         longitude: Optional[float] = None,
         auto_create_alert: bool = True,
     ) -> dict:
-        fecha_objetivo = (
-            reserva.fecha_cita.astimezone(datetime_timezone.utc)
-            if timezone.is_aware(reserva.fecha_cita)
-            else reserva.fecha_cita
-        )
+        fecha_base = reserva.fecha_realizacion or reserva.fecha_cita
+        if not fecha_base:
+            raise ValueError("La reserva no tiene fecha para evaluar (fecha_realizacion/fecha_cita).")
+
+        fecha_objetivo = fecha_base.astimezone(datetime_timezone.utc) if timezone.is_aware(fecha_base) else fecha_base
         latitude, longitude, localidad_info = self._get_coordinates(reserva, latitude, longitude)
         forecast = self.client.get_daily_forecast(latitude, longitude, fecha_objetivo)
         forecast_obj = self._ensure_forecast(latitude, longitude, fecha_objetivo, forecast)

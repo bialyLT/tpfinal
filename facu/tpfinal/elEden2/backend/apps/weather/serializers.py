@@ -36,7 +36,7 @@ class PronosticoClimaSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-    class AlertaClimaticaSerializer(serializers.ModelSerializer):
+class AlertaClimaticaSerializer(serializers.ModelSerializer):
     alert_date = serializers.DateField(source="fecha_alerta", read_only=True)
     alert_type = serializers.CharField(source="tipo_alerta", read_only=True)
     status = serializers.CharField(source="estado", read_only=True)

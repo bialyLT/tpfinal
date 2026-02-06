@@ -247,9 +247,9 @@ const ComprasPage = () => {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mt-4 items-end">
             {/* Date Range */}
-            <div className="flex space-x-2">
+            <div className="flex space-x-2 lg:col-span-2">
               <input
                 type="date"
                 placeholder="Desde"
@@ -267,7 +267,7 @@ const ComprasPage = () => {
             </div>
 
             {/* Total Range */}
-            <div className="flex space-x-2">
+            <div className="flex space-x-2 lg:col-span-2">
               <input
                 type="number"
                 placeholder="Total mín."
@@ -285,7 +285,7 @@ const ComprasPage = () => {
             </div>
 
             {/* Apply Filters Button */}
-            <div className="flex items-center">
+            <div className="flex items-center lg:col-span-2">
               <button
                 onClick={fetchData}
                 className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center"

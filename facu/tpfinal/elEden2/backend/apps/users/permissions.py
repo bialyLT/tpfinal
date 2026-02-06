@@ -101,6 +101,22 @@ class EsAdministradorOSoloLectura(permissions.BasePermission):
             return request.user.is_staff or request.user.is_superuser
 
 
+class SoloAdministrador(permissions.BasePermission):
+    """Permiso que permite acceso únicamente a administradores (incluye superuser).
+
+    A diferencia de `EsAdministradorOSoloLectura`, también restringe métodos SAFE.
+    """
+
+    def has_permission(self, request, _view):
+        if isinstance(request.user, AnonymousUser):
+            return False
+
+        try:
+            return request.user.perfil.tipo_usuario == "administrador"
+        except Exception:
+            return request.user.is_staff or request.user.is_superuser
+
+
 class EsPropietarioOAdministrador(permissions.BasePermission):
     """
     Permiso que permite que solo el propietario o un administrador

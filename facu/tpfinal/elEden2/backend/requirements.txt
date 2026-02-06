@@ -21,6 +21,9 @@ mercadopago==2.2.3
 # Environment Variables
 python-dotenv==1.0.1
 
+# Packaging (pkg_resources)
+setuptools==75.1.0
+
 # Validation & Filtering
 django-filter==23.5
 django-rest-auth==0.9.5

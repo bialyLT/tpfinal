@@ -595,6 +595,8 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
       if (formData.hora_preferida) {
         fechaReserva = `${formData.fecha_preferida}T${formData.hora_preferida}:00`;
       }
+      formDataToSend.append('fecha_cita', fechaReserva);
+      // Compatibilidad (legacy)
       formDataToSend.append('fecha_reserva', fechaReserva);
       
       formDataToSend.append('direccion', formData.direccion_servicio);

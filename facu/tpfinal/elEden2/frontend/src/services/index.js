@@ -219,6 +219,18 @@ export const serviciosService = {
     const response = await api.get(`/servicios/reservas/${id}/`);
     return response.data;
   },
+
+  getEmpleadosCatalogo: async () => {
+    const response = await api.get('/servicios/reservas/empleados-catalogo/');
+    return response.data;
+  },
+
+  updateReservaEmpleados: async (id, empleadosIds = []) => {
+    const response = await api.patch(`/servicios/reservas/${id}/editar-empleados/`, {
+      empleados_ids: empleadosIds,
+    });
+    return response.data;
+  },
   
   // MercadoPago - Crear preferencias
   crearPreferenciaSena: async (reservaId) => {

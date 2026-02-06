@@ -3,6 +3,7 @@ from datetime import datetime
 
 import django_filters
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
@@ -16,6 +17,8 @@ from rest_framework.permissions import (
     IsAuthenticated,
 )
 from rest_framework.response import Response
+
+from apps.users.permissions import SoloAdministrador
 
 from apps.productos.models import Producto, Tarea
 from apps.users.models import Cliente, Empleado, Localidad
@@ -43,6 +46,7 @@ from .serializers import (
     DisenoSerializer,
     FormaTerrenoSerializer,
     JardinSerializer,
+    EditarEmpleadosReservaSerializer,
     ReservaSerializer,
     ServicioSerializer,
 )
@@ -106,8 +110,15 @@ class ReservaViewSet(viewsets.ModelViewSet):
         """
         user = self.request.user
 
+        es_admin = user.is_staff or user.is_superuser
+        if not es_admin:
+            try:
+                es_admin = user.perfil.tipo_usuario == "administrador"
+            except Exception:
+                es_admin = False
+
         # Si es staff, mostrar solo reservas con seña pagada
-        if user.is_staff:
+        if es_admin:
             return Reserva.objects.select_related("cliente__persona", "servicio", "localidad_servicio", "pago").filter(
                 pago__estado_pago_sena__in=["sena_pagada", "aprobado"]
             )
@@ -147,11 +158,162 @@ class ReservaViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+    @action(
+        detail=True,
+        methods=["patch"],
+        url_path="editar-empleados",
+        permission_classes=[SoloAdministrador],
+    )
+    @transaction.atomic
+    def editar_empleados(self, request, pk=None):
+        """Editar empleados asignados (rol=operador) de una reserva.
+
+        Solo administradores. Permitido únicamente DESPUÉS de que se pague el pago final
+        y HASTA que el servicio se finalice (estado != completada/cancelada).
+        """
+        reserva = self.get_object()
+
+        if reserva.estado in ("completada", "cancelada") or reserva.estado not in ("confirmada", "en_curso"):
+            return Response(
+                {
+                    "error": "No se pueden editar empleados para esta reserva.",
+                    "detail": "Solo se permite en reservas 'confirmada' o 'en_curso' que aún no estén finalizadas/canceladas.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        pago = reserva.obtener_pago()
+        if not (pago.estado_pago_final == "pagado" or pago.payment_id_final):
+            return Response(
+                {
+                    "error": "No se pueden editar empleados para esta reserva.",
+                    "detail": "Solo se permite después de que el pago final esté pagado.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Snapshot para detectar qué empleados se agregan
+        operadores_previos_ids = set(
+            ReservaEmpleado.objects.filter(reserva=reserva, rol="operador").values_list("empleado_id", flat=True)
+        )
+
+        payload_serializer = EditarEmpleadosReservaSerializer(data=request.data)
+        payload_serializer.is_valid(raise_exception=True)
+        empleados_ids = list(dict.fromkeys(payload_serializer.validated_data["empleados_ids"]))
+
+        empleados = Empleado.objects.filter(id_empleado__in=empleados_ids)
+        if empleados_ids and empleados.count() != len(empleados_ids):
+            existentes = set(empleados.values_list("id_empleado", flat=True))
+            faltantes = [eid for eid in empleados_ids if eid not in existentes]
+            return Response(
+                {"error": "Hay empleados inexistentes.", "faltantes": faltantes},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Remover operadores que ya no están en la lista
+        ReservaEmpleado.objects.filter(reserva=reserva, rol="operador").exclude(empleado_id__in=empleados_ids).delete()
+
+        # Agregar nuevos operadores sin tocar asignaciones con otros roles
+        for empleado in empleados:
+            ReservaEmpleado.objects.get_or_create(
+                reserva=reserva,
+                empleado=empleado,
+                defaults={
+                    "rol": "operador",
+                    "notas": "Asignación actualizada manualmente por administrador",
+                },
+            )
+
+        # Notificar por email SOLO a los empleados que fueron agregados en esta edición
+        nuevos_ids = set(empleados_ids) - operadores_previos_ids
+        if nuevos_ids:
+            try:
+                from apps.emails.services import EmailService
+
+                cliente = reserva.cliente.persona if reserva.cliente_id else None
+                cliente_nombre = (
+                    f"{cliente.nombre} {cliente.apellido}" if cliente else "Cliente"
+                )
+                fecha_servicio = reserva.fecha_cita
+                hora_servicio = fecha_servicio.strftime("%H:%M") if fecha_servicio else "A confirmar"
+                direccion = reserva.direccion or "A confirmar"
+
+                for empleado in empleados:
+                    if empleado.id_empleado not in nuevos_ids:
+                        continue
+                    try:
+                        EmailService.send_employee_work_assignment_notification(
+                            empleado_email=empleado.persona.email,
+                            empleado_nombre=f"{empleado.persona.nombre} {empleado.persona.apellido}",
+                            reserva_id=reserva.id_reserva,
+                            cliente_nombre=cliente_nombre,
+                            servicio_nombre=reserva.servicio.nombre if reserva.servicio_id else "Servicio",
+                            fecha_servicio=fecha_servicio,
+                            hora_servicio=hora_servicio,
+                            direccion=direccion,
+                            observaciones=reserva.observaciones,
+                            rol="operador",
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"No se pudo enviar email de asignación a empleado {empleado.id_empleado}: {e}"
+                        )
+            except Exception as e:
+                logger.error(f"No se pudieron enviar emails de reasignación: {e}")
+
+        serializer = self.get_serializer(reserva)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="empleados-catalogo",
+        permission_classes=[SoloAdministrador],
+    )
+    def empleados_catalogo(self, request):
+        """Listar empleados (modelo Empleado) para tareas administrativas.
+
+        Devuelve un catálogo simple para que el admin pueda reasignar empleados en reservas.
+        """
+        empleados_qs = Empleado.objects.select_related("persona").order_by("persona__apellido", "persona__nombre")
+        data = []
+        for emp in empleados_qs:
+            data.append(
+                {
+                    "id": emp.id_empleado,
+                    "nombre": emp.persona.nombre,
+                    "apellido": emp.persona.apellido,
+                    "email": emp.persona.email,
+                    "puntuacion_promedio": (
+                        float(emp.puntuacion_promedio) if emp.puntuacion_promedio is not None else None
+                    ),
+                    "puntuacion_cantidad": emp.puntuacion_cantidad,
+                    "puntuacion_acumulada": (
+                        float(emp.puntuacion_acumulada) if emp.puntuacion_acumulada is not None else None
+                    ),
+                    "fecha_ultima_puntuacion": (
+                        emp.fecha_ultima_puntuacion.isoformat() if emp.fecha_ultima_puntuacion else None
+                    ),
+                }
+            )
+
+        return Response({"results": data, "count": len(data)})
+
     def create(self, request, *args, **kwargs):
         """
         Crear una reserva de un servicio del catálogo
         """
         data = request.data.copy()
+
+        # Compatibilidad: algunos clientes/frontends envían `fecha_reserva` en vez de `fecha_cita`.
+        # El modelo usa `fecha_cita`.
+        if not data.get("fecha_cita"):
+            fecha_reserva = data.get("fecha_reserva")
+            if fecha_reserva:
+                data["fecha_cita"] = fecha_reserva
+
+        # Si quedó `fecha_reserva`, la removemos para evitar campos desconocidos.
+        data.pop("fecha_reserva", None)
 
         # Campos legacy (normalización): si el frontend los manda, los ignoramos
         data.pop("tipo_servicio_solicitado", None)
@@ -392,7 +554,11 @@ class ReservaViewSet(viewsets.ModelViewSet):
         pago.payment_id_sena = payment_id
         pago.estado_pago_sena = "sena_pagada"
         pago.fecha_pago_sena = timezone.now()
-        pago.save(update_fields=["payment_id_sena", "estado_pago_sena", "fecha_pago_sena"])
+        if pago.estado_pago_final == "pagado":
+            pago.estado_pago = "pagado"
+        else:
+            pago.estado_pago = "sena_pagada"
+        pago.save(update_fields=["payment_id_sena", "estado_pago_sena", "fecha_pago_sena", "estado_pago"])
 
         logger.info(f"✅ Pago de seña confirmado para reserva {reserva.id_reserva}: payment_id={payment_id}")
 
@@ -470,7 +636,17 @@ class ReservaViewSet(viewsets.ModelViewSet):
         pago.payment_id_final = payment_id
         pago.estado_pago_final = "pagado"
         pago.fecha_pago_final = timezone.now()
-        pago.save(update_fields=["payment_id_final", "estado_pago_final", "fecha_pago_final"])
+        pago.estado_pago = "pagado"
+        pago.save(update_fields=["payment_id_final", "estado_pago_final", "fecha_pago_final", "estado_pago"])
+
+        # Si existe una propuesta aceptada con fecha, guardarla como fecha_realizacion (no pisar fecha_cita)
+        try:
+            diseno_aceptado = reserva.disenos.filter(estado="aceptado").order_by("-id_diseno").first()
+            if diseno_aceptado and diseno_aceptado.fecha_propuesta and not reserva.fecha_realizacion:
+                reserva.fecha_realizacion = diseno_aceptado.fecha_propuesta
+                reserva.save(update_fields=["fecha_realizacion"])
+        except Exception:
+            pass
 
         logger.info(f"Pago final confirmado para reserva {reserva.id_reserva}: payment_id={payment_id}")
 
@@ -535,10 +711,10 @@ class ReservaViewSet(viewsets.ModelViewSet):
 
         reserva.aplicar_reprogramacion(nueva_fecha, motivo="clima", confirmar=True)
 
-                if reserva.weather_alert:
-                        reserva.weather_alert.estado = "resolved"
-                        reserva.weather_alert.resuelta_en = timezone.now()
-                        reserva.weather_alert.save(update_fields=["estado", "resuelta_en"])
+        if reserva.weather_alert:
+            reserva.weather_alert.estado = "resolved"
+            reserva.weather_alert.resuelta_en = timezone.now()
+            reserva.weather_alert.save(update_fields=["estado", "resuelta_en"])
 
         from apps.emails.services import EmailService
 
@@ -756,10 +932,17 @@ class ReservaViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Obtener reservas activas en esa fecha
-        reservas_en_fecha = Reserva.objects.filter(
-            fecha_cita__date=fecha, estado__in=["confirmada", "en_curso"]
-        ).values_list("id_reserva", flat=True)
+        # Obtener reservas activas en esa fecha.
+        # Si existe fecha_realizacion (programada por diseñador), esa manda;
+        # si no, usar fecha_cita (solicitada por el cliente).
+        reservas_en_fecha = (
+            Reserva.objects.filter(
+                Q(fecha_realizacion__date=fecha)
+                | (Q(fecha_realizacion__isnull=True) & Q(fecha_cita__date=fecha)),
+                estado__in=["confirmada", "en_curso"],
+            )
+            .values_list("id_reserva", flat=True)
+        )
 
         # Obtener empleados asignados como operadores en esas reservas
         empleados_ocupados = ReservaEmpleado.objects.filter(reserva__in=reservas_en_fecha, rol="operador").values_list(
@@ -843,9 +1026,14 @@ class ReservaViewSet(viewsets.ModelViewSet):
 
         while current_date <= fecha_fin:
             # Contar reservas activas en esta fecha
-            reservas_en_fecha = Reserva.objects.filter(
-                fecha_cita__date=current_date, estado__in=["confirmada", "en_curso"]
-            ).values_list("id_reserva", flat=True)
+            reservas_en_fecha = (
+                Reserva.objects.filter(
+                    Q(fecha_realizacion__date=current_date)
+                    | (Q(fecha_realizacion__isnull=True) & Q(fecha_cita__date=current_date)),
+                    estado__in=["confirmada", "en_curso"],
+                )
+                .values_list("id_reserva", flat=True)
+            )
 
             # Contar empleados ocupados
             empleados_ocupados = (
@@ -1706,11 +1894,16 @@ class DisenoViewSet(viewsets.ModelViewSet):
         dias_buscados = 0
 
         while dias_buscados < max_dias_busqueda:
+            fecha_dia = fecha_candidata.date() if hasattr(fecha_candidata, "date") else fecha_candidata
             # Obtener reservas activas en esa fecha
-            reservas_en_fecha = Reserva.objects.filter(
-                fecha_cita__date=fecha_candidata.date(),
-                estado__in=["confirmada", "en_curso"],
-            ).values_list("id_reserva", flat=True)
+            reservas_en_fecha = (
+                Reserva.objects.filter(
+                    Q(fecha_realizacion__date=fecha_dia)
+                    | (Q(fecha_realizacion__isnull=True) & Q(fecha_cita__date=fecha_dia)),
+                    estado__in=["confirmada", "en_curso"],
+                )
+                .values_list("id_reserva", flat=True)
+            )
 
             # Obtener empleados ocupados en esa fecha
             empleados_ocupados = ReservaEmpleado.objects.filter(
@@ -1853,20 +2046,22 @@ class DisenoViewSet(viewsets.ModelViewSet):
         if diseno.reserva:
             from apps.servicios.models import ReservaEmpleado
 
-            # Actualizar fecha_cita con fecha_propuesta si existe
+            # Guardar la fecha propuesta por el diseñador SIN pisar la fecha solicitada por el cliente
             if diseno.fecha_propuesta:
-                diseno.reserva.fecha_cita = diseno.fecha_propuesta
+                diseno.reserva.fecha_realizacion = diseno.fecha_propuesta
 
             diseno.reserva.estado = "en_curso"
             diseno.reserva.save()
 
             # Asignar empleados disponibles automáticamente
-            fecha_reserva = diseno.reserva.fecha_cita.date()
+            fecha_base = diseno.fecha_propuesta or diseno.reserva.fecha_realizacion or diseno.reserva.fecha_cita
+            fecha_reserva = fecha_base.date()
 
             # Obtener reservas activas en esa fecha
             reservas_en_fecha = (
                 Reserva.objects.filter(
-                    fecha_cita__date=fecha_reserva,
+                    Q(fecha_realizacion__date=fecha_reserva)
+                    | Q(fecha_realizacion__isnull=True, fecha_cita__date=fecha_reserva),
                     estado__in=["confirmada", "en_curso"],
                 )
                 .exclude(id_reserva=diseno.reserva.id_reserva)

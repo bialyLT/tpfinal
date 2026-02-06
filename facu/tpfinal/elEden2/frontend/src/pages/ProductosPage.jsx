@@ -276,10 +276,10 @@ const ProductosPage = () => {
 
         {/* Filters */}
         <div className="mb-6 bg-gray-800 p-4 rounded-lg">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
             {/* Search */}
             {/* Simple search input (server-side) */}
-            <div className="relative">
+            <div className="relative lg:col-span-2">
               <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
@@ -290,7 +290,7 @@ const ProductosPage = () => {
               />
             </div>
             {/* Quick product selector to avoid duplicate search views – opens edit modal */}
-            <div className="relative">
+            <div className="relative lg:col-span-2">
               <ProductSelector
                 productos={productos}
                 serverSide={false}
@@ -301,7 +301,7 @@ const ProductosPage = () => {
             </div>
 
             {/* Category Filter */}
-            <div className="relative">
+            <div className="relative lg:col-span-2">
               <Filter className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <select
                 value={selectedCategoria}
@@ -318,7 +318,7 @@ const ProductosPage = () => {
             </div>
 
             {/* Price Range */}
-            <div className="flex space-x-2">
+            <div className="flex space-x-2 lg:col-span-2">
               <input
                 type="number"
                 placeholder="Costo mín."
@@ -336,7 +336,7 @@ const ProductosPage = () => {
             </div>
 
             {/* Stock Range */}
-            <div className="flex space-x-2">
+            <div className="flex space-x-2 lg:col-span-2">
               <input
                 type="number"
                 placeholder="Stock mín."
@@ -354,7 +354,7 @@ const ProductosPage = () => {
             </div>
 
             {/* Apply Filters Button */}
-            <div className="flex items-center">
+            <div className="flex items-center lg:col-span-2">
               <button
                 onClick={fetchData}
                 className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
@@ -365,7 +365,7 @@ const ProductosPage = () => {
             </div>
 
             {/* Results Count */}
-            <div className="flex items-center justify-end col-span-1 md:col-span-4">
+            <div className="flex items-center justify-end col-span-1 md:col-span-2 lg:col-span-6">
               <span className="text-sm text-gray-400">
                 {productos.length} producto{productos.length !== 1 ? 's' : ''} encontrado{productos.length !== 1 ? 's' : ''}
               </span>

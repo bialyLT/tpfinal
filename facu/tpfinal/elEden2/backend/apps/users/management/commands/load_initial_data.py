@@ -217,13 +217,19 @@ class Command(BaseCommand):
         localidades_creadas = 0
 
         for loc_data in localidades_data:
-            localidad, created = Localidad.objects.get_or_create(
+            localidad = Localidad.objects.filter(
                 cp=loc_data["cp"],
-                defaults={
-                    "nombre_localidad": loc_data["nombre_localidad"],
-                    "nombre_provincia": loc_data["nombre_provincia"],
-                },
-            )
+                nombre_localidad=loc_data["nombre_localidad"],
+                nombre_provincia=loc_data["nombre_provincia"],
+            ).first()
+            created = False
+            if not localidad:
+                localidad = Localidad.objects.create(
+                    cp=loc_data["cp"],
+                    nombre_localidad=loc_data["nombre_localidad"],
+                    nombre_provincia=loc_data["nombre_provincia"],
+                )
+                created = True
             if created:
                 localidades_creadas += 1
                 self.stdout.write(

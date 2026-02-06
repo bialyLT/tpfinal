@@ -116,6 +116,11 @@ class Reserva(models.Model):
     id_reserva = models.AutoField(primary_key=True)
     fecha_solicitud = models.DateTimeField(auto_now_add=True)
     fecha_cita = models.DateTimeField()
+    fecha_realizacion = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Fecha y hora planificada para realizar el servicio (según propuesta de diseño aceptada)",
+    )
     fecha_inicio = models.DateTimeField(
         null=True,
         blank=True,

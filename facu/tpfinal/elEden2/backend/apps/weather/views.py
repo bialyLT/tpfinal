@@ -3,6 +3,7 @@ from decimal import Decimal
 
 import requests
 from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAdminUser
@@ -62,7 +63,8 @@ class SimulacionClimaAPIView(APIView):
             alert_datetime = timezone.make_aware(alert_datetime, timezone.get_current_timezone())
 
         reservas_qs = Reserva.objects.select_related("servicio", "cliente__persona").filter(
-            fecha_cita__date=alert_datetime.date(),
+            Q(fecha_realizacion__date=alert_datetime.date())
+            | (Q(fecha_realizacion__isnull=True) & Q(fecha_cita__date=alert_datetime.date())),
             servicio__reprogramable_por_clima=True,
             estado__in=["pendiente", "confirmada", "en_curso"],
         )

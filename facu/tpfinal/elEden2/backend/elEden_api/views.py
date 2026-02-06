@@ -27,7 +27,18 @@ class AdminStatsAPIView(APIView):
         # Ingresos del mes actual
         now = timezone.now()
         start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        monthly_revenue = (
+
+        # Sumamos ingresos efectivamente cobrados en el mes:
+        # - Señas pagadas en el mes (monto_sena)
+        # - Pagos finales pagados en el mes (monto_total - monto_sena)
+        # Esto evita doble conteo y distribuye ingresos según la fecha real de cobro.
+        monthly_sena = (
+            Pago.objects.filter(estado_pago_sena="sena_pagada", fecha_pago_sena__gte=start_of_month).aggregate(
+                total=Sum("monto_sena")
+            )["total"]
+            or 0
+        )
+        monthly_final = (
             Pago.objects.filter(estado_pago_final="pagado", fecha_pago_final__gte=start_of_month)
             .annotate(
                 monto_final_calc=ExpressionWrapper(
@@ -38,6 +49,7 @@ class AdminStatsAPIView(APIView):
             .aggregate(total=Sum("monto_final_calc"))["total"]
             or 0
         )
+        monthly_revenue = monthly_sena + monthly_final
 
         return Response(
             {

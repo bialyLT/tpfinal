@@ -384,9 +384,13 @@ def confirmar_pago_sena(request, reserva_id):
             pago.payment_id_sena = payment_id
             pago.fecha_pago_sena = timezone.now()
 
-            # Actualizar el estado de la reserva si aún está pendiente
-            if reserva.estado == "pendiente_pago_sena":
-                reserva.estado = "en_revision"
+            # Mantener estado general consistente
+            # - Si ya está pagado el final, queda 'pagado'
+            # - Si solo está la seña, queda 'sena_pagada'
+            if pago.estado_pago_final == "pagado":
+                pago.estado_pago = "pagado"
+            else:
+                pago.estado_pago = "sena_pagada"
 
             reserva.save()
             pago.save()
@@ -472,15 +476,51 @@ def confirmar_pago_final(request, reserva_id):
 
         logger.info(f"🔍 Confirmando pago final para reserva {reserva_id} con payment_id: {payment_id}")
 
+        # Idempotencia: si ya está pagado, no volver a consultar/actualizar
+        pago_existente = reserva.obtener_pago()
+        if pago_existente.estado_pago_final == "pagado":
+            return Response(
+                {
+                    "success": True,
+                    "message": "El pago final ya fue confirmado",
+                    "reserva_id": reserva.id_reserva,
+                    "estado_pago": pago_existente.estado_pago_final,
+                    "estado_reserva": reserva.estado,
+                    "payment_id": pago_existente.payment_id_final,
+                }
+            )
+
         # Verificar el pago con MercadoPago
         try:
             sdk = mercadopago.SDK(settings.MERCADOPAGO_ACCESS_TOKEN)
-            payment_info = sdk.payment().get(payment_id)
+            payment_data = None
+            max_retries = 6
+            retry_delay = 3
 
-            if "response" in payment_info:
-                payment_data = payment_info["response"]
-            else:
-                payment_data = payment_info
+            for attempt in range(max_retries):
+                if attempt > 0:
+                    logger.info(f"⏳ Reintento {attempt + 1}/{max_retries} después de {retry_delay}s...")
+                    import time
+
+                    time.sleep(retry_delay)
+
+                payment_info = sdk.payment().get(payment_id)
+                payment_data = payment_info["response"] if "response" in payment_info else payment_info
+
+                # Si no es 404, lo tomamos como disponible
+                if isinstance(payment_data, dict) and payment_data.get("status") != 404:
+                    break
+
+                if attempt == max_retries - 1:
+                    return Response(
+                        {
+                            "error": (
+                                "El pago aún está siendo procesado. Por favor, espera unos segundos "
+                                "y recarga la página."
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
             logger.info(f"📄 Información del pago: {payment_data}")
 
@@ -493,9 +533,22 @@ def confirmar_pago_final(request, reserva_id):
                 pago.payment_id_final = payment_id
                 pago.fecha_pago_final = timezone.now()
 
+                # Estado general
+                pago.estado_pago = "pagado"
+
+                # Si existe una propuesta aceptada con fecha, tomarla como fecha de cita confirmada
+                try:
+                    diseno_aceptado = reserva.disenos.filter(estado="aceptado").order_by("-id_diseno").first()
+                    if diseno_aceptado and diseno_aceptado.fecha_propuesta:
+                        if not getattr(reserva, "fecha_realizacion", None):
+                            reserva.fecha_realizacion = diseno_aceptado.fecha_propuesta
+                except Exception:
+                    pass
+
                 # Actualizar el estado de la reserva
-                if reserva.estado == "aprobado":  # Si estaba en aprobado (diseño aceptado)
-                    reserva.estado = "en_curso"  # Pasar a en curso
+                if reserva.estado not in ("confirmada", "en_curso", "completada", "cancelada"):
+                    # Normalización suave: si hubiese estados legacy en DB
+                    reserva.estado = "confirmada"
 
                 reserva.save()
                 pago.save()
@@ -646,15 +699,25 @@ def buscar_pago_por_preferencia(request, reserva_id):
                     pago.payment_id_sena = payment_id
                     pago.fecha_pago_sena = timezone.now()
 
-                    if reserva.estado == "pendiente_pago_sena":
-                        reserva.estado = "en_revision"
+                    if pago.estado_pago_final == "pagado":
+                        pago.estado_pago = "pagado"
+                    else:
+                        pago.estado_pago = "sena_pagada"
                 else:
                     pago.estado_pago_final = "pagado"
                     pago.payment_id_final = payment_id
                     pago.fecha_pago_final = timezone.now()
 
-                    if reserva.estado == "aprobado":
-                        reserva.estado = "en_curso"
+                    pago.estado_pago = "pagado"
+
+                    # Si existe una propuesta aceptada con fecha, tomarla como fecha de cita confirmada
+                    try:
+                        diseno_aceptado = reserva.disenos.filter(estado="aceptado").order_by("-id_diseno").first()
+                        if diseno_aceptado and diseno_aceptado.fecha_propuesta:
+                            if not getattr(reserva, "fecha_realizacion", None):
+                                reserva.fecha_realizacion = diseno_aceptado.fecha_propuesta
+                    except Exception:
+                        pass
 
                 reserva.save()
                 pago.save()

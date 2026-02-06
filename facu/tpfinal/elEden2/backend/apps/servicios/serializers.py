@@ -1,4 +1,5 @@
-﻿from rest_framework import serializers
+﻿from django.utils import timezone
+from rest_framework import serializers
 
 from apps.users.models import Cliente
 from apps.productos.models import Tarea
@@ -179,6 +180,13 @@ class ReservaSerializer(serializers.ModelSerializer):
     encuesta_cliente_completada = serializers.SerializerMethodField()
     encuesta_cliente_respuesta_id = serializers.SerializerMethodField()
     localidad_servicio_info = serializers.SerializerMethodField()
+    puede_editar_empleados_admin = serializers.SerializerMethodField()
+
+    # Aliases de fechas para compatibilidad con frontend legacy
+    # - `fecha_reserva` fue renombrada a `fecha_cita`
+    # - `fecha_realizacion` ahora representa la fecha planificada propuesta por el diseñador
+    fecha_reserva = serializers.DateTimeField(source="fecha_cita", read_only=True)
+    fecha_realizacion = serializers.DateTimeField(read_only=True)
 
     # Campos de pago (ahora están en `Pago`, se exponen aplanados por compatibilidad)
     monto_sena = serializers.DecimalField(
@@ -187,7 +195,7 @@ class ReservaSerializer(serializers.ModelSerializer):
         decimal_places=2,
         read_only=True,
     )
-    estado_pago_sena = serializers.CharField(source="pago.estado_pago_sena", read_only=True)
+    estado_pago_sena = serializers.SerializerMethodField()
     payment_id_sena = serializers.CharField(source="pago.payment_id_sena", read_only=True)
     fecha_pago_sena = serializers.DateTimeField(source="pago.fecha_pago_sena", read_only=True)
 
@@ -203,10 +211,10 @@ class ReservaSerializer(serializers.ModelSerializer):
         decimal_places=2,
         read_only=True,
     )
-    estado_pago_final = serializers.CharField(source="pago.estado_pago_final", read_only=True)
+    estado_pago_final = serializers.SerializerMethodField()
     payment_id_final = serializers.CharField(source="pago.payment_id_final", read_only=True)
     fecha_pago_final = serializers.DateTimeField(source="pago.fecha_pago_final", read_only=True)
-    estado_pago = serializers.CharField(source="pago.estado_pago", read_only=True)
+    estado_pago = serializers.SerializerMethodField()
 
     class Meta:
         model = Reserva
@@ -229,6 +237,44 @@ class ReservaSerializer(serializers.ModelSerializer):
             }
             for d in disenos
         ]
+
+    def _get_pago(self, obj):
+        return getattr(obj, "pago", None)
+
+    def get_estado_pago_sena(self, obj):
+        pago = self._get_pago(obj)
+        if not pago:
+            return None
+
+        # Si ya hay un payment_id registrado, consideramos la seña como pagada
+        if pago.payment_id_sena:
+            return "sena_pagada"
+
+        return pago.estado_pago_sena
+
+    def get_estado_pago_final(self, obj):
+        pago = self._get_pago(obj)
+        if not pago:
+            return None
+
+        # Si ya hay un payment_id del final, consideramos el final como pagado
+        if pago.payment_id_final:
+            return "pagado"
+
+        return pago.estado_pago_final
+
+    def get_estado_pago(self, obj):
+        pago = self._get_pago(obj)
+        if not pago:
+            return None
+
+        # Estado general coherente (evita casos donde quedó 'pendiente' aunque haya pagos registrados)
+        if pago.payment_id_final or pago.estado_pago_final == "pagado":
+            return "pagado"
+        if pago.payment_id_sena or pago.estado_pago_sena == "sena_pagada":
+            return "sena_pagada"
+
+        return pago.estado_pago
 
     def _get_cliente_respuesta(self, obj):
         """Obtiene la respuesta de encuesta completada por el cliente autenticado, si existe."""
@@ -294,6 +340,54 @@ class ReservaSerializer(serializers.ModelSerializer):
             "latitud": (float(localidad.latitud) if localidad.latitud is not None else None),
             "longitud": (float(localidad.longitud) if localidad.longitud is not None else None),
         }
+
+    def get_puede_editar_empleados_admin(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user or not request.user.is_authenticated:
+            return False
+
+        # Consideramos admin a:
+        # - staff/superuser
+        # - o perfil.tipo_usuario == "administrador"
+        # (hay usuarios que son staff pero su perfil puede quedar como "empleado")
+        es_admin = bool(request.user.is_staff or request.user.is_superuser)
+        try:
+            es_admin = es_admin or (request.user.perfil.tipo_usuario == "administrador")
+        except Exception:
+            pass
+
+        if not es_admin:
+            return False
+
+        # Regla de negocio:
+        # - Se puede editar asignación SOLO después de que se haya pagado el monto final
+        # - y hasta que el servicio se finalice (completada). No aplica a canceladas.
+        pago = getattr(obj, "pago", None)
+        if not pago:
+            try:
+                pago = obj.obtener_pago()
+            except Exception:
+                pago = None
+
+        if obj.estado in ("completada", "cancelada"):
+            return False
+
+        # Mantener la edición acotada a los estados operativos
+        if obj.estado not in ("confirmada", "en_curso"):
+            return False
+
+        if not pago:
+            return False
+
+        return bool(pago.estado_pago_final == "pagado" or pago.payment_id_final)
+
+
+class EditarEmpleadosReservaSerializer(serializers.Serializer):
+    empleados_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=True,
+        allow_empty=True,
+    )
 
 
 class ImagenDisenoSerializer(serializers.ModelSerializer):
