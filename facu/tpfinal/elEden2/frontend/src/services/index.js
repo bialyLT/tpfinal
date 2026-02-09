@@ -394,6 +394,24 @@ export const encuestasService = {
   }
 };
 
+// Notificaciones (emails)
+export const notificacionesService = {
+  getAll: async (params = {}) => {
+    const response = await api.get('/emails/notificaciones/', { params });
+    return response.data;
+  },
+
+  marcarLeida: async (id) => {
+    const response = await api.post(`/emails/notificaciones/${id}/marcar-leida/`);
+    return response.data;
+  },
+
+  marcarTodasLeidas: async () => {
+    const response = await api.post('/emails/notificaciones/marcar-todas-leidas/');
+    return response.data;
+  },
+};
+
 // ⚠️ ADVERTENCIA: Los siguientes endpoints NO EXISTEN en el backend actual
 // Este servicio está aquí solo para mantener compatibilidad con EmpleadosPage
 // Users/Empleados Services
