@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FileText, RefreshCw, Download, CheckSquare, Square } from 'lucide-react';
-import { serviciosService } from '../services';
+import { serviciosService, usersService } from '../services';
 import { Bar, Line, Pie } from 'react-chartjs-2';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import {
@@ -36,6 +36,11 @@ const formatCurrencyARS = (value) => {
     currency: 'ARS',
     maximumFractionDigits: 2,
   }).format(numeric);
+};
+
+const formatPuntuacion = (value) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric.toFixed(2) : '—';
 };
 
 const resolveUserName = (user) => {
@@ -148,6 +153,7 @@ const EstadisticasPage = () => {
   const [error, setError] = useState('');
   const [reservas, setReservas] = useState([]);
   const [disenosDetalles, setDisenosDetalles] = useState([]);
+  const [empleadosMetricas, setEmpleadosMetricas] = useState(new Map());
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [filterError, setFilterError] = useState('');
   const [ventasGranularity, setVentasGranularity] = useState('month');
@@ -181,6 +187,38 @@ const EstadisticasPage = () => {
           include_all: 1,
         })),
       ]);
+
+      let empleadosAll = [];
+      try {
+        empleadosAll = await fetchAllPages((params) => usersService.getEmpleados({
+          ...params,
+          page_size: DEFAULT_PAGE_SIZE,
+        }));
+      } catch (err) {
+        console.warn('No se pudieron cargar métricas de empleados', err);
+      }
+
+      const metricasMap = new Map();
+      empleadosAll.forEach((empleado) => {
+        if (!empleado) return;
+        const idKey = empleado.id ?? empleado.empleado_id ?? empleado.user_id;
+        if (idKey !== undefined && idKey !== null) {
+          metricasMap.set(String(idKey), empleado.empleado_metricas || null);
+        }
+        const emailKey = empleado.email || empleado.empleado_email;
+        if (emailKey) {
+          metricasMap.set(String(emailKey).toLowerCase(), empleado.empleado_metricas || null);
+        }
+        const usernameKey = empleado.username || empleado.empleado_username;
+        if (usernameKey) {
+          metricasMap.set(String(usernameKey).toLowerCase(), empleado.empleado_metricas || null);
+        }
+        const nombreKey = `${empleado.first_name || ''} ${empleado.last_name || ''}`.trim();
+        if (nombreKey) {
+          metricasMap.set(nombreKey.toLowerCase(), empleado.empleado_metricas || null);
+        }
+      });
+      setEmpleadosMetricas(metricasMap);
 
       setReservas(reservasAll);
 
@@ -253,6 +291,7 @@ const EstadisticasPage = () => {
     const serviciosPorTipo = new Map();
     const empleadosPorServicios = new Map();
     const ventasHistoricas = new Map();
+    const metricasById = empleadosMetricas || new Map();
 
     reservasFinalizadas.forEach((r) => {
       const tipo = r?.servicio_nombre || 'Sin servicio';
@@ -260,11 +299,31 @@ const EstadisticasPage = () => {
 
       const empleados = Array.isArray(r?.empleados_asignados) ? r.empleados_asignados : [];
       empleados.forEach((asignacion) => {
-        const empleadoId = asignacion?.empleado;
+        const empleadoId = asignacion?.empleado ?? asignacion?.empleado_id ?? asignacion?.id_empleado;
         const empleadoNombre = `${asignacion?.empleado_nombre || ''} ${asignacion?.empleado_apellido || ''}`.trim() || 'Empleado';
+        const empleadoEmail = asignacion?.empleado_email || asignacion?.email;
+        const empleadoUsername = asignacion?.empleado_username || asignacion?.username;
         const key = empleadoId ?? empleadoNombre;
-        const prev = empleadosPorServicios.get(key) || { id: empleadoId, nombre: empleadoNombre, count: 0 };
-        empleadosPorServicios.set(key, { ...prev, nombre: empleadoNombre, count: prev.count + 1 });
+        const metricas =
+          (empleadoId != null && (metricasById.get(String(empleadoId)) || metricasById.get(Number(empleadoId)))) ||
+          (empleadoEmail && metricasById.get(String(empleadoEmail).toLowerCase())) ||
+          (empleadoUsername && metricasById.get(String(empleadoUsername).toLowerCase())) ||
+          (empleadoNombre && metricasById.get(empleadoNombre.toLowerCase())) ||
+          null;
+        const prev = empleadosPorServicios.get(key) || {
+          id: empleadoId,
+          nombre: empleadoNombre,
+          count: 0,
+          puntuacion: metricas?.puntuacion_promedio ?? null,
+          puntuacionCantidad: metricas?.puntuacion_cantidad ?? 0,
+        };
+        empleadosPorServicios.set(key, {
+          ...prev,
+          nombre: empleadoNombre,
+          count: prev.count + 1,
+          puntuacion: prev.puntuacion ?? metricas?.puntuacion_promedio ?? null,
+          puntuacionCantidad: prev.puntuacionCantidad || metricas?.puntuacion_cantidad || 0,
+        });
       });
 
       const estadoPagoFinal = r?.estado_pago_final;
@@ -346,7 +405,7 @@ const EstadisticasPage = () => {
       topProductosServicio,
       ventasHistoricasList,
     };
-  }, [reservas, disenosDetalles, ventasGranularity]);
+  }, [reservas, disenosDetalles, ventasGranularity, empleadosMetricas]);
 
   const chartColors = [
     '#10B981', '#22D3EE', '#F59E0B', '#A78BFA', '#F97316', '#EF4444', '#60A5FA', '#34D399', '#F472B6', '#A3E635'
@@ -816,6 +875,18 @@ const EstadisticasPage = () => {
             ) : (
               <div ref={chartRefs.topEmpleados} className="bg-gray-900/40 rounded-lg p-4">
                 <Bar data={topEmpleadosData} options={chartOptionsBase} />
+                <div className="mt-4 text-sm text-gray-400">
+                  <div className="text-xs uppercase text-gray-500 mb-2">Indice de puntuacion</div>
+                  {computed.topEmpleados.map((empleado) => (
+                    <div key={empleado.id ?? empleado.nombre} className="flex justify-between border-b border-gray-800 py-1">
+                      <span className="text-white">{empleado.nombre}</span>
+                      <span>
+                        {empleado.count} serv. · Puntaje: {formatPuntuacion(empleado.puntuacion)}
+                        {empleado.puntuacionCantidad ? ` (${empleado.puntuacionCantidad})` : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </TableCard>
