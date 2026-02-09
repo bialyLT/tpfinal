@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { productosService, categoriasService, marcasService, especiesService, tareasService } from '../services';
 import ProductSelector from '../components/ProductSelector';
 import { handleApiError, success } from '../utils/notifications';
@@ -24,6 +24,8 @@ const ProductosPage = () => {
   const [tareas, setTareas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategoria, setSelectedCategoria] = useState('');
+  const [selectedMarca, setSelectedMarca] = useState('');
+  const [selectedEspecie, setSelectedEspecie] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('grid');
   const [priceRange, setPriceRange] = useState({ min: '', max: '' });
@@ -52,6 +54,8 @@ const ProductosPage = () => {
       const params = {};
       if (searchTerm) params.search = searchTerm;
       if (selectedCategoria) params.categoria = selectedCategoria;
+      if (selectedMarca) params.marca = selectedMarca;
+      if (selectedEspecie) params.especie = selectedEspecie;
       if (priceRange.min) params.precio__gte = priceRange.min;
       if (priceRange.max) params.precio__lte = priceRange.max;
       if (stockRange.min) params.stock__cantidad__gte = stockRange.min;
@@ -74,7 +78,7 @@ const ProductosPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, selectedCategoria, priceRange, stockRange]);
+  }, [searchTerm, selectedCategoria, selectedMarca, selectedEspecie, priceRange, stockRange]);
 
   useEffect(() => {
     fetchData();
@@ -276,10 +280,10 @@ const ProductosPage = () => {
 
         {/* Filters */}
         <div className="mb-6 bg-gray-800 p-4 rounded-lg">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
+          <div className="grid gap-4 items-end sm:grid-cols-2 lg:grid-cols-4">
             {/* Search */}
             {/* Simple search input (server-side) */}
-            <div className="relative lg:col-span-2">
+            <div className="relative w-full sm:col-span-2 lg:col-span-2">
               <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
@@ -289,19 +293,9 @@ const ProductosPage = () => {
                 className="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
               />
             </div>
-            {/* Quick product selector to avoid duplicate search views – opens edit modal */}
-            <div className="relative lg:col-span-2">
-              <ProductSelector
-                productos={productos}
-                serverSide={false}
-                selectedProductId={selectedProducto?.id_producto}
-                onSelect={(prod) => handleOpenModal(prod)}
-                placeholder="Buscar y editar producto..."
-              />
-            </div>
 
             {/* Category Filter */}
-            <div className="relative lg:col-span-2">
+            <div className="relative w-full">
               <Filter className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <select
                 value={selectedCategoria}
@@ -309,67 +303,48 @@ const ProductosPage = () => {
                 className="w-full pl-10 pr-8 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
               >
                 <option value="">Todas las categorías</option>
-                {categorias.map(categoria => (
-                  <option key={categoria.id} value={categoria.id}>
-                    {categoria.nombre}
+                {categorias.map((categoria) => (
+                  <option key={categoria.id_categoria} value={String(categoria.id_categoria)}>
+                    {categoria.nombre_categoria}
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Price Range */}
-            <div className="flex space-x-2 lg:col-span-2">
-              <input
-                type="number"
-                placeholder="Costo mín."
-                value={priceRange.min}
-                onChange={(e) => setPriceRange({ ...priceRange, min: e.target.value })}
-                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
-              />
-              <input
-                type="number"
-                placeholder="Costo máx."
-                value={priceRange.max}
-                onChange={(e) => setPriceRange({ ...priceRange, max: e.target.value })}
-                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
-              />
-            </div>
-
-            {/* Stock Range */}
-            <div className="flex space-x-2 lg:col-span-2">
-              <input
-                type="number"
-                placeholder="Stock mín."
-                value={stockRange.min}
-                onChange={(e) => setStockRange({ ...stockRange, min: e.target.value })}
-                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
-              />
-              <input
-                type="number"
-                placeholder="Stock máx."
-                value={stockRange.max}
-                onChange={(e) => setStockRange({ ...stockRange, max: e.target.value })}
-                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
-              />
-            </div>
-
-            {/* Apply Filters Button */}
-            <div className="flex items-center lg:col-span-2">
-              <button
-                onClick={fetchData}
-                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
+            {/* Marca Filter */}
+            <div className="relative w-full">
+              <Filter className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <select
+                value={selectedMarca}
+                onChange={(e) => setSelectedMarca(e.target.value)}
+                className="w-full pl-10 pr-8 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
               >
-                <Filter className="w-4 h-4 mr-2" />
-                Filtrar
-              </button>
+                <option value="">Todas las marcas</option>
+                {marcas.map((marca) => (
+                  <option key={marca.id_marca} value={String(marca.id_marca)}>
+                    {marca.nombre_marca}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {/* Results Count */}
-            <div className="flex items-center justify-end col-span-1 md:col-span-2 lg:col-span-6">
-              <span className="text-sm text-gray-400">
-                {productos.length} producto{productos.length !== 1 ? 's' : ''} encontrado{productos.length !== 1 ? 's' : ''}
-              </span>
+            {/* Especie Filter */}
+            <div className="relative w-full">
+              <Filter className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <select
+                value={selectedEspecie}
+                onChange={(e) => setSelectedEspecie(e.target.value)}
+                className="w-full pl-10 pr-8 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              >
+                <option value="">Todas las especies</option>
+                {especies.map((especie) => (
+                  <option key={especie.id_especie} value={String(especie.id_especie)}>
+                    {especie.nombre_especie}
+                  </option>
+                ))}
+              </select>
             </div>
+
           </div>
         </div>
 

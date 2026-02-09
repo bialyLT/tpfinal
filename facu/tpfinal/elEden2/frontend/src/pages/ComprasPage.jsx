@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { success, handleApiError } from '../utils/notifications';
 import {
   Plus, Edit, Trash2, Search, ShoppingCart, X, Calendar,
@@ -234,8 +234,8 @@ const ComprasPage = () => {
           </div>
         </div>
 
-        {/* Search Bar */}
         <div className="mb-6 bg-gray-800 p-4 rounded-lg">
+        {/* Search Bar */}
           <div className="relative">
             <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <input
@@ -247,7 +247,7 @@ const ComprasPage = () => {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mt-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 items-end">
             {/* Date Range */}
             <div className="flex space-x-2 lg:col-span-2">
               <input

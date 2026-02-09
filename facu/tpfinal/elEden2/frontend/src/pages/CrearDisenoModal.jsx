@@ -1,6 +1,6 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import flatpickr from 'flatpickr';
-// No localization imports for now
+import { Spanish } from 'flatpickr/dist/l10n/es.js';
 import { X, Upload, Plus, Trash2, Palette, DollarSign, Calendar, Image as ImageIcon, Package, Search } from 'lucide-react';
 import { serviciosService, productosService, tareasService } from '../services';
 import { useAuth } from '../context/AuthContext';
@@ -87,6 +87,63 @@ const addWorkingHours = (startDate, hoursToAdd) => {
   return cursor;
 };
 
+const subtractOneWorkingHour = (dateObj) => {
+  if (!dateObj || Number.isNaN(dateObj.getTime())) return null;
+  const d = new Date(dateObj);
+  d.setMinutes(0, 0, 0);
+  const h = d.getHours();
+
+  if (h > 16 && h <= 20) {
+    d.setHours(h - 1, 0, 0, 0);
+    return d;
+  }
+  if (h === 16) {
+    d.setHours(12, 0, 0, 0);
+    return d;
+  }
+  if (h > 8 && h <= 12) {
+    d.setHours(h - 1, 0, 0, 0);
+    return d;
+  }
+  if (h === 8) {
+    d.setDate(d.getDate() - 1);
+    d.setHours(19, 0, 0, 0);
+    return d;
+  }
+  if (h > 20) {
+    d.setHours(20, 0, 0, 0);
+    return d;
+  }
+  if (h > 12 && h < 16) {
+    d.setHours(12, 0, 0, 0);
+    return d;
+  }
+  if (h < 8) {
+    d.setHours(8, 0, 0, 0);
+    return d;
+  }
+
+  return d;
+};
+
+const shiftWorkingHours = (startDate, hoursDelta) => {
+  if (!startDate || Number.isNaN(startDate.getTime())) return null;
+  const delta = Number(hoursDelta) || 0;
+  if (delta === 0) return new Date(startDate);
+  if (delta > 0) return addWorkingHours(startDate, delta);
+
+  let remaining = Math.abs(delta);
+  let cursor = new Date(startDate);
+  cursor.setMinutes(0, 0, 0);
+  while (remaining > 0) {
+    const next = subtractOneWorkingHour(cursor);
+    if (!next) return null;
+    cursor = next;
+    remaining -= 1;
+  }
+  return cursor;
+};
+
 const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDisenoCreado, mode = 'diseno', onCargarJardin }) => {
   const [loading, setLoading] = useState(false);
   const [productos, setProductos] = useState([]);
@@ -96,14 +153,16 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
   const [fechaPropuesta, setFechaPropuesta] = useState(null);
   const [fechaPropuestaDatePart, setFechaPropuestaDatePart] = useState(null); // selected date (day)
   const [fechaPropuestaTimePart, setFechaPropuestaTimePart] = useState(''); // 'HH:MM'
-  const fpRef = React.useRef(null);
-  const fpInstanceRef = React.useRef(null);
-  const fpTimeRef = React.useRef(null);
-  const fpTimeInstanceRef = React.useRef(null);
+  const fpRef = useRef(null);
+  const fpInstanceRef = useRef(null);
+  const fpTimeRef = useRef(null);
+  const fpTimeInstanceRef = useRef(null);
   const [originalFechaPropuesta, setOriginalFechaPropuesta] = useState(null);
   const [fechasBloqueadas, setFechasBloqueadas] = useState([]);
   const [minFechaLocal, setMinFechaLocal] = useState(null);
   const [fechaError, setFechaError] = useState('');
+  const [fechaFinOverride, setFechaFinOverride] = useState(null);
+  const [fechaFinLocked, setFechaFinLocked] = useState(false);
   
   // Determinar si estamos en modo edición
   const modoEdicion = !!diseno;
@@ -354,11 +413,14 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
     }
 
     const originalDayStr = originalFechaPropuesta ? originalFechaPropuesta.toISOString().split('T')[0] : null;
-    const disabledDatesArr = (fechasBloqueadas || []).filter(d => d !== originalDayStr);
+    const disabledDatesArr = (fechasBloqueadas || [])
+      .filter((d) => d !== originalDayStr)
+      .map((d) => new Date(d));
     
     const options = {
       enableTime: false,
-      dateFormat: 'Y-m-d',
+      dateFormat: 'd/m/Y',
+      locale: Spanish,
       defaultDate: fechaPropuestaDatePart || null,
       minDate: minFechaLocal || 'today',
       disable: disabledDatesArr || [],
@@ -546,6 +608,8 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
     setFechaPropuestaTimePart('');
     setOriginalFechaPropuesta(null);
     setFechaError('');
+    setFechaFinOverride(null);
+    setFechaFinLocked(false);
     setReservaSeleccionadaId(null);
     setSearchReservaInput('');
     setSearchReservaError('');
@@ -718,6 +782,33 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
     if (!fechaInicioNormalizada) return null;
     return addWorkingHours(fechaInicioNormalizada, totalHorasTrabajo);
   }, [fechaInicioNormalizada, totalHorasTrabajo]);
+
+  useEffect(() => {
+    if (!fechaInicioNormalizada) {
+      setFechaFinOverride(null);
+      setFechaFinLocked(false);
+      return;
+    }
+    setFechaFinOverride(null);
+    setFechaFinLocked(false);
+  }, [fechaInicioNormalizada, totalHorasTrabajo]);
+
+  const fechaFinMostrada = fechaFinOverride || fechaFinCalculada || fechaInicioNormalizada;
+
+  const handleShiftFinalizacion = (delta) => {
+    if (!fechaInicioNormalizada) return;
+    const base = fechaFinOverride || fechaFinCalculada || fechaInicioNormalizada;
+    const next = shiftWorkingHours(base, delta);
+    if (!next) return;
+    setFechaFinOverride(next);
+    setFechaFinLocked(false);
+  };
+
+  const handleConfirmFinalizacion = () => {
+    if (!fechaFinMostrada) return;
+    setFechaFinOverride(fechaFinMostrada);
+    setFechaFinLocked(true);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1338,8 +1429,41 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                 <div className="mt-2 text-xs text-gray-400">
                   <div>Duración estimada: <span className="text-white font-semibold">{totalHorasTrabajo}h</span></div>
                   {fechaInicioNormalizada && (
-                    <div>
-                      Finaliza: <span className="text-white font-semibold">{formatLocalDateTime(fechaFinCalculada || fechaInicioNormalizada)}</span>
+                    <div className="mt-2 flex flex-col gap-2">
+                      <div>
+                        Finaliza: <span className="text-white font-semibold">{formatLocalDateTime(fechaFinMostrada)}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleShiftFinalizacion(-1)}
+                          disabled={!fechaInicioNormalizada || !!fechaError || fechaFinLocked}
+                          className="px-2 py-1 rounded-md bg-gray-700 text-gray-200 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          -1h
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleShiftFinalizacion(1)}
+                          disabled={!fechaInicioNormalizada || !!fechaError || fechaFinLocked}
+                          className="px-2 py-1 rounded-md bg-gray-700 text-gray-200 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          +1h
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleConfirmFinalizacion}
+                          disabled={!fechaInicioNormalizada || !!fechaError || fechaFinLocked}
+                          className="px-3 py-1 rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Confirmar hora
+                        </button>
+                        {fechaFinLocked && (
+                          <span className="px-2 py-1 rounded-md bg-green-900/40 text-green-300">
+                            Hora confirmada
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )}
                   {!fechaInicioNormalizada && (

@@ -1,8 +1,10 @@
 ﻿import logging
-from datetime import datetime
+from datetime import datetime, timedelta
+from decimal import Decimal
 
 import django_filters
 from django.db import transaction
+from django.forms.models import model_to_dict
 from django.db.models import Q
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -17,8 +19,10 @@ from rest_framework.permissions import (
     IsAuthenticated,
 )
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.users.permissions import SoloAdministrador
+from apps.audit.services import AuditService, sanitize_payload
 
 from apps.productos.models import Producto, Tarea
 from apps.users.models import Cliente, Empleado, Localidad
@@ -28,6 +32,7 @@ from apps.users.services.address_service import (
 )
 
 from .models import (
+    ConfiguracionPago,
     Diseno,
     DisenoProducto,
     DisenoTarea,
@@ -35,17 +40,25 @@ from .models import (
     ImagenDiseno,
     ImagenReserva,
     Jardin,
+    OpcionNivelIntervencion,
+    OpcionPresupuestoAproximado,
+    ObjetivoDiseno,
+    Pago,
     Reserva,
     ReservaEmpleado,
     Servicio,
 )
 from .pagination import SmallResultsSetPagination, StandardResultsSetPagination
 from .serializers import (
+    ConfiguracionPagoSerializer,
     CrearDisenoSerializer,
     DisenoDetalleSerializer,
     DisenoSerializer,
     FormaTerrenoSerializer,
     JardinSerializer,
+    ObjetivoDisenoSerializer,
+    OpcionNivelIntervencionSerializer,
+    OpcionPresupuestoAproximadoSerializer,
     EditarEmpleadosReservaSerializer,
     ReservaSerializer,
     ServicioSerializer,
@@ -53,6 +66,69 @@ from .serializers import (
 from .utils import ordenar_empleados_por_puntuacion
 
 logger = logging.getLogger(__name__)
+
+
+class ConfiguracionPagoAPIView(APIView):
+    permission_classes = [SoloAdministrador]
+
+    def get(self, request):
+        config, created = ConfiguracionPago.objects.get_or_create(
+            pk=1,
+            defaults={"monto_sena": Decimal("50.00")},
+        )
+        if created:
+            AuditService.register(
+                user=request.user,
+                role="administrador",
+                method="GET",
+                action="Creacion automatica de configuracion de pagos",
+                entity="configuracion_pago",
+                response_body={"monto_sena": str(config.monto_sena)},
+                before_state=None,
+                after_state=sanitize_payload(model_to_dict(config)),
+            )
+        serializer = ConfiguracionPagoSerializer(config)
+        return Response(serializer.data)
+
+    def put(self, request):
+        request._skip_audit = True
+        config = ConfiguracionPago.obtener_configuracion()
+        before_state = sanitize_payload(model_to_dict(config))
+        serializer = ConfiguracionPagoSerializer(config, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        updated = serializer.save()
+        after_state = sanitize_payload(model_to_dict(updated))
+        AuditService.register(
+            user=request.user,
+            role="administrador",
+            method="PUT",
+            action="Actualizacion de configuracion de pagos",
+            entity="configuracion_pago",
+            response_body=serializer.data,
+            before_state=before_state,
+            after_state=after_state,
+        )
+        return Response(serializer.data)
+
+    def patch(self, request):
+        request._skip_audit = True
+        config = ConfiguracionPago.obtener_configuracion()
+        before_state = sanitize_payload(model_to_dict(config))
+        serializer = ConfiguracionPagoSerializer(config, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        updated = serializer.save()
+        after_state = sanitize_payload(model_to_dict(updated))
+        AuditService.register(
+            user=request.user,
+            role="administrador",
+            method="PATCH",
+            action="Actualizacion de configuracion de pagos",
+            entity="configuracion_pago",
+            response_body=serializer.data,
+            before_state=before_state,
+            after_state=after_state,
+        )
+        return Response(serializer.data)
 
 
 class ServicioViewSet(viewsets.ModelViewSet):
@@ -63,6 +139,33 @@ class ServicioViewSet(viewsets.ModelViewSet):
     filterset_fields = ["activo"]
     search_fields = ["nombre", "descripcion"]
     ordering = ["nombre"]
+
+
+class ObjetivoDisenoViewSet(viewsets.ModelViewSet):
+    queryset = ObjetivoDiseno.objects.all()
+    serializer_class = ObjetivoDisenoSerializer
+    permission_classes = [SoloAdministrador]
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ["codigo", "nombre"]
+    ordering = ["nombre"]
+
+
+class OpcionNivelIntervencionViewSet(viewsets.ModelViewSet):
+    queryset = OpcionNivelIntervencion.objects.all()
+    serializer_class = OpcionNivelIntervencionSerializer
+    permission_classes = [SoloAdministrador]
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ["codigo", "nombre"]
+    ordering = ["orden", "nombre"]
+
+
+class OpcionPresupuestoAproximadoViewSet(viewsets.ModelViewSet):
+    queryset = OpcionPresupuestoAproximado.objects.all()
+    serializer_class = OpcionPresupuestoAproximadoSerializer
+    permission_classes = [SoloAdministrador]
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ["codigo", "nombre"]
+    ordering = ["orden", "nombre"]
 
 
 class ReservaViewSet(viewsets.ModelViewSet):
@@ -79,6 +182,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
         estado_pago_sena = django_filters.CharFilter(field_name="pago__estado_pago_sena")
         estado_pago_final = django_filters.CharFilter(field_name="pago__estado_pago_final")
         fecha_solicitud = django_filters.DateFromToRangeFilter(field_name="fecha_solicitud")
+        fecha_cita = django_filters.DateFromToRangeFilter(field_name="fecha_cita")
         fecha_finalizacion = django_filters.DateFromToRangeFilter(field_name="fecha_finalizacion")
 
         class Meta:
@@ -87,6 +191,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
                 "estado",
                 "servicio",
                 "fecha_solicitud",
+                "fecha_cita",
                 "fecha_finalizacion",
                 "estado_pago_sena",
                 "estado_pago_final",
@@ -101,6 +206,61 @@ class ReservaViewSet(viewsets.ModelViewSet):
     ordering = ["-fecha_solicitud", "-id_reserva"]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
+    def _auto_finalize_due_reservas(self, *, user=None):
+        now = timezone.now()
+        tz = timezone.get_current_timezone()
+
+        reservas = (
+            Reserva.objects.filter(
+                estado__in=["confirmada", "en_curso"],
+                disenos__estado="aceptado",
+                disenos__fecha_fin__isnull=False,
+                disenos__hora_fin__isnull=False,
+            )
+            .distinct()
+            .prefetch_related("disenos")
+        )
+
+        for reserva in reservas:
+            disenos = [
+                d
+                for d in reserva.disenos.all()
+                if d.estado == "aceptado" and d.fecha_fin and d.hora_fin
+            ]
+            if not disenos:
+                continue
+
+            def to_end_datetime(diseno):
+                end_dt = datetime.combine(diseno.fecha_fin, diseno.hora_fin)
+                if timezone.is_naive(end_dt):
+                    return timezone.make_aware(end_dt, tz)
+                return end_dt
+
+            end_dt = max((to_end_datetime(d) for d in disenos), default=None)
+            if not end_dt:
+                continue
+
+            if now >= end_dt:
+                before_state = model_to_dict(reserva)
+                reserva.estado = "completada"
+                if not reserva.fecha_finalizacion:
+                    reserva.fecha_finalizacion = end_dt
+                reserva.save(update_fields=["estado", "fecha_finalizacion"])
+
+                if user and getattr(user, "is_authenticated", False):
+                    is_admin = bool(getattr(user, "is_superuser", False) or getattr(user, "is_staff", False))
+                    role = "administrador" if is_admin else "empleado"
+                    AuditService.register(
+                        user=user,
+                        role=role,
+                        method="GET",
+                        action="Auto-finalizacion de reserva",
+                        entity="reservas",
+                        response_body={"reserva_id": reserva.id_reserva, "estado": reserva.estado},
+                        before_state=sanitize_payload(before_state),
+                        after_state=sanitize_payload(model_to_dict(reserva)),
+                    )
+
     def get_queryset(self):
         """
         Filtrar reservas según el tipo de usuario:
@@ -108,7 +268,10 @@ class ReservaViewSet(viewsets.ModelViewSet):
         - Empleados/Staff: ven todas las reservas que tengan la seña pagada
           (solo muestran las que tienen estado_pago_sena = 'sena_pagada' o 'aprobado')
         """
+        self._auto_finalize_due_reservas(user=self.request.user)
         user = self.request.user
+        include_all = str(self.request.query_params.get("include_all", "")).lower() in {"1", "true", "yes"}
+        base_queryset = self.queryset
 
         es_admin = user.is_staff or user.is_superuser
         if not es_admin:
@@ -119,6 +282,8 @@ class ReservaViewSet(viewsets.ModelViewSet):
 
         # Si es staff, mostrar solo reservas con seña pagada
         if es_admin:
+            if include_all:
+                return base_queryset
             return Reserva.objects.select_related("cliente__persona", "servicio", "localidad_servicio", "pago").filter(
                 pago__estado_pago_sena__in=["sena_pagada", "aprobado"]
             )
@@ -127,6 +292,8 @@ class ReservaViewSet(viewsets.ModelViewSet):
         try:
             Empleado.objects.get(persona__email=user.email)
             # Empleados también solo ven reservas con seña pagada
+            if include_all:
+                return base_queryset
             return Reserva.objects.select_related("cliente__persona", "servicio", "localidad_servicio", "pago").filter(
                 pago__estado_pago_sena__in=["sena_pagada", "aprobado"]
             )
@@ -136,9 +303,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
         # Si es cliente, filtrar solo sus reservas (sin restricción de estado)
         try:
             cliente = Cliente.objects.get(persona__email=user.email)
-            return Reserva.objects.select_related("cliente__persona", "servicio", "localidad_servicio", "pago").filter(
-                cliente=cliente
-            )
+            return base_queryset.filter(cliente=cliente)
         except Cliente.DoesNotExist:
             # Si no es cliente ni empleado, no mostrar nada
             return Reserva.objects.none()
@@ -196,6 +361,20 @@ class ReservaViewSet(viewsets.ModelViewSet):
         operadores_previos_ids = set(
             ReservaEmpleado.objects.filter(reserva=reserva, rol="operador").values_list("empleado_id", flat=True)
         )
+        operadores_previos = list(
+            ReservaEmpleado.objects.filter(reserva=reserva, rol="operador")
+            .select_related("empleado__persona")
+            .values(
+                "empleado_id",
+                "empleado__persona__nombre",
+                "empleado__persona__apellido",
+                "empleado__persona__email",
+            )
+        )
+        request._audit_before = sanitize_payload({
+            **model_to_dict(reserva),
+            "empleados_asignados": operadores_previos,
+        })
 
         payload_serializer = EditarEmpleadosReservaSerializer(data=request.data)
         payload_serializer.is_valid(raise_exception=True)
@@ -223,6 +402,21 @@ class ReservaViewSet(viewsets.ModelViewSet):
                     "notas": "Asignación actualizada manualmente por administrador",
                 },
             )
+
+        operadores_actuales = list(
+            ReservaEmpleado.objects.filter(reserva=reserva, rol="operador")
+            .select_related("empleado__persona")
+            .values(
+                "empleado_id",
+                "empleado__persona__nombre",
+                "empleado__persona__apellido",
+                "empleado__persona__email",
+            )
+        )
+        request._audit_after = sanitize_payload({
+            **model_to_dict(reserva),
+            "empleados_asignados": operadores_actuales,
+        })
 
         # Notificar por email SOLO a los empleados que fueron agregados en esta edición
         nuevos_ids = set(empleados_ids) - operadores_previos_ids
@@ -1143,8 +1337,21 @@ class ReservaViewSet(viewsets.ModelViewSet):
         Obtener comprobante de pago de una reserva
         Query params: tipo (sena|final)
         """
+        from django.conf import settings
+
         reserva = self.get_object()
-        pago = reserva.obtener_pago()
+        pago, created = Pago.objects.get_or_create(reserva=reserva)
+        if created:
+            AuditService.register(
+                user=request.user,
+                role="administrador" if (request.user.is_staff or request.user.is_superuser) else "empleado",
+                method="GET",
+                action="Creacion automatica de pago",
+                entity="pago_reserva",
+                response_body={"reserva_id": reserva.id_reserva, "pago_id": pago.id_pago},
+                before_state=None,
+                after_state=sanitize_payload(model_to_dict(pago)),
+            )
         tipo = request.query_params.get("tipo", "sena")
 
         # Validar que el usuario sea el dueño de la reserva
@@ -1201,6 +1408,10 @@ class ReservaViewSet(viewsets.ModelViewSet):
         # Agregar información común
         comprobante.update(
             {
+                "empresa": {
+                    "razon_social": settings.COMPANY_RAZON_SOCIAL,
+                    "cuit": settings.COMPANY_CUIT,
+                },
                 "cliente": {
                     "nombre": f"{reserva.cliente.persona.nombre} {reserva.cliente.persona.apellido}",
                     "email": reserva.cliente.persona.email,
@@ -1212,6 +1423,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
                 },
                 "fecha_solicitud": reserva.fecha_solicitud,
                 "fecha_reserva": reserva.fecha_cita,
+                "fecha_inicio": reserva.fecha_inicio,
                 "observaciones": reserva.observaciones,
                 "superficie_aproximada": reserva.superficie_aproximada,
                 "objetivo_diseno": reserva.objetivo_diseno_id,

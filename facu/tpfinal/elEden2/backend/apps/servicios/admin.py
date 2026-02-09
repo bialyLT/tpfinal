@@ -9,6 +9,8 @@ from .models import (
     ImagenReserva,
     ImagenZona,
     Jardin,
+    OpcionNivelIntervencion,
+    OpcionPresupuestoAproximado,
     ObjetivoDiseno,
     Pago,
     Reserva,
@@ -45,6 +47,22 @@ class ConfiguracionPagoAdmin(admin.ModelAdmin):
             },
         ),
     )
+
+
+@admin.register(OpcionNivelIntervencion)
+class OpcionNivelIntervencionAdmin(admin.ModelAdmin):
+    list_display = ("id_opcion_nivel", "codigo", "nombre", "valor", "activo", "orden")
+    list_filter = ("activo", "valor")
+    search_fields = ("codigo", "nombre")
+    ordering = ("orden", "nombre")
+
+
+@admin.register(OpcionPresupuestoAproximado)
+class OpcionPresupuestoAproximadoAdmin(admin.ModelAdmin):
+    list_display = ("id_opcion_presupuesto", "codigo", "nombre", "activo", "orden")
+    list_filter = ("activo",)
+    search_fields = ("codigo", "nombre")
+    ordering = ("orden", "nombre")
 
     def has_add_permission(self, request):
         # Solo permitir una configuración

@@ -17,7 +17,8 @@ class AuditLogSerializer(serializers.ModelSerializer):
             "action",
             "entity",
             "response_body",
-            "metadata",
+            "before_state",
+            "after_state",
         ]
 
     def get_user_display(self, obj):

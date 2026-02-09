@@ -172,9 +172,10 @@ def google_login(request):
                     nombre=first_name or "Usuario",
                     apellido=last_name or "Google",
                     email=email,
-                    telefono="PENDIENTE",
+                    telefono="Sin especificar",
                     nro_documento=nro_documento_unico,
-                    calle=(normalized_address.get("calle") if normalized_address else "PENDIENTE") or "PENDIENTE",
+                    calle=(normalized_address.get("calle") if normalized_address else "Sin especificar")
+                    or "Sin especificar",
                     numero=(normalized_address.get("numero") if normalized_address else "S/N") or "S/N",
                     localidad=localidad_default,
                     genero=genero_default,

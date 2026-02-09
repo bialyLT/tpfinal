@@ -17,6 +17,7 @@ class ConfiguracionPago(models.Model):
         help_text="Monto de seña requerido para realizar una reserva",
     )
 
+
     class Meta:
         verbose_name = "Configuración de Pago"
         verbose_name_plural = "Configuraciones de Pago"
@@ -84,6 +85,45 @@ class ObjetivoDiseno(models.Model):
         return self.nombre
 
 
+class OpcionNivelIntervencion(models.Model):
+    """Opciones configurables para nivel de intervención (true/false)."""
+
+    id_opcion_nivel = models.AutoField(primary_key=True)
+    codigo = models.CharField(max_length=50, unique=True)
+    nombre = models.CharField(max_length=120)
+    valor = models.BooleanField(help_text="True=desde cero, False=remodelación")
+    activo = models.BooleanField(default=True)
+    orden = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        verbose_name = "Opción de Nivel de Intervención"
+        verbose_name_plural = "Opciones de Nivel de Intervención"
+        db_table = "opcion_nivel_intervencion"
+        ordering = ["orden", "nombre"]
+
+    def __str__(self):
+        return self.nombre
+
+
+class OpcionPresupuestoAproximado(models.Model):
+    """Opciones configurables para presupuesto aproximado."""
+
+    id_opcion_presupuesto = models.AutoField(primary_key=True)
+    codigo = models.CharField(max_length=50, unique=True)
+    nombre = models.CharField(max_length=120)
+    activo = models.BooleanField(default=True)
+    orden = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        verbose_name = "Opción de Presupuesto Aproximado"
+        verbose_name_plural = "Opciones de Presupuesto Aproximado"
+        db_table = "opcion_presupuesto_aproximado"
+        ordering = ["orden", "nombre"]
+
+    def __str__(self):
+        return self.nombre
+
+
 class Reserva(models.Model):
     """Modelo para reservas de servicios"""
 
@@ -105,12 +145,6 @@ class Reserva(models.Model):
         ("pagado", "Pagado Completamente"),
         ("rechazado", "Rechazado"),
         ("cancelado", "Cancelado"),
-    ]
-
-    PRESUPUESTO_CHOICES = [
-        ("bajo", "Económico / Ajustado"),
-        ("medio", "Intermedio / Flexible"),
-        ("alto", "Premium / Sin Restricciones"),
     ]
 
     id_reserva = models.AutoField(primary_key=True)
@@ -164,7 +198,6 @@ class Reserva(models.Model):
     )
     presupuesto_aproximado = models.CharField(
         max_length=50,
-        choices=PRESUPUESTO_CHOICES,
         null=True,
         blank=True,
         help_text="Rango de presupuesto estimado por el cliente",
@@ -252,7 +285,9 @@ class Reserva(models.Model):
     def completar(self):
         """Marcar reserva como completada"""
         self.estado = "completada"
-        self.save()
+        if not self.fecha_finalizacion:
+            self.fecha_finalizacion = timezone.now()
+        self.save(update_fields=["estado", "fecha_finalizacion"])
 
     def generate_encuesta_token(self, force: bool = False) -> uuid.UUID:
         """

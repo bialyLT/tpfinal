@@ -1,4 +1,3 @@
-import React from 'react';
 import { BrowserRouter, HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { Menu } from 'lucide-react';
@@ -36,6 +35,7 @@ import TareasPage from './pages/TareasPage';
 import ProveedoresPage from './pages/ProveedoresPage';
 import AuditLogPage from './pages/AuditLogPage';
 import EstadisticasPage from './pages/EstadisticasPage';
+import ConfiguracionesPage from './pages/ConfiguracionesPage';
 
 // Basic Protected Route Component (solo requiere autenticación)
 const BasicProtectedRoute = ({ children }) => {
@@ -209,6 +209,16 @@ function App() {
                   <AuditLogPage />
                 </ProtectedRoute>
               } 
+            />
+
+            {/* Configuración del Sistema - Solo Administradores */}
+            <Route
+              path="/configuracion"
+              element={
+                <ProtectedRoute allowedRoles={['administrador']}>
+                  <ConfiguracionesPage />
+                </ProtectedRoute>
+              }
             />
             
             {/* Productos - Solo Empleados y Administradores */}

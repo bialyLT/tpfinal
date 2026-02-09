@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Plus, Search, Edit, Trash2, ToggleLeft, ToggleRight, Eye, BarChart3 } from 'lucide-react';
 import api from '../services/api';
 import CrearEncuestaModal from './CrearEncuestaModal';

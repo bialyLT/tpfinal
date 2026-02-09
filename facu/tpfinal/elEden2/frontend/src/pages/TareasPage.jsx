@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Edit, Trash2, Search, ListChecks, X } from 'lucide-react';
 import { tareasService } from '../services';
 import { success, handleApiError } from '../utils/notifications';

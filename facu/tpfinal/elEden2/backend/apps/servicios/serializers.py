@@ -6,6 +6,7 @@ from apps.productos.models import Tarea
 from apps.productos.serializers import TareaSerializer
 
 from .models import (
+    ConfiguracionPago,
     Diseno,
     DisenoProducto,
     DisenoTarea,
@@ -14,6 +15,9 @@ from .models import (
     ImagenReserva,
     ImagenZona,
     Jardin,
+    OpcionNivelIntervencion,
+    OpcionPresupuestoAproximado,
+    ObjetivoDiseno,
     Reserva,
     ReservaEmpleado,
     Servicio,
@@ -26,6 +30,30 @@ class ServicioSerializer(serializers.ModelSerializer):
     class Meta:
         model = Servicio
         fields = "__all__"
+
+
+class ConfiguracionPagoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ConfiguracionPago
+        fields = ["monto_sena"]
+
+
+class OpcionNivelIntervencionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OpcionNivelIntervencion
+        fields = ["id_opcion_nivel", "codigo", "nombre", "valor", "activo", "orden"]
+
+
+class OpcionPresupuestoAproximadoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OpcionPresupuestoAproximado
+        fields = ["id_opcion_presupuesto", "codigo", "nombre", "activo", "orden"]
+
+
+class ObjetivoDisenoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ObjetivoDiseno
+        fields = ["id_objetivo_diseno", "codigo", "nombre", "activo"]
 
 
 class ImagenReservaSerializer(serializers.ModelSerializer):

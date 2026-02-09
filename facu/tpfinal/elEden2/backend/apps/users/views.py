@@ -1,6 +1,7 @@
 ﻿import logging
 
 from django.contrib.auth.models import Group, User
+from django.forms.models import model_to_dict
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -10,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.emails import EmailService
+from apps.audit.services import AuditService, sanitize_payload
 
 from .models import (
     Cliente,
@@ -426,6 +428,52 @@ class EmpleadoViewSet(viewsets.ModelViewSet):
 
         headers = self.get_success_headers({"id": user.id})
         return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def update(self, request, *args, **kwargs):
+        request._skip_audit = True
+        instance = self.get_object()
+        request._audit_before = sanitize_payload(model_to_dict(instance))
+        response = super().update(request, *args, **kwargs)
+        try:
+            updated = self.get_object()
+            request._audit_after = sanitize_payload(model_to_dict(updated))
+            role = "administrador" if (request.user.is_staff or request.user.is_superuser) else "empleado"
+            AuditService.register(
+                user=request.user,
+                role=role,
+                method="PUT",
+                action="Actualizacion de empleados",
+                entity="empleados",
+                response_body=response.data,
+                before_state=request._audit_before,
+                after_state=request._audit_after,
+            )
+        except Exception:
+            pass
+        return response
+
+    def partial_update(self, request, *args, **kwargs):
+        request._skip_audit = True
+        instance = self.get_object()
+        request._audit_before = sanitize_payload(model_to_dict(instance))
+        response = super().partial_update(request, *args, **kwargs)
+        try:
+            updated = self.get_object()
+            request._audit_after = sanitize_payload(model_to_dict(updated))
+            role = "administrador" if (request.user.is_staff or request.user.is_superuser) else "empleado"
+            AuditService.register(
+                user=request.user,
+                role=role,
+                method="PATCH",
+                action="Actualizacion parcial de empleados",
+                entity="empleados",
+                response_body=response.data,
+                before_state=request._audit_before,
+                after_state=request._audit_after,
+            )
+        except Exception:
+            pass
+        return response
 
     def destroy(self, request, *args, **kwargs):
         """No permitir eliminar, solo desactivar"""

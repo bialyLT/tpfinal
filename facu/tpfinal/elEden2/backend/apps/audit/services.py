@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any, Dict
 
 from .models import AuditLog
@@ -38,6 +39,9 @@ def sanitize_payload(data: Any, max_length: int = 2000) -> Any:
     if isinstance(data, (str, bytes)):
         text = data.decode("utf-8", errors="ignore") if isinstance(data, bytes) else data
         return text[:max_length]
+
+    if isinstance(data, Decimal):
+        return str(data)
 
     return data
 

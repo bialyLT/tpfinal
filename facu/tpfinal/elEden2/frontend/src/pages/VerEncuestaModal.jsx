@@ -1,4 +1,3 @@
-import React from 'react';
 import { X, CheckCircle, Circle } from 'lucide-react';
 
 const VerEncuestaModal = ({ show, onClose, encuesta }) => {

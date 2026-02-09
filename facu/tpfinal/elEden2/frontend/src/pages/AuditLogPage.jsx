@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ShieldCheck,
   RefreshCw,
@@ -229,6 +229,28 @@ const AuditLogPage = () => {
     }
   };
 
+  const extractChangeEntries = (log) => {
+    const before = log?.before_state;
+    const after = log?.after_state;
+    if (!before || !after || typeof before !== 'object' || typeof after !== 'object') {
+      return null;
+    }
+
+    const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+    const changes = [];
+
+    keys.forEach((key) => {
+      const beforeValue = before[key];
+      const afterValue = after[key];
+      if (JSON.stringify(beforeValue) !== JSON.stringify(afterValue)) {
+        changes.push({ key, before: beforeValue, after: afterValue });
+      }
+    });
+
+    return changes;
+  };
+
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
@@ -425,6 +447,42 @@ const AuditLogPage = () => {
 
                   {expandedId === log.id && (
                     <div className="mt-4 space-y-4 bg-gray-900/40 rounded-lg p-4 text-sm text-gray-300">
+                      {(() => {
+                        const changes = extractChangeEntries(log);
+                        if (!changes) {
+                          return (
+                            <div>
+                              <p className="text-xs text-gray-400 uppercase tracking-wide">Cambios</p>
+                              <p className="mt-1 text-gray-400">No hay datos de anterior/posterior para esta accion.</p>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div>
+                            <p className="text-xs text-gray-400 uppercase tracking-wide">Cambios</p>
+                            {changes.length === 0 ? (
+                              <p className="mt-1 text-gray-400">Sin cambios detectados.</p>
+                            ) : (
+                              <div className="mt-2 space-y-2">
+                                {changes.map((change) => (
+                                  <div key={change.key} className="grid grid-cols-1 md:grid-cols-3 gap-2 bg-black/30 p-3 rounded-md">
+                                    <div className="text-xs text-gray-400 uppercase tracking-wide">{change.key}</div>
+                                    <div>
+                                      <p className="text-xs text-gray-400">Antes</p>
+                                      <pre className="mt-1 text-xs whitespace-pre-wrap break-words">{stringifyData(change.before)}</pre>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-gray-400">Después</p>
+                                      <pre className="mt-1 text-xs whitespace-pre-wrap break-words">{stringifyData(change.after)}</pre>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                       <div>
                         <p className="text-xs text-gray-400 uppercase tracking-wide">Recurso</p>
                         <p className="mt-1">Entidad: {log.entity}</p>
@@ -432,14 +490,6 @@ const AuditLogPage = () => {
                       <div>
                         <p className="text-xs text-gray-400 uppercase tracking-wide">Resultado</p>
                         <p className={`mt-1 ${isLikelyErrorResponse(log.response_body) ? 'text-red-300' : 'text-emerald-200'}`}>{extractResultSummary(log)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-400 uppercase tracking-wide">Respuesta</p>
-                        <pre className="mt-1 bg-black/30 p-3 rounded-md text-xs overflow-auto max-h-60">{stringifyData(log.response_body)}</pre>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-400 uppercase tracking-wide">Metadata</p>
-                        <pre className="mt-1 bg-black/30 p-3 rounded-md text-xs overflow-auto max-h-60">{stringifyData(log.metadata)}</pre>
                       </div>
                     </div>
                   )}

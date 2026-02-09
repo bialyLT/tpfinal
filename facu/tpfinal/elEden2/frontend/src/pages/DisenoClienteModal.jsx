@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { X, Calendar, User, DollarSign, CheckCircle, XCircle, Clock, Package, Image as ImageIcon, AlertCircle, Palette, Edit3, Info } from 'lucide-react';
 import { serviciosService } from '../services';
 import { handleApiError, success } from '../utils/notifications';

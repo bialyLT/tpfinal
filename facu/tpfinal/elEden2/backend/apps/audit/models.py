@@ -15,6 +15,8 @@ class AuditLog(models.Model):
     action = models.CharField(max_length=120)
     entity = models.CharField(max_length=120)
     response_body = models.JSONField(null=True, blank=True)
+    before_state = models.JSONField(null=True, blank=True)
+    after_state = models.JSONField(null=True, blank=True)
     metadata = models.JSONField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

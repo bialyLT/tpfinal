@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
 from django.utils.deprecation import MiddlewareMixin
+from django.forms.models import model_to_dict
 
 from .services import AuditService, sanitize_payload
 
@@ -25,17 +26,48 @@ class AuditLogMiddleware(MiddlewareMixin):
 
     def process_response(self, request, response):
         try:
+            if getattr(request, "_skip_audit", False):
+                return response
             self._maybe_log(request, response)
         except Exception:
             # No interrumpir el flujo si la auditoría falla
             pass
         return response
 
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        if request.method not in {"PUT", "PATCH", "DELETE"}:
+            return None
+
+        model, lookup_field, lookup_value = self._resolve_model_and_lookup(request, view_func, view_kwargs)
+        if not model or lookup_value is None:
+            return None
+
+        request._audit_model = model
+        request._audit_lookup_field = lookup_field
+        request._audit_lookup_value = lookup_value
+
+        try:
+            obj = model.objects.filter(**{lookup_field: lookup_value}).first()
+        except Exception:
+            return None
+
+        if not obj:
+            return None
+
+        try:
+            request._audit_before = sanitize_payload(model_to_dict(obj))
+        except Exception:
+            return None
+
+        return None
+
     def _maybe_log(self, request, response):
         if request.method not in self.TRACKED_METHODS:
             return
 
         path = request.path
+        if path.rstrip("/") == "/api/v1/servicios/configuracion-pagos" and request.method in {"PUT", "PATCH"}:
+            return
         if not path.startswith(self.API_PREFIX) or any(path.startswith(prefix) for prefix in self.EXCLUDED_PATHS):
             return
 
@@ -56,6 +88,26 @@ class AuditLogMiddleware(MiddlewareMixin):
         payload = self._extract_request_payload(request)
         response_body = self._extract_response_body(response)
 
+        before_state = getattr(request, "_audit_before", None)
+        after_state = getattr(request, "_audit_after", None)
+        if request.method in {"PUT", "PATCH"}:
+            model = getattr(request, "_audit_model", None)
+            lookup_field = getattr(request, "_audit_lookup_field", None)
+            lookup_value = getattr(request, "_audit_lookup_value", None)
+            if model and lookup_field and lookup_value is not None:
+                try:
+                    obj = model.objects.filter(**{lookup_field: lookup_value}).first()
+                    if obj:
+                        after_state = sanitize_payload(model_to_dict(obj))
+                except Exception:
+                    pass
+
+            if after_state is None:
+                after_state = self._extract_after_state(response_body)
+
+        if request.method == "POST":
+            after_state = self._extract_after_state(response_body)
+
         AuditService.register(
             user=user,
             role=role,
@@ -63,7 +115,8 @@ class AuditLogMiddleware(MiddlewareMixin):
             action=self._build_action(request.method, entity, path, user, payload, response_body),
             entity=entity,
             response_body=response_body,
-            metadata=self._build_metadata(request, response, user=user, is_admin=is_admin),
+            before_state=before_state,
+            after_state=after_state,
         )
 
     def _extract_request_payload(self, request) -> Optional[Any]:
@@ -136,6 +189,38 @@ class AuditLogMiddleware(MiddlewareMixin):
             entity = segments[-2] if len(segments) >= 2 else entity
 
         return entity
+
+    def _extract_after_state(self, response_body: Any) -> Any:
+        if not response_body:
+            return None
+
+        if isinstance(response_body, dict):
+            for key in (
+                "reserva",
+                "servicio",
+                "producto",
+                "diseno",
+                "cliente",
+                "empleado",
+                "proveedor",
+                "categoria",
+                "marca",
+                "especie",
+                "tarea",
+                "user",
+                "data",
+                "result",
+            ):
+                value = response_body.get(key)
+                if isinstance(value, dict):
+                    return value
+
+            if len(response_body) == 1:
+                value = next(iter(response_body.values()))
+                if isinstance(value, dict):
+                    return value
+
+        return response_body
 
     def _build_action(self, method: str, entity: str, path: str, user, payload: Any, response_body: Any) -> str:
         custom = self._build_custom_action(method, path, user, payload, response_body)
@@ -239,15 +324,41 @@ class AuditLogMiddleware(MiddlewareMixin):
 
         return None
 
-    def _build_metadata(self, request, response, *, user=None, is_admin: bool = False):
-        try:
-            groups = list(user.groups.values_list("name", flat=True)) if user and getattr(user, "groups", None) else []
-        except Exception:
-            groups = []
+    def _resolve_model_and_lookup(self, request, view_func, view_kwargs) -> Tuple[Any, str, Any]:
+        view_class = getattr(view_func, "cls", None)
+        if not view_class:
+            return None, "", None
 
-        return {
-            "query_params": request.GET.dict(),
-            "response_reason": getattr(response, "reason_phrase", ""),
-            "user_groups": groups,
-            "is_admin": bool(is_admin),
-        }
+        lookup_field = getattr(view_class, "lookup_field", "pk")
+        lookup_url_kwarg = getattr(view_class, "lookup_url_kwarg", None) or lookup_field
+        lookup_value = view_kwargs.get(lookup_url_kwarg)
+        if lookup_value is None and "pk" in view_kwargs:
+            lookup_value = view_kwargs.get("pk")
+
+        queryset = getattr(view_class, "queryset", None)
+        model = getattr(queryset, "model", None) if queryset is not None else None
+
+        if not model:
+            try:
+                view = view_class()
+                view.request = request
+                view.args = []
+                view.kwargs = view_kwargs
+                actions = getattr(view_func, "actions", {}) or {}
+                view.action = actions.get(request.method.lower())
+
+                if hasattr(view, "get_queryset"):
+                    qs = view.get_queryset()
+                    model = getattr(qs, "model", None)
+
+                if not model and hasattr(view, "get_serializer_class"):
+                    serializer_class = view.get_serializer_class()
+                    model = getattr(getattr(serializer_class, "Meta", None), "model", None)
+            except Exception:
+                model = None
+
+        if not model:
+            serializer_class = getattr(view_class, "serializer_class", None)
+            model = getattr(getattr(serializer_class, "Meta", None), "model", None)
+
+        return model, lookup_field, lookup_value

@@ -8,6 +8,7 @@ import uuid
 
 import mercadopago
 from django.conf import settings
+from django.forms.models import model_to_dict
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -15,7 +16,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.emails.services import EmailService
-from apps.servicios.models import ConfiguracionPago, ImagenReserva, Reserva, Servicio
+from apps.audit.services import AuditService, sanitize_payload
+from apps.servicios.models import ConfiguracionPago, ImagenReserva, Pago, Reserva, Servicio
 from apps.servicios.serializers import ReservaSerializer
 from apps.users.models import Cliente, Persona
 
@@ -272,7 +274,18 @@ def verificar_pago(request, reserva_id):
     """
     try:
         reserva = Reserva.objects.get(id_reserva=reserva_id)
-        pago = reserva.obtener_pago()
+        pago, created = Pago.objects.get_or_create(reserva=reserva)
+        if created:
+            AuditService.register(
+                user=request.user,
+                role="administrador" if (request.user.is_staff or request.user.is_superuser) else "empleado",
+                method="GET",
+                action="Creacion automatica de pago",
+                entity="pago_reserva",
+                response_body={"reserva_id": reserva.id_reserva, "pago_id": pago.id_pago},
+                before_state=None,
+                after_state=sanitize_payload(model_to_dict(pago)),
+            )
 
         # Verificar que el usuario sea el dueño de la reserva
         try:

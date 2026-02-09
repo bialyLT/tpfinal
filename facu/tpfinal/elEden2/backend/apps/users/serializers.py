@@ -233,7 +233,7 @@ class CreateEmpleadoSerializer(serializers.Serializer):
         # Extraer datos (ahora todos son requeridos excepto dirección)
         telefono = validated_data.pop("telefono")
         nro_documento = validated_data.pop("nro_documento")
-        calle = validated_data.pop("calle", "PENDIENTE")
+        calle = validated_data.pop("calle", "Sin especificar")
         numero = validated_data.pop("numero", "S/N")
         piso = validated_data.pop("piso", "")
         dpto = validated_data.pop("dpto", "")

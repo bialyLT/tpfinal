@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import { createContext, useContext, useReducer, useEffect } from 'react';
 import { authService } from '../services';
 import { success, handleApiError } from '../utils/notifications';
 
@@ -162,6 +162,7 @@ export const AuthProvider = ({ children }) => {
 
   const value = {
     ...state,
+    loading: state.isLoading,
     login,
     logout,
     register,

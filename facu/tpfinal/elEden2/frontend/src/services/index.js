@@ -751,3 +751,120 @@ export const adminService = {
     return response.data;
   }
 };
+
+// Configuración del sistema (solo admin)
+export const configuracionService = {
+  getConfig: async () => {
+    const response = await api.get('/servicios/configuracion-pagos/');
+    return response.data;
+  },
+
+  updateConfig: async (data) => {
+    const response = await api.put('/servicios/configuracion-pagos/', data);
+    return response.data;
+  },
+
+  patchConfig: async (data) => {
+    const response = await api.patch('/servicios/configuracion-pagos/', data);
+    return response.data;
+  }
+};
+
+export const objetivosDisenoService = {
+  getAll: async (params = {}) => {
+    const response = await api.get('/servicios/objetivos-diseno/', { params });
+    return response.data;
+  },
+
+  create: async (data) => {
+    const response = await api.post('/servicios/objetivos-diseno/', data);
+    return response.data;
+  },
+
+  update: async (id, data) => {
+    const response = await api.put(`/servicios/objetivos-diseno/${id}/`, data);
+    return response.data;
+  },
+
+  patch: async (id, data) => {
+    const response = await api.patch(`/servicios/objetivos-diseno/${id}/`, data);
+    return response.data;
+  },
+
+  delete: async (id) => {
+    await api.delete(`/servicios/objetivos-diseno/${id}/`);
+  }
+};
+
+export const nivelesIntervencionService = {
+  getAll: async (params = {}) => {
+    const response = await api.get('/servicios/niveles-intervencion/', { params });
+    return response.data;
+  },
+
+  create: async (data) => {
+    const response = await api.post('/servicios/niveles-intervencion/', data);
+    return response.data;
+  },
+
+  update: async (id, data) => {
+    const response = await api.put(`/servicios/niveles-intervencion/${id}/`, data);
+    return response.data;
+  },
+
+  patch: async (id, data) => {
+    const response = await api.patch(`/servicios/niveles-intervencion/${id}/`, data);
+    return response.data;
+  },
+
+  delete: async (id) => {
+    await api.delete(`/servicios/niveles-intervencion/${id}/`);
+  }
+};
+
+export const presupuestosAproximadosService = {
+  getAll: async (params = {}) => {
+    const response = await api.get('/servicios/presupuestos-aproximados/', { params });
+    return response.data;
+  },
+
+  create: async (data) => {
+    const response = await api.post('/servicios/presupuestos-aproximados/', data);
+    return response.data;
+  },
+
+  update: async (id, data) => {
+    const response = await api.put(`/servicios/presupuestos-aproximados/${id}/`, data);
+    return response.data;
+  },
+
+  patch: async (id, data) => {
+    const response = await api.patch(`/servicios/presupuestos-aproximados/${id}/`, data);
+    return response.data;
+  },
+
+  delete: async (id) => {
+    await api.delete(`/servicios/presupuestos-aproximados/${id}/`);
+  }
+};
+
+export const formasTerrenoService = {
+  getAll: async (params = {}) => {
+    const response = await api.get('/servicios/formas-terreno/', { params });
+    return response.data;
+  },
+
+  create: async (data) => {
+    const response = await api.post('/servicios/formas-terreno/', data);
+    return response.data;
+  },
+
+  update: async (id, data) => {
+    const response = await api.put(`/servicios/formas-terreno/${id}/`, data);
+    return response.data;
+  },
+
+  delete: async (id) => {
+    await api.delete(`/servicios/formas-terreno/${id}/`);
+  }
+};

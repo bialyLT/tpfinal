@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   AlertCircle,
@@ -36,6 +36,7 @@ const getPreguntaId = (pregunta) => pregunta?.id_pregunta ?? pregunta?.id;
 const ReservaDetallePage = () => {
   const { reservaId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
 
   const [reserva, setReserva] = useState(null);
@@ -386,6 +387,10 @@ const ReservaDetallePage = () => {
   };
 
   const handleRegresar = () => {
+    if (location.state?.fromComprobante) {
+      navigate('/mis-reservas');
+      return;
+    }
     if (window.history.length > 1) {
       navigate(-1);
       return;
@@ -613,7 +618,14 @@ const ReservaDetallePage = () => {
                     <div className="flex items-center space-x-2">
                       <Calendar className="w-4 h-4 text-gray-400" />
                       <span className="text-gray-300">
-                        Solicitud: {new Date(reserva.fecha_solicitud).toLocaleString('es-AR')}
+                        Solicitud: {new Date(reserva.fecha_solicitud).toLocaleString('es-AR', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true,
+                        })}
                       </span>
                     </div>
                   )}
@@ -645,7 +657,14 @@ const ReservaDetallePage = () => {
                     <div className="flex items-center space-x-2">
                       <Calendar className="w-4 h-4 text-gray-400" />
                       <span className="text-gray-300">
-                        Fecha de finalización: {new Date(reserva.fecha_finalizacion).toLocaleString('es-AR')}
+                        Fecha de finalización: {new Date(reserva.fecha_finalizacion).toLocaleString('es-AR', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true,
+                        })}
                       </span>
                     </div>
                   )}
@@ -749,9 +768,7 @@ const ReservaDetallePage = () => {
                           {reserva.payment_id_sena}
                         </p>
                         <a
-                          href={`https://www.mercadopago.com.ar/activities?q=${reserva.payment_id_sena}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                          href={`/reservas/pago-exitoso?tipo=sena&reserva_id=${reserva.id_reserva}`}
                           className="inline-flex items-center mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg"
                         >
                           <ExternalLink className="w-4 h-4 mr-2" />
@@ -807,9 +824,7 @@ const ReservaDetallePage = () => {
                             {reserva.payment_id_final}
                           </p>
                           <a
-                            href={`https://www.mercadopago.com.ar/activities?q=${reserva.payment_id_final}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                            href={`/reservas/pago-exitoso?tipo=final&reserva_id=${reserva.id_reserva}`}
                             className="inline-flex items-center mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg"
                           >
                             <ExternalLink className="w-4 h-4 mr-2" />

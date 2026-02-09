@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Fragment, useState, useEffect, useRef, useMemo } from 'react';
 import flatpickr from 'flatpickr';
 import api from '../services/api';
 import { addressService, serviciosService } from '../services';
@@ -78,7 +78,12 @@ const SolicitarServicioPage = () => {
     nivel_intervencion: '', // 'true' | 'false' (se envía como boolean)
     presupuesto_aproximado: ''
   });
-  const [referenceData, setReferenceData] = useState({ localidades: [], objetivos_diseno: [] });
+  const [referenceData, setReferenceData] = useState({
+    localidades: [],
+    objetivos_diseno: [],
+    niveles_intervencion: [],
+    presupuestos_aproximados: [],
+  });
   const [addressSearch, setAddressSearch] = useState('');
   const [addressInfo, setAddressInfo] = useState(null);
   const [addressError, setAddressError] = useState('');
@@ -119,16 +124,16 @@ const SolicitarServicioPage = () => {
     { id: 4, title: 'Confirmación', icon: CheckCircle }
   ];
 
-  const NIVEL_INTERVENCION_OPCIONES = [
-    { value: 'false', label: 'Remodelación Parcial' },
-    { value: 'true', label: 'Diseño Completo desde Cero' }
-  ];
+  const NIVEL_INTERVENCION_OPCIONES = (referenceData.niveles_intervencion || []).map((op) => ({
+    value: String(op.valor),
+    label: op.nombre,
+    codigo: op.codigo,
+  }));
 
-  const PRESUPUESTO_OPCIONES = [
-    { value: 'bajo', label: 'Económico / Ajustado' },
-    { value: 'medio', label: 'Intermedio / Flexible' },
-    { value: 'alto', label: 'Premium / Sin Restricciones' }
-  ];
+  const PRESUPUESTO_OPCIONES = (referenceData.presupuestos_aproximados || []).map((op) => ({
+    value: op.codigo,
+    label: op.nombre,
+  }));
 
   // Cargar servicios disponibles y dirección del cliente al montar el componente
   useEffect(() => {
@@ -695,7 +700,7 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
               const isCompleted = currentStep > step.id;
 
               return (
-                <React.Fragment key={step.id}>
+                <Fragment key={step.id}>
                   <div className="flex flex-col items-center">
                     <div
                       className={`w-12 h-12 rounded-full flex items-center justify-center mb-2 ${isCompleted
@@ -717,7 +722,7 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
                         }`}
                     />
                   )}
-                </React.Fragment>
+                </Fragment>
               );
             })}
           </div>

@@ -1,23 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { CheckCircle, Printer, FileText, Calendar, DollarSign, CreditCard, User, Mail, Phone, AlertCircle, Loader, Info, Ruler, Palette, Hammer } from 'lucide-react';
+import { CheckCircle, Printer, FileText, Calendar, DollarSign, CreditCard, User, Mail, Phone, AlertCircle, Loader, Info, Ruler, Palette, Hammer, ArrowLeft } from 'lucide-react';
 import api from '../../services/api';
 import { serviciosService } from '../../services';
 import { error as showError, success as showSuccess } from '../../utils/notifications';
 import { useAuth } from '../../context/AuthContext';
 
 const PagoExitoso = () => {
+  const [referenceData, setReferenceData] = useState({
+    niveles_intervencion: [],
+    presupuestos_aproximados: [],
+  });
+
   const getNivelIntervencionLabel = (value) => {
-    if (value === true) return 'Diseño Completo desde Cero';
-    if (value === false) return 'Remodelación Parcial';
-    return 'No especificado';
+    if (value === null || value === undefined) return 'No especificado';
+    const match = (referenceData.niveles_intervencion || []).find(
+      (op) => op.valor === value
+    );
+    return match?.nombre || 'No especificado';
   };
 
-  const PRESUPUESTO_OPCIONES = [
-    { value: 'bajo', label: 'Económico / Ajustado' },
-    { value: 'medio', label: 'Intermedio / Flexible' },
-    { value: 'alto', label: 'Premium / Sin Restricciones' }
-  ];
+  const PRESUPUESTO_OPCIONES = (referenceData.presupuestos_aproximados || []).map((op) => ({
+    value: op.codigo,
+    label: op.nombre,
+  }));
 
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -58,6 +64,22 @@ const PagoExitoso = () => {
     externalReference,
     searchParams
   ]);
+
+  useEffect(() => {
+    const fetchReferenceData = async () => {
+      try {
+        const response = await api.get('/reference-data/');
+        setReferenceData({
+          niveles_intervencion: response.data?.niveles_intervencion || [],
+          presupuestos_aproximados: response.data?.presupuestos_aproximados || [],
+        });
+      } catch (err) {
+        console.error('Error al cargar referencia de configuraciones:', err);
+      }
+    };
+
+    fetchReferenceData();
+  }, []);
 
   // Esperar a que el usuario se autentique antes de procesar el pago
   useEffect(() => {
@@ -196,7 +218,11 @@ const PagoExitoso = () => {
     window.print();
   };
 
-  const handleGoToReservas = () => {
+  const handleGoToReservaDetalle = () => {
+    if (reservaId) {
+      navigate(`/servicios/reservas/${reservaId}`, { state: { fromComprobante: true } });
+      return;
+    }
     navigate('/mis-reservas');
   };
 
@@ -228,16 +254,29 @@ const PagoExitoso = () => {
     return badges[estado] || 'bg-gray-100 text-gray-800';
   };
 
+  const getEstadoLabel = (estado) => {
+    const labels = {
+      aprobado: 'Aprobado',
+      pendiente: 'Pendiente',
+      rechazado: 'Rechazado',
+      sena_pagada: 'Seña pagada',
+      pendiente_pago_sena: 'Pendiente de seña',
+      pagado: 'Pagado',
+      cancelado: 'Cancelado',
+    };
+    return labels[estado] || 'Sin especificar';
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
           <Loader className="w-16 h-16 mx-auto mb-4 text-green-600 animate-spin" />
           <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            Procesando tu pago...
+            Generando comprobante de pago...
           </h2>
           <p className="text-gray-600">
-            Estamos verificando la información de tu pago. Por favor espera un momento.
+            Estamos generando tu comprobante. Por favor espera un momento.
           </p>
         </div>
       </div>
@@ -260,10 +299,10 @@ const PagoExitoso = () => {
 
           <div className="space-y-3">
             <button
-              onClick={handleGoToReservas}
+              onClick={handleGoToReservaDetalle}
               className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
             >
-              Ver Mis Reservas
+              Volver a detalle reserva
             </button>
             {status === 'failure' && reservaId && (
               <button
@@ -286,6 +325,13 @@ const PagoExitoso = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 py-8 px-4">
       <div className="max-w-4xl mx-auto">
+        <button
+          onClick={handleGoToReservaDetalle}
+          className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800 mb-6"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Volver
+        </button>
         {/* Header de éxito */}
         <div className="bg-white rounded-2xl shadow-xl p-8 mb-6 text-center">
           <div className="mx-auto w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-4">
@@ -301,189 +347,160 @@ const PagoExitoso = () => {
 
         {/* Comprobante de Pago */}
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden print:shadow-none" id="comprobante">
-          {/* Header del comprobante */}
-          <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-6">
-            <div className="flex items-center justify-between">
+          <div className="px-6 py-5 border-b">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-bold mb-1">Comprobante de Pago</h2>
-                <p className="text-green-100">
-                  {tipoPago === 'sena' ? 'Seña de Reserva' : 'Pago Final'}
-                </p>
+                <p className="text-xs uppercase tracking-wide text-gray-500">Emisor</p>
+                <h2 className="text-xl font-bold text-gray-800">
+                  {comprobante.empresa?.razon_social || 'El Eden'}
+                </h2>
+                <p className="text-sm text-gray-600">CUIT: {comprobante.empresa?.cuit || 'N/A'}</p>
               </div>
-              <FileText className="w-12 h-12 opacity-80" />
+              <div className="md:text-right">
+                <p className="text-xs uppercase tracking-wide text-gray-500">Comprobante de pago</p>
+                <p className="text-sm text-gray-700 font-semibold">{comprobante.tipo_pago_display}</p>
+                <p className="text-sm text-gray-600">N° {`R-${comprobante.reserva_id}-${tipoPago === 'sena' ? 'S' : 'F'}`}</p>
+                <p className="text-sm text-gray-600">Fecha de pago: {formatearFecha(comprobante.fecha_pago)}</p>
+              </div>
             </div>
           </div>
 
-          {/* Información del Pago */}
+          <div className="px-6 py-4 bg-gray-50 border-b">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-gray-500">Monto pagado</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {formatearMonto(comprobante.monto)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-gray-500">Estado</p>
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${getEstadoBadge(comprobante.estado)}`}>
+                  {getEstadoLabel(comprobante.estado)}
+                </span>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-gray-500">ID de transacción</p>
+                <p className="text-sm text-gray-800 font-mono break-all">
+                  {comprobante.payment_id || 'N/A'}
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="p-6 space-y-6">
-            {/* Detalles de la transacción */}
-            <div className="border-b pb-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                <DollarSign className="w-5 h-5 mr-2 text-green-600" />
-                Detalles de la Transacción
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Monto Pagado</p>
-                  <p className="text-2xl font-bold text-green-600">
-                    {formatearMonto(comprobante.monto)}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="border rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Datos del cliente</h3>
+                <div className="space-y-2 text-sm text-gray-700">
+                  <p><span className="font-semibold">Nombre:</span> {comprobante.cliente.nombre}</p>
+                  <p className="flex items-center">
+                    <Mail className="w-4 h-4 mr-2 text-gray-500" />
+                    {comprobante.cliente.email}
                   </p>
+                  {comprobante.cliente.telefono && (
+                    <p className="flex items-center">
+                      <Phone className="w-4 h-4 mr-2 text-gray-500" />
+                      {comprobante.cliente.telefono}
+                    </p>
+                  )}
                 </div>
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Estado</p>
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${getEstadoBadge(comprobante.estado)}`}>
-                    {comprobante.estado.charAt(0).toUpperCase() + comprobante.estado.slice(1)}
-                  </span>
+              </div>
+              <div className="border rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Datos del servicio</h3>
+                <div className="space-y-2 text-sm text-gray-700">
+                  <p><span className="font-semibold">Servicio:</span> {comprobante.servicio.nombre}</p>
+                  <p><span className="font-semibold">Reserva:</span> #{comprobante.reserva_id}</p>
+                  {tipoPago === 'sena' ? (
+                    <p>
+                      <span className="font-semibold">Fecha de cita:</span>{' '}
+                      {formatearFecha(comprobante.fecha_reserva)}
+                    </p>
+                  ) : (
+                    <p>
+                      <span className="font-semibold">Fecha de inicio:</span>{' '}
+                      {formatearFecha(comprobante.fecha_inicio)}
+                    </p>
+                  )}
                 </div>
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Fecha de Pago</p>
-                  <p className="text-gray-800 font-medium flex items-center">
-                    <Calendar className="w-4 h-4 mr-2 text-gray-500" />
-                    {formatearFecha(comprobante.fecha_pago)}
-                  </p>
+              </div>
+            </div>
+
+            <div className="border rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Detalle del diseño</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-700">
+                <div className="flex items-start">
+                  <Ruler className="w-4 h-4 text-green-600 mr-2 mt-0.5" />
+                  <div>
+                    <span className="font-semibold">Superficie:</span>{' '}
+                    {comprobante.superficie_aproximada || 'A medir'} m²
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">ID de Transacción</p>
-                  <p className="text-gray-800 font-mono text-sm">
-                    {comprobante.payment_id || 'N/A'}
-                  </p>
+                <div className="flex items-start">
+                  <Palette className="w-4 h-4 text-green-600 mr-2 mt-0.5" />
+                  <div>
+                    <span className="font-semibold">Objetivo:</span>{' '}
+                    {comprobante.objetivo_diseno_nombre || comprobante.objetivo_diseno_codigo || 'No especificado'}
+                  </div>
+                </div>
+                <div className="flex items-start">
+                  <Hammer className="w-4 h-4 text-green-600 mr-2 mt-0.5" />
+                  <div>
+                    <span className="font-semibold">Intervención:</span>{' '}
+                    {getNivelIntervencionLabel(comprobante.nivel_intervencion)}
+                  </div>
+                </div>
+                <div className="flex items-start">
+                  <DollarSign className="w-4 h-4 text-green-600 mr-2 mt-0.5" />
+                  <div>
+                    <span className="font-semibold">Presupuesto:</span>{' '}
+                    {PRESUPUESTO_OPCIONES.find(o => o.value === comprobante.presupuesto_aproximado)?.label || comprobante.presupuesto_aproximado || 'No especificado'}
+                  </div>
                 </div>
               </div>
 
-              {/* Información adicional de MercadoPago */}
-              {comprobante.pago_info && (
-                <div className="mt-4 pt-4 border-t">
-                  <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
-                    <CreditCard className="w-4 h-4 mr-2 text-blue-600" />
-                    Detalles del Método de Pago
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    {comprobante.pago_info.metodo_pago && (
-                      <div>
-                        <p className="text-gray-600">Método</p>
-                        <p className="font-medium text-gray-800">{comprobante.pago_info.metodo_pago}</p>
-                      </div>
-                    )}
-                    {comprobante.pago_info.ultimos_digitos && (
-                      <div>
-                        <p className="text-gray-600">Tarjeta</p>
-                        <p className="font-medium text-gray-800">**** {comprobante.pago_info.ultimos_digitos}</p>
-                      </div>
-                    )}
-                    {comprobante.pago_info.cuotas && (
-                      <div>
-                        <p className="text-gray-600">Cuotas</p>
-                        <p className="font-medium text-gray-800">{comprobante.pago_info.cuotas}x</p>
-                      </div>
-                    )}
-                  </div>
+              {comprobante.observaciones && (
+                <div className="mt-4 pt-4 border-t text-sm text-gray-700">
+                  <p className="font-semibold mb-1">Observaciones</p>
+                  <p className="whitespace-pre-line">{comprobante.observaciones}</p>
                 </div>
               )}
             </div>
 
-            {/* Información del Cliente */}
-            <div className="border-b pb-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                <User className="w-5 h-5 mr-2 text-green-600" />
-                Información del Cliente
-              </h3>
-              <div className="space-y-2">
-                <p className="text-gray-800">
-                  <span className="font-semibold">Nombre:</span> {comprobante.cliente.nombre}
-                </p>
-                <p className="text-gray-800 flex items-center">
-                  <Mail className="w-4 h-4 mr-2 text-gray-500" />
-                  {comprobante.cliente.email}
-                </p>
-                {comprobante.cliente.telefono && (
-                  <p className="text-gray-800 flex items-center">
-                    <Phone className="w-4 h-4 mr-2 text-gray-500" />
-                    {comprobante.cliente.telefono}
-                  </p>
-                )}
+            {comprobante.pago_info && (
+              <div className="border rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                  <CreditCard className="w-4 h-4 mr-2 text-blue-600" />
+                  Metodo de pago
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-700">
+                  {comprobante.pago_info.metodo_pago && (
+                    <div>
+                      <p className="text-gray-500">Metodo</p>
+                      <p className="font-medium">{comprobante.pago_info.metodo_pago}</p>
+                    </div>
+                  )}
+                  {comprobante.pago_info.ultimos_digitos && (
+                    <div>
+                      <p className="text-gray-500">Tarjeta</p>
+                      <p className="font-medium">**** {comprobante.pago_info.ultimos_digitos}</p>
+                    </div>
+                  )}
+                  {comprobante.pago_info.cuotas && (
+                    <div>
+                      <p className="text-gray-500">Cuotas</p>
+                      <p className="font-medium">{comprobante.pago_info.cuotas}x</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Información del Servicio */}
-            <div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                <FileText className="w-5 h-5 mr-2 text-green-600" />
-                Detalles del Servicio
-              </h3>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="font-semibold text-gray-800 mb-2">
-                  {comprobante.servicio.nombre}
-                </p>
-
-                {(
-                  comprobante.superficie_aproximada ||
-                  comprobante.objetivo_diseno_nombre ||
-                  comprobante.objetivo_diseno_codigo ||
-                  comprobante.nivel_intervencion !== null ||
-                  comprobante.presupuesto_aproximado
-                ) ? (
-                  <div className="mt-3 space-y-2">
-                    <div className="flex items-start text-sm">
-                      <Ruler className="w-4 h-4 text-green-600 mr-2 mt-0.5" />
-                      <div>
-                        <span className="font-medium text-gray-700">Superficie:</span>
-                        <span className="text-gray-600 ml-1">{comprobante.superficie_aproximada || 'A medir'} m²</span>
-                      </div>
-                    </div>
-                    <div className="flex items-start text-sm">
-                      <Palette className="w-4 h-4 text-green-600 mr-2 mt-0.5" />
-                      <div>
-                        <span className="font-medium text-gray-700">Objetivo:</span>
-                        <span className="text-gray-600 ml-1">
-                          {comprobante.objetivo_diseno_nombre || comprobante.objetivo_diseno_codigo || 'No especificado'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-start text-sm">
-                      <Hammer className="w-4 h-4 text-green-600 mr-2 mt-0.5" />
-                      <div>
-                        <span className="font-medium text-gray-700">Intervención:</span>
-                        <span className="text-gray-600 ml-1">
-                          {getNivelIntervencionLabel(comprobante.nivel_intervencion)}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-start text-sm">
-                      <DollarSign className="w-4 h-4 text-green-600 mr-2 mt-0.5" />
-                      <div>
-                        <span className="font-medium text-gray-700">Presupuesto:</span>
-                        <span className="text-gray-600 ml-1">
-                          {PRESUPUESTO_OPCIONES.find(o => o.value === comprobante.presupuesto_aproximado)?.label || comprobante.presupuesto_aproximado || 'No especificado'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-gray-600 text-sm">
-                    {comprobante.servicio.descripcion}
-                  </p>
-                )}
-
-                {comprobante.observaciones && (
-                  <div className="mt-3 pt-3 border-t border-gray-200">
-                    <p className="text-sm text-gray-800 font-medium mb-1">Observaciones:</p>
-                    <p className="text-sm text-gray-600 whitespace-pre-line">{comprobante.observaciones}</p>
-                  </div>
-                )}
-
-                <p className="text-sm text-gray-500 mt-3 pt-2 border-t border-gray-200">
-                  Reserva #{comprobante.reserva_id}
-                </p>
-              </div>
-            </div>
-
-            {/* Nota informativa */}
             {tipoPago === 'sena' && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <p className="text-sm text-blue-800">
                   <span className="font-semibold">Nota:</span> Has pagado la seña de tu reserva.
-                  El saldo restante deberá ser abonado una vez que nuestro diseñador presente la propuesta
-                  y sea aceptada por ti.
+                  El saldo restante deberá ser abonado una vez que el diseño sea aceptado.
                 </p>
               </div>
             )}
@@ -507,10 +524,10 @@ const PagoExitoso = () => {
             Imprimir Comprobante
           </button>
           <button
-            onClick={handleGoToReservas}
+            onClick={handleGoToReservaDetalle}
             className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
           >
-            Ver Mis Reservas
+            Volver a detalle reserva
           </button>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Edit, Trash2, Search, Leaf, X } from 'lucide-react';
 import { especiesService } from '../services';
 import { success, handleApiError } from '../utils/notifications';

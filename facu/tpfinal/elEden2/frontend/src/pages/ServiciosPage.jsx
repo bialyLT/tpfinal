@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { serviciosService } from '../services';
 import { useAuth } from '../context/AuthContext';
@@ -41,20 +41,28 @@ const ServiciosPage = () => {
     pageSize: 10
   });
 
-  const isAdmin = user?.groups?.includes('Administradores');
-  const isEmpleado = user?.groups?.includes('Empleados');
+  const userRole = user?.perfil?.tipo_usuario || 'cliente';
+  const isAdmin = !!(user?.is_staff || user?.is_superuser || userRole === 'administrador' || user?.groups?.includes('Administradores'));
+  const isEmpleado = !!(userRole === 'empleado' || userRole === 'diseñador' || user?.groups?.includes('Empleados'));
   const isCliente = !isAdmin && !isEmpleado;
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+      const pagosParams = {};
+      if (paymentFilter === 'pagado') {
+        pagosParams.estado_pago_sena = 'sena_pagada';
+        pagosParams.estado_pago_final = 'pagado';
+      } else if (paymentFilter) {
+        pagosParams.estado_pago_sena = paymentFilter;
+      }
       const promises = [
         serviciosService.getReservas({
           page: solicitudesPagination.currentPage,
           page_size: solicitudesPagination.pageSize,
           estado: statusFilter || undefined,
           fecha_solicitud: dateFilter || undefined,
-          estado_pago_sena: paymentFilter || undefined,
+          ...pagosParams,
           search: searchTerm || undefined
         })
       ];
@@ -213,16 +221,7 @@ const ServiciosPage = () => {
       'en_curso': 'bg-cyan-500',
       'completada': 'bg-green-500',
       'cancelada': 'bg-red-500',
-      // Estados legacy (por compatibilidad)
-      'solicitud': 'bg-blue-500',
-      'en_revision': 'bg-yellow-500',
-      'en_diseño': 'bg-purple-500',
-      'diseño_enviado': 'bg-indigo-500',
-      'revision_diseño': 'bg-orange-500',
-      'aprobado': 'bg-green-500',
-      'pausado': 'bg-gray-500',
-      'completado': 'bg-green-500',
-      'cancelado': 'bg-red-500'
+
     };
     return colors[status] || 'bg-gray-500';
   };
@@ -300,7 +299,7 @@ const ServiciosPage = () => {
                 <option value="">Todos los estados</option>
                 <option value="pendiente">Pendiente</option>
                 <option value="confirmada">Confirmada</option>
-                <option value="en_curso">En Curso</option>
+                <option value="en_curso">En Ejecucion</option>
                 <option value="completada">Completada</option>
                 <option value="cancelada">Cancelada</option>
               </select>

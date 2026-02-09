@@ -469,6 +469,10 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 # Backend URL for webhooks
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
+# Comprobantes - Datos del emisor
+COMPANY_RAZON_SOCIAL = os.getenv("COMPANY_RAZON_SOCIAL", "El Eden")
+COMPANY_CUIT = os.getenv("COMPANY_CUIT", "00-00000000-0")
+
 # ==================== MERCADOPAGO CONFIGURATION ====================
 MERCADOPAGO_ACCESS_TOKEN = os.getenv("MERCADOPAGO_ACCESS_TOKEN", "")
 MERCADOPAGO_PUBLIC_KEY = os.getenv("MERCADOPAGO_PUBLIC_KEY", "")

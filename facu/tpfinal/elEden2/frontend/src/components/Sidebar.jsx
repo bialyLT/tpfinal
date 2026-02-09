@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSidebar } from '../context/SidebarContext';
@@ -6,7 +6,7 @@ import {
   Leaf, Menu, X, User, LogOut, Home, ShoppingCart, 
   Package, Users, Wrench, ClipboardList, Tag, Building2,
   FileText, Plus, ChevronDown, ChevronRight, LayoutDashboard,
-  ShoppingBag, ListChecks, Palette, ShieldCheck
+  ShoppingBag, ListChecks, Palette, ShieldCheck, Settings
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -83,6 +83,7 @@ const Sidebar = () => {
     if (isAdmin) {
       return [
         { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+        { name: 'Configuración', href: '/configuracion', icon: Settings },
         { name: 'Estadísticas', href: '/estadisticas', icon: FileText },
         { 
           name: 'Inventario', 

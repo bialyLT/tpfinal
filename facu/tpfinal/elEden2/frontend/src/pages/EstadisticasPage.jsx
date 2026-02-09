@@ -1,13 +1,15 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FileText, RefreshCw, Download, CheckSquare, Square } from 'lucide-react';
 import { serviciosService } from '../services';
-import { Bar, Pie } from 'react-chartjs-2';
+import { Bar, Line, Pie } from 'react-chartjs-2';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
   BarElement,
+  LineElement,
+  PointElement,
   ArcElement,
   Tooltip,
   Legend,
@@ -16,7 +18,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { useAuth } from '../context/AuthContext';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend, ChartDataLabels);
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Tooltip, Legend, ChartDataLabels);
 
 const DEFAULT_PAGE_SIZE = 100;
 const TOP_N = 5;
@@ -46,6 +48,32 @@ const resolveUserName = (user) => {
 const formatGeneratedAt = (date) => new Intl.DateTimeFormat('es-AR', {
   dateStyle: 'medium',
   timeStyle: 'short',
+}).format(date);
+
+const formatFilterRange = (range) => {
+  const start = range?.start ? new Date(`${range.start}T00:00:00`) : null;
+  const end = range?.end ? new Date(`${range.end}T00:00:00`) : null;
+  const formatDate = (date) => new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium' }).format(date);
+
+  if (start && end) return `Desde ${formatDate(start)} hasta ${formatDate(end)}`;
+  if (start) return `Desde ${formatDate(start)}`;
+  if (end) return `Hasta ${formatDate(end)}`;
+  return 'Todo el período';
+};
+
+const getISOWeekInfo = (date) => {
+  const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNumber = (target.getUTCDay() + 6) % 7;
+  target.setUTCDate(target.getUTCDate() - dayNumber + 3);
+  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+  const firstDayNumber = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNumber + 3);
+  const weekNumber = 1 + Math.round((target - firstThursday) / (7 * 24 * 60 * 60 * 1000));
+  return { week: weekNumber, year: target.getUTCFullYear() };
+};
+
+const formatDateShort = (date) => new Intl.DateTimeFormat('es-AR', {
+  dateStyle: 'medium',
 }).format(date);
 
 const normalizePagedResponse = (data) => {
@@ -105,6 +133,15 @@ const TableCard = ({ title, children }) => (
   </div>
 );
 
+const ChartLoading = ({ label = 'Cargando gráfico...' }) => (
+  <div className="bg-gray-900/40 rounded-lg p-6 flex items-center justify-center min-h-[260px] text-gray-300">
+    <div className="flex items-center gap-2">
+      <RefreshCw size={18} className="animate-spin" />
+      <span>{label}</span>
+    </div>
+  </div>
+);
+
 const EstadisticasPage = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -113,10 +150,12 @@ const EstadisticasPage = () => {
   const [disenosDetalles, setDisenosDetalles] = useState([]);
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [filterError, setFilterError] = useState('');
+  const [ventasGranularity, setVentasGranularity] = useState('month');
   const [selectedCharts, setSelectedCharts] = useState({
     serviciosPorTipo: true,
     topProductos: true,
     topEmpleados: true,
+    ventasHistoricas: true,
   });
   const [exporting, setExporting] = useState(false);
 
@@ -124,6 +163,7 @@ const EstadisticasPage = () => {
     serviciosPorTipo: useRef(null),
     topProductos: useRef(null),
     topEmpleados: useRef(null),
+    ventasHistoricas: useRef(null),
   };
 
   const loadData = async (range = dateRange) => {
@@ -131,18 +171,24 @@ const EstadisticasPage = () => {
     setError('');
     try {
       const dateParams = {};
-      if (range?.start) dateParams.fecha_solicitud_after = range.start;
-      if (range?.end) dateParams.fecha_solicitud_before = range.end;
+      if (range?.start) dateParams.fecha_finalizacion_after = range.start;
+      if (range?.end) dateParams.fecha_finalizacion_before = range.end;
 
       const [reservasAll] = await Promise.all([
-        fetchAllPages((params) => serviciosService.getReservas({ ...params, ...dateParams })),
+        fetchAllPages((params) => serviciosService.getReservas({
+          ...params,
+          ...dateParams,
+          include_all: 1,
+        })),
       ]);
 
       setReservas(reservasAll);
 
       // Para "productos usados en servicios" tomamos productos desde diseños.
       // El listado de diseños no incluye productos, así que buscamos el detalle por id.
-      const disenoIds = reservasAll
+      const reservasFinalizadas = reservasAll.filter((r) => r?.estado === 'completada');
+
+      const disenoIds = reservasFinalizadas
         .flatMap((r) => (Array.isArray(r?.disenos) ? r.disenos : []))
         .map((d) => d?.id_diseno)
         .filter((id) => id !== null && id !== undefined);
@@ -202,11 +248,13 @@ const EstadisticasPage = () => {
   };
 
   const computed = useMemo(() => {
-    const serviciosCantidad = reservas.length;
+    const reservasFinalizadas = reservas.filter((r) => r?.estado === 'completada');
+    const serviciosCantidad = reservasFinalizadas.length;
     const serviciosPorTipo = new Map();
     const empleadosPorServicios = new Map();
+    const ventasHistoricas = new Map();
 
-    reservas.forEach((r) => {
+    reservasFinalizadas.forEach((r) => {
       const tipo = r?.servicio_nombre || 'Sin servicio';
       serviciosPorTipo.set(tipo, (serviciosPorTipo.get(tipo) || 0) + 1);
 
@@ -218,6 +266,39 @@ const EstadisticasPage = () => {
         const prev = empleadosPorServicios.get(key) || { id: empleadoId, nombre: empleadoNombre, count: 0 };
         empleadosPorServicios.set(key, { ...prev, nombre: empleadoNombre, count: prev.count + 1 });
       });
+
+      const estadoPagoFinal = r?.estado_pago_final;
+      const estadoPago = r?.estado_pago;
+      const servicioCompletado = true;
+      const pagoConfirmado = estadoPagoFinal === 'pagado' || estadoPago === 'pagado';
+      const montoTotal = safeNumber(r?.monto_total);
+      const fechaVenta = r?.fecha_finalizacion || r?.fecha_pago_final || r?.fecha_realizacion || r?.fecha_cita || r?.fecha_solicitud;
+
+      if (servicioCompletado && pagoConfirmado && montoTotal > 0 && fechaVenta) {
+        const fecha = new Date(fechaVenta);
+        if (!Number.isNaN(fecha.getTime())) {
+          let key = '';
+          let label = '';
+
+          if (ventasGranularity === 'day') {
+            key = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
+            label = formatDateShort(fecha);
+          } else if (ventasGranularity === 'week') {
+            const { week, year } = getISOWeekInfo(fecha);
+            key = `${year}-W${String(week).padStart(2, '0')}`;
+            label = `Semana ${week} ${year}`;
+          } else if (ventasGranularity === 'year') {
+            key = `${fecha.getFullYear()}`;
+            label = `${fecha.getFullYear()}`;
+          } else {
+            key = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+            label = new Intl.DateTimeFormat('es-AR', { month: 'short', year: 'numeric' }).format(fecha);
+          }
+
+          const prev = ventasHistoricas.get(key) || { key, label, total: 0, count: 0 };
+          ventasHistoricas.set(key, { ...prev, total: prev.total + montoTotal, count: prev.count + 1 });
+        }
+      }
     });
 
     let topTipoServicio = { nombre: '--', count: 0 };
@@ -254,14 +335,18 @@ const EstadisticasPage = () => {
       .sort((a, b) => b.cantidad - a.cantidad)
       .slice(0, TOP_N);
 
+    const ventasHistoricasList = Array.from(ventasHistoricas.values())
+      .sort((a, b) => a.key.localeCompare(b.key));
+
     return {
       serviciosCantidad,
       serviciosPorTipoList,
       topTipoServicio,
       topEmpleados,
       topProductosServicio,
+      ventasHistoricasList,
     };
-  }, [reservas, disenosDetalles]);
+  }, [reservas, disenosDetalles, ventasGranularity]);
 
   const chartColors = [
     '#10B981', '#22D3EE', '#F59E0B', '#A78BFA', '#F97316', '#EF4444', '#60A5FA', '#34D399', '#F472B6', '#A3E635'
@@ -283,16 +368,29 @@ const EstadisticasPage = () => {
     };
   }, [computed.serviciosPorTipoList]);
 
-  const topProductosData = useMemo(() => {
+  const topProductosCombinedData = useMemo(() => {
     const labels = computed.topProductosServicio.map((item) => item.nombre);
-    const data = computed.topProductosServicio.map((item) => item.cantidad);
+    const cantidades = computed.topProductosServicio.map((item) => item.cantidad);
+    const subtotales = computed.topProductosServicio.map((item) => item.subtotal);
     return {
       labels,
       datasets: [
         {
-          label: 'Cantidad',
-          data,
+          type: 'bar',
+          label: 'Cantidad usada',
+          data: cantidades,
           backgroundColor: '#22C55E',
+          yAxisID: 'y',
+        },
+        {
+          type: 'line',
+          label: 'Valor total (ARS)',
+          data: subtotales,
+          borderColor: '#F97316',
+          backgroundColor: 'rgba(249, 115, 22, 0.2)',
+          pointBackgroundColor: '#F97316',
+          tension: 0.3,
+          yAxisID: 'y1',
         },
       ],
     };
@@ -312,6 +410,25 @@ const EstadisticasPage = () => {
       ],
     };
   }, [computed.topEmpleados]);
+
+  const ventasHistoricasData = useMemo(() => {
+    const labels = computed.ventasHistoricasList.map((item) => item.label);
+    const data = computed.ventasHistoricasList.map((item) => item.total);
+    return {
+      labels,
+      datasets: [
+        {
+          label: 'Ventas (ARS)',
+          data,
+          borderColor: '#F97316',
+          backgroundColor: 'rgba(249, 115, 22, 0.2)',
+          pointBackgroundColor: '#F97316',
+          tension: 0.3,
+          fill: true,
+        },
+      ],
+    };
+  }, [computed.ventasHistoricasList]);
 
   const chartOptionsBase = {
     responsive: true,
@@ -333,6 +450,22 @@ const EstadisticasPage = () => {
     },
   };
 
+  const chartOptionsCurrency = {
+    ...chartOptionsBase,
+    plugins: {
+      ...chartOptionsBase.plugins,
+      tooltip: {
+        callbacks: {
+          label: (context) => `${context.dataset.label}: ${formatCurrencyARS(context.parsed.y)}`,
+        },
+      },
+      datalabels: {
+        ...chartOptionsBase.plugins.datalabels,
+        formatter: (value) => (Number.isFinite(Number(value)) ? formatCurrencyARS(value) : ''),
+      },
+    },
+  };
+
   const chartOptionsNoScale = {
     responsive: true,
     plugins: {
@@ -345,6 +478,52 @@ const EstadisticasPage = () => {
         formatter: (value) => (Number.isFinite(Number(value)) ? value : ''),
         font: { weight: '600', size: 12 },
         clamp: true,
+      },
+    },
+  };
+
+  const chartOptionsTopProductos = {
+    responsive: true,
+    plugins: {
+      legend: { labels: { color: '#E5E7EB' } },
+      tooltip: {
+        callbacks: {
+          label: (context) => {
+            const value = context.parsed.y;
+            if (context.dataset.yAxisID === 'y1') {
+              return `${context.dataset.label}: ${formatCurrencyARS(value)}`;
+            }
+            return `${context.dataset.label}: ${value}`;
+          },
+        },
+      },
+      datalabels: {
+        color: '#E5E7EB',
+        anchor: 'end',
+        align: 'top',
+        formatter: (value, context) => {
+          if (context.dataset.yAxisID === 'y1') {
+            return Number.isFinite(Number(value)) ? formatCurrencyARS(value) : '';
+          }
+          return Number.isFinite(Number(value)) ? value : '';
+        },
+        font: { weight: '600', size: 11 },
+        clamp: true,
+      },
+    },
+    scales: {
+      x: { ticks: { color: '#E5E7EB' }, grid: { color: 'rgba(255,255,255,0.08)' } },
+      y: {
+        position: 'left',
+        ticks: { color: '#E5E7EB' },
+        grid: { color: 'rgba(255,255,255,0.08)' },
+        title: { display: true, text: 'Unidades', color: '#E5E7EB' },
+      },
+      y1: {
+        position: 'right',
+        ticks: { color: '#E5E7EB', callback: (value) => formatCurrencyARS(value) },
+        grid: { drawOnChartArea: false },
+        title: { display: true, text: 'ARS', color: '#E5E7EB' },
       },
     },
   };
@@ -362,11 +541,13 @@ const EstadisticasPage = () => {
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: 'a4' });
       const generatedAt = formatGeneratedAt(new Date());
       const generatedBy = resolveUserName(user);
+      const filterRangeLabel = formatFilterRange(dateRange);
       const headerTitle = 'Reporte de Estadísticas';
       const headerLines = [
         `Generado: ${generatedAt}`,
         `Lugar: ${PLACE_NAME}`,
         `Usuario: ${generatedBy}`,
+        `Filtro: ${filterRangeLabel}`,
       ];
       const headerHeight = 70;
 
@@ -384,6 +565,7 @@ const EstadisticasPage = () => {
         { key: 'serviciosPorTipo', title: 'Servicios por tipo' },
         { key: 'topProductos', title: 'Top productos usados' },
         { key: 'topEmpleados', title: 'Top empleados asignados' },
+        { key: 'ventasHistoricas', title: 'Histórico de ventas de servicios realizados' },
       ];
 
       let firstPage = true;
@@ -523,8 +705,47 @@ const EstadisticasPage = () => {
             icon={<FileText className="text-emerald-400" size={24} />}
           />
         </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <TableCard title="Histórico de ventas de servicios realizados">
+            <div className="flex items-center gap-3 mb-4">
+              <button
+                onClick={() => toggleChartSelection('ventasHistoricas')}
+                className="flex items-center gap-2 text-sm text-gray-300"
+                type="button"
+              >
+                {selectedCharts.ventasHistoricas ? <CheckSquare size={18} /> : <Square size={18} />}
+                Incluir en PDF
+              </button>
+              <select
+                value={ventasGranularity}
+                onChange={(e) => setVentasGranularity(e.target.value)}
+                className="ml-auto px-3 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white"
+              >
+                <option value="day">Día</option>
+                <option value="week">Semana</option>
+                <option value="month">Mes</option>
+                <option value="year">Año</option>
+              </select>
+            </div>
+            {loading ? (
+              <ChartLoading />
+            ) : computed.ventasHistoricasList.length === 0 ? (
+              <p className="text-gray-400">Sin datos.</p>
+            ) : (
+              <div ref={chartRefs.ventasHistoricas} className="bg-gray-900/40 rounded-lg p-4">
+                <Line data={ventasHistoricasData} options={chartOptionsCurrency} />
+                <div className="mt-4 text-sm text-gray-400">
+                  {computed.ventasHistoricasList.map((item) => (
+                    <div key={item.key} className="flex justify-between border-b border-gray-800 py-1">
+                      <span className="text-white">{item.label}</span>
+                      <span>{formatCurrencyARS(item.total)} · {item.count} servicio{item.count !== 1 ? 's' : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </TableCard>
+
           <TableCard title="Servicios por tipo (todos)">
             <div className="flex items-center gap-3 mb-4">
               <button
@@ -536,7 +757,9 @@ const EstadisticasPage = () => {
                 Incluir en PDF
               </button>
             </div>
-            {computed.serviciosPorTipoList.length === 0 ? (
+            {loading ? (
+              <ChartLoading />
+            ) : computed.serviciosPorTipoList.length === 0 ? (
               <p className="text-gray-400">Sin datos.</p>
             ) : (
               <div ref={chartRefs.serviciosPorTipo} className="bg-gray-900/40 rounded-lg p-4">
@@ -556,11 +779,13 @@ const EstadisticasPage = () => {
                 Incluir en PDF
               </button>
             </div>
-            {computed.topProductosServicio.length === 0 ? (
+            {loading ? (
+              <ChartLoading />
+            ) : computed.topProductosServicio.length === 0 ? (
               <p className="text-gray-400">Sin datos.</p>
             ) : (
               <div ref={chartRefs.topProductos} className="bg-gray-900/40 rounded-lg p-4">
-                <Bar data={topProductosData} options={chartOptionsBase} />
+                <Bar data={topProductosCombinedData} options={chartOptionsTopProductos} />
                 <div className="mt-4 text-sm text-gray-400">
                   {computed.topProductosServicio.map((p) => (
                     <div key={p.id ?? p.nombre} className="flex justify-between border-b border-gray-800 py-1">
@@ -584,20 +809,15 @@ const EstadisticasPage = () => {
                 Incluir en PDF
               </button>
             </div>
-            {computed.topEmpleados.length === 0 ? (
+            {loading ? (
+              <ChartLoading />
+            ) : computed.topEmpleados.length === 0 ? (
               <p className="text-gray-400">Sin datos.</p>
             ) : (
               <div ref={chartRefs.topEmpleados} className="bg-gray-900/40 rounded-lg p-4">
                 <Bar data={topEmpleadosData} options={chartOptionsBase} />
               </div>
             )}
-          </TableCard>
-
-          <TableCard title="Notas">
-            <ul className="text-gray-300 text-sm space-y-2">
-              <li>• Servicios: se cuentan desde <span className="text-white">reservas</span>.</li>
-              <li>• Productos usados en servicios: se agregan desde los <span className="text-white">productos</span> de cada diseño asociado.</li>
-            </ul>
           </TableCard>
         </div>
       </div>
