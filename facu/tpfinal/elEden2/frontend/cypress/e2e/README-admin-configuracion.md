@@ -1,22 +1,38 @@
-# Admin - Configuracion (admin-configuracion.cy.js)
+# N.º referencia
+CP-09
 
-## Objetivo
-- Verificar actualizacion de configuracion y CRUD de objetivos.
+# Título
+Admin: Configuración y objetivos.
 
-## Precondiciones
-- Usuario admin valido.
+# Descripción
+Validar la actualización de configuración de pagos y el CRUD de objetivos desde la interfaz administrativa.
+
+# Pre-condición
+- Usuario admin válido.
 - Backend disponible.
 - BaseUrl de Cypress apuntando al frontend.
 
-## Pasos automatizados
-- Login por API y acceso a /configuracion.
-- Actualizar monto de sena.
-- Crear objetivo en catalogo.
-- Eliminar objetivo creado.
+# Referencias
+- CU: Configuración del sistema, Objetivos de diseño.
 
-## Datos
-- Objetivo con codigo y nombre unicos.
+# Dependencias
+Ninguna.
 
-## Variables
-- E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD (o E2E_EMAIL / E2E_PASSWORD)
-- API_BASE_URL (opcional, default http://localhost:8000/api/v1)
+# Pasos de prueba
+N° | Acción
+1 | Iniciar sesión por API con credenciales admin y acceder a /configuracion.
+2 | Actualizar el monto de seña.
+3 | Crear un objetivo en el catálogo con código y nombre únicos.
+4 | Eliminar el objetivo creado.
+
+# Supuestos
+El usuario admin tiene permisos para actualizar configuración.
+
+# Datos de prueba
+- Caso 1: Objetivo con código y nombre únicos.
+
+# Tipo de prueba
+Automatizada.
+
+# Resultado esperado de prueba
+- Caso 1: Se actualiza el monto de seña y el objetivo se crea/elimina correctamente.

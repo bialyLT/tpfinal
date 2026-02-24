@@ -7,7 +7,7 @@ const VerEncuestaModal = ({ show, onClose, encuesta }) => {
     const tipos = {
       'texto': 'Texto Libre',
       'numero': 'Número',
-      'escala': 'Escala (1-5)',
+      'escala': 'Escala (1-10)',
       'si_no': 'Sí/No',
       'multiple': 'Opción Múltiple'
     };
@@ -107,8 +107,8 @@ const VerEncuestaModal = ({ show, onClose, encuesta }) => {
 
                     {/* Vista previa del tipo de respuesta */}
                     {pregunta.tipo === 'escala' && (
-                      <div className="ml-11 mt-3 flex gap-2">
-                        {[1, 2, 3, 4, 5].map(num => (
+                      <div className="ml-11 mt-3 flex flex-wrap gap-2">
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
                           <div key={num} className="w-10 h-10 flex items-center justify-center bg-gray-600 text-gray-300 rounded-lg text-sm">
                             {num}
                           </div>

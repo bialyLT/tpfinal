@@ -666,6 +666,19 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
     }
   };
 
+  const handlePasteReservaIdFromClipboard = async (event) => {
+    event.preventDefault();
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        setSearchReservaInput(String(text).trim());
+        setSearchReservaError('');
+      }
+    } catch {
+      setSearchReservaError('No se pudo leer el portapapeles. Pegá el ID manualmente.');
+    }
+  };
+
   const removeImage = (index) => {
     const newImages = imagenesDiseno.filter((_, i) => i !== index);
     const newPreviews = previewImages.filter((_, i) => i !== index);
@@ -976,6 +989,23 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
   const selectedReservaForTitle = reserva || reservaBuscada || reservasConJardin.find(r => `${r.id_reserva}` === `${reservaSeleccionadaId}`);
   const computedReservaId = selectedReservaForTitle?.id_reserva || reservaSeleccionadaId || reservaId;
   const computedTitulo = (formData.descripcion_tecnica || '').trim().substring(0,100) || (computedReservaId ? `Diseño - Reserva #${computedReservaId}` : `Diseño - Servicio #${servicioId || 'N/A'}`);
+  const fechaFinFormateada = fechaFinMostrada ? formatLocalDateTime(fechaFinMostrada) : '';
+  const [fechaFinSoloFecha = '', fechaFinSoloHora = ''] = fechaFinFormateada ? fechaFinFormateada.split(' ') : ['', ''];
+  const descripcionCliente = (selectedReservaForTitle?.observaciones || '').trim();
+  const descripcionJardin = (selectedReservaForTitle?.jardin?.descripcion || '').trim();
+  const medidasZonasJardin = (selectedReservaForTitle?.jardin?.zonas || [])
+    .filter((zona) => zona?.ancho || zona?.largo)
+    .map((zona, index) => ({
+      nombre: zona?.nombre || `Zona ${zona?.id_zona || index + 1}`,
+      ancho: zona?.ancho,
+      largo: zona?.largo,
+    }));
+
+  const openReservaDetail = () => {
+    const targetReservaId = selectedReservaForTitle?.id_reserva || reservaSeleccionadaId || reservaId;
+    if (!targetReservaId) return;
+    window.open(`/servicios/reservas/${targetReservaId}`, '_blank', 'noopener,noreferrer');
+  };
 
   // Cleanup URLs when component unmounts
   useEffect(() => {
@@ -1024,6 +1054,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                         value={searchReservaInput}
                         onChange={(e) => setSearchReservaInput(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') { handleSearchReserva(); } }}
+                        onContextMenu={handlePasteReservaIdFromClipboard}
                         className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white w-full" />
                       <button
                         type="button"
@@ -1057,18 +1088,66 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                   </div>
                 )}
             
-              <div className="bg-gray-700 rounded-lg p-4">
-                <h3 className="text-white font-semibold mb-2">Seleccionar Reserva (con jardín)</h3>
-                <select value={reservaSeleccionadaId || ''} onChange={(e) => { setReservaSeleccionadaId(e.target.value); setReservaBuscada(null); setSearchReservaInput(''); setSearchReservaError(''); }} className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm">
-                  <option value="">Seleccionar reserva...</option>
-                  {reservasConJardin.map(r => (
-                    <option key={r.id_reserva} value={r.id_reserva}>#{r.id_reserva} - {r.cliente_nombre} - {r.servicio_nombre}</option>
-                  ))}
-                </select>
-              </div>
               </>
             )}
             
+            {computedReservaId && (
+              <div className="bg-gray-900 rounded-xl border border-gray-700 p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Reserva seleccionada</p>
+                    <p className="text-white font-semibold">#{computedReservaId}</p>
+                    {(selectedReservaForTitle?.cliente_nombre || selectedReservaForTitle?.servicio_nombre) && (
+                      <p className="text-sm text-gray-300 mt-1">
+                        {selectedReservaForTitle?.cliente_nombre ? `Cliente: ${selectedReservaForTitle.cliente_nombre}${selectedReservaForTitle?.cliente_apellido ? ` ${selectedReservaForTitle.cliente_apellido}` : ''}` : ''}
+                        {selectedReservaForTitle?.servicio_nombre ? ` · Servicio: ${selectedReservaForTitle.servicio_nombre}` : ''}
+                      </p>
+                    )}
+                    {selectedReservaForTitle?.fecha_reserva && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        Fecha: {new Date(selectedReservaForTitle.fecha_reserva).toLocaleString('es-AR')}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={openReservaDetail}
+                    className="inline-flex items-center px-3 py-2 text-sm font-medium rounded text-white bg-cyan-600 hover:bg-cyan-700"
+                  >
+                    Ver detalle de reserva
+                  </button>
+                </div>
+
+                {descripcionCliente && (
+                  <div className="mt-4 border-t border-gray-700 pt-3">
+                    <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">Descripción del cliente</p>
+                    <p className="text-sm text-gray-200 whitespace-pre-wrap">{descripcionCliente}</p>
+                  </div>
+                )}
+
+                {(descripcionJardin || medidasZonasJardin.length > 0) && (
+                  <div className="mt-4 border-t border-gray-700 pt-3">
+                    <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">Observaciones del jardín</p>
+                    {descripcionJardin && (
+                      <p className="text-sm text-gray-200 whitespace-pre-wrap mb-2">{descripcionJardin}</p>
+                    )}
+                    {medidasZonasJardin.length > 0 && (
+                      <div className="space-y-2">
+                        {medidasZonasJardin.map((zonaMedida) => (
+                          <div key={`${zonaMedida.nombre}-${zonaMedida.ancho}-${zonaMedida.largo}`} className="bg-gray-800/60 rounded p-2 border border-gray-700">
+                            <p className="text-xs text-gray-400">{zonaMedida.nombre}</p>
+                            <p className="text-sm text-gray-200">
+                              {zonaMedida.ancho || '--'}m x {zonaMedida.largo || '--'}m
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             
             {/* Preview del Título (según descripción o reserva) */}
             <div className="mb-2">
@@ -1391,7 +1470,7 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Fecha propuesta
+                  Fecha de inicio
                 </label>
                 <div className="bg-gray-800 p-2 rounded-md">
                   <div className="relative">
@@ -1408,21 +1487,55 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                 {fechasBloqueadas && fechasBloqueadas.length > 0 && (
                   <p className="text-xs text-gray-400 mt-1">Fechas no disponibles: {fechasBloqueadas.slice(0,5).join(', ')}{fechasBloqueadas.length > 5 ? '...' : ''}</p>
                 )}
+
+                <div className="mt-3">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Hora de inicio
+                  </label>
+                  <div className="bg-gray-800 p-2 rounded-md">
+                    <div className="relative">
+                      <input
+                        ref={fpTimeRef}
+                        type="text"
+                        readOnly
+                        placeholder="Seleccionar hora"
+                        className={`w-full px-3 py-2 bg-gray-700 rounded-md text-white focus:outline-none focus:ring-2 ${fechaError ? 'focus:ring-red-500' : 'focus:ring-green-500'}`}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Hora
+                  Fecha de finalización
                 </label>
                 <div className="bg-gray-800 p-2 rounded-md">
                   <div className="relative">
                     <input
-                      ref={fpTimeRef}
                       type="text"
                       readOnly
-                      placeholder="Seleccionar hora"
-                      className={`w-full px-3 py-2 bg-gray-700 rounded-md text-white focus:outline-none focus:ring-2 ${fechaError ? 'focus:ring-red-500' : 'focus:ring-green-500'}`}
+                      value={fechaFinSoloFecha}
+                      placeholder="Se calculará automáticamente"
+                      className="w-full px-3 py-2 bg-gray-700 rounded-md text-white"
                     />
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Hora de finalización
+                  </label>
+                  <div className="bg-gray-800 p-2 rounded-md">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        readOnly
+                        value={fechaFinSoloHora}
+                        placeholder="Se calculará automáticamente"
+                        className="w-full px-3 py-2 bg-gray-700 rounded-md text-white"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -1430,9 +1543,6 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
                   <div>Duración estimada: <span className="text-white font-semibold">{totalHorasTrabajo}h</span></div>
                   {fechaInicioNormalizada && (
                     <div className="mt-2 flex flex-col gap-2">
-                      <div>
-                        Finaliza: <span className="text-white font-semibold">{formatLocalDateTime(fechaFinMostrada)}</span>
-                      </div>
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"

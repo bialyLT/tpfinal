@@ -59,6 +59,9 @@ const MiPerfil = () => {
   const paisDisplay = addressInfo?.pais || selectedLocalidad?.pais || user?.persona?.localidad?.pais || '';
   const cpDisplay = addressInfo?.codigo_postal || selectedLocalidad?.cp || user?.persona?.localidad?.cp || '';
   const isEmpleado = user?.groups?.includes('Empleados');
+  const employeeScoreAverage = Number(user?.empleado?.puntuacion_promedio || 0);
+  const employeeScoreCount = Number(user?.empleado?.puntuacion_cantidad || 0);
+  const employeeLastScoreAt = user?.empleado?.fecha_ultima_puntuacion || null;
 
   const formatImpactDate = (value) => {
     if (!value) return '-';
@@ -719,6 +722,25 @@ const MiPerfil = () => {
                       <RefreshCw className={`w-4 h-4 mr-2 ${impactLoading ? 'animate-spin' : ''}`} />
                       Actualizar
                     </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div className="bg-gray-900/60 border border-gray-700 rounded-lg p-4">
+                    <p className="text-xs uppercase text-gray-500 mb-1">Calificación promedio</p>
+                    <p className="text-2xl font-bold text-emerald-400">
+                      {employeeScoreCount > 0 ? employeeScoreAverage.toFixed(2) : '—'}
+                    </p>
+                  </div>
+                  <div className="bg-gray-900/60 border border-gray-700 rounded-lg p-4">
+                    <p className="text-xs uppercase text-gray-500 mb-1">Evaluaciones consideradas</p>
+                    <p className="text-2xl font-bold text-white">{employeeScoreCount}</p>
+                  </div>
+                  <div className="bg-gray-900/60 border border-gray-700 rounded-lg p-4">
+                    <p className="text-xs uppercase text-gray-500 mb-1">Última actualización</p>
+                    <p className="text-sm font-medium text-gray-200">
+                      {employeeLastScoreAt ? formatImpactDate(employeeLastScoreAt) : 'Sin actualizaciones'}
+                    </p>
                   </div>
                 </div>
 

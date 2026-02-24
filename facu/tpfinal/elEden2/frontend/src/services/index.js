@@ -154,8 +154,16 @@ export const serviciosService = {
   },
 
   upsertJardin: async (reservaId, data) => {
-    // If there are per-zone images attached, construct a FormData
-    if (data && data.zonas && data.zonas.some(z => z.imagenes && z.imagenes.length > 0)) {
+    // If there are NEW per-zone images (with file) attached, construct a FormData
+    const hasNewZoneFiles = !!(
+      data
+      && data.zonas
+      && data.zonas.some(
+        z => (z.imagenes || []).some(imgObj => !!imgObj?.file)
+      )
+    );
+
+    if (hasNewZoneFiles) {
       const formData = new FormData();
       // Non-file fields
       Object.keys(data).forEach((key) => {
@@ -167,12 +175,13 @@ export const serviciosService = {
       formData.append('zonas', JSON.stringify(data.zonas.map(z => ({ nombre: z.nombre, ancho: z.ancho, largo: z.largo, forma: z.forma, notas: z.notas }))));
       // Append per-zone files and descriptions
       data.zonas.forEach((z, idx) => {
-        if (z.imagenes && z.imagenes.length > 0) {
-          z.imagenes.forEach(imgObj => {
+        const nuevasImagenes = (z.imagenes || []).filter((imgObj) => !!imgObj?.file);
+        if (nuevasImagenes.length > 0) {
+          nuevasImagenes.forEach(imgObj => {
             formData.append(`imagenes_zona_${idx}`, imgObj.file);
           });
           // Descriptions for the zone images (optional)
-          const descripciones = z.imagenes.map(imgObj => imgObj.descripcion || '');
+          const descripciones = nuevasImagenes.map(imgObj => imgObj.descripcion || '');
           formData.append(`descripciones_zona_${idx}`, JSON.stringify(descripciones));
         }
       });
@@ -372,6 +381,16 @@ export const serviciosService = {
 export const encuestasService = {
   getEncuestas: async (params = {}) => {
     const response = await api.get('/encuestas/encuestas/', { params });
+    return response.data;
+  },
+
+  getEncuestaRespuestas: async (params = {}) => {
+    const response = await api.get('/encuestas/encuestas-respuestas/', { params });
+    return response.data;
+  },
+
+  getRespuestas: async (params = {}) => {
+    const response = await api.get('/encuestas/respuestas/', { params });
     return response.data;
   },
   

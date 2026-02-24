@@ -458,7 +458,47 @@ const ReservaDetallePage = () => {
     return estados[estado] || estado;
   };
 
+  const parseDateValue = (value) => {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    const direct = new Date(value);
+    if (!Number.isNaN(direct.getTime())) return direct;
+    const parts = String(value).split('-');
+    if (parts.length < 3) return null;
+    const [year, month, day] = parts.map((part) => Number(part));
+    if (!year || !month || !day) return null;
+    return new Date(year, month - 1, day);
+  };
+
+  const buildDateTime = (dateValue, timeValue) => {
+    const base = parseDateValue(dateValue);
+    if (!base) return null;
+    if (timeValue) {
+      const [h = '0', m = '0', s = '0'] = String(timeValue).split(':');
+      base.setHours(Number(h), Number(m), Number(s));
+    }
+    return base;
+  };
+
+  const formatDateTime = (value) => {
+    const date = parseDateValue(value);
+    if (!date) return 'N/A';
+    return date.toLocaleString('es-AR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  };
+
   const placeholderImage = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiBmaWxsPSIjNEY0RjRGIi8+CjxwYXRoIGQ9Ik0zMCA1MEw0NSA2NUw3MCAzNUw5MCA2NVY4NUgxMFY2NUwzMCA1MFoiIGZpbGw9IiM2MzYzNjMiLz4KPGNpcmNsZSBjeD0iMzUiIGN5PSIzNSIgcj0iNSIgZmlsbD0iIzYzNjM2MyIvPgo8L3N2Zz4K';
+
+  const plannedStart = buildDateTime(diseno?.fecha_inicio, diseno?.hora_inicio)
+    || (diseno?.fecha_propuesta ? new Date(diseno.fecha_propuesta) : null);
+  const plannedEnd = buildDateTime(diseno?.fecha_fin, diseno?.hora_fin);
+  const showPlannedSchedule = !reserva?.fecha_finalizacion && (plannedStart || plannedEnd);
 
   const puedeMostrarEncuesta = isCliente && reserva?.estado === 'completada' && surveyState.encuesta && !surveyState.completada;
 
@@ -653,6 +693,24 @@ const ReservaDetallePage = () => {
                     </div>
                   )}
 
+                  {showPlannedSchedule && plannedStart && (
+                    <div className="flex items-center space-x-2">
+                      <Calendar className="w-4 h-4 text-gray-400" />
+                      <span className="text-gray-300">
+                        Inicio estimado: {formatDateTime(plannedStart)}
+                      </span>
+                    </div>
+                  )}
+
+                  {showPlannedSchedule && plannedEnd && (
+                    <div className="flex items-center space-x-2">
+                      <Calendar className="w-4 h-4 text-gray-400" />
+                      <span className="text-gray-300">
+                        Finalización estimada: {formatDateTime(plannedEnd)}
+                      </span>
+                    </div>
+                  )}
+
                   {reserva.fecha_finalizacion && (
                     <div className="flex items-center space-x-2">
                       <Calendar className="w-4 h-4 text-gray-400" />
@@ -709,8 +767,11 @@ const ReservaDetallePage = () => {
                           <div className="flex-1">
                             {zona.imagenes && zona.imagenes.length > 0 ? (
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {zona.imagenes.map((img) => (
-                                  <div key={img.id_imagen_zona} className="bg-gray-800 rounded-lg overflow-hidden">
+                                {zona.imagenes.map((img, index) => (
+                                  <div
+                                    key={`${zona.id_zona}-${img.id_imagen_zona || img.id_imagen_reserva || img.imagen_url || img.imagen || 'img'}-${index}`}
+                                    className="bg-gray-800 rounded-lg overflow-hidden"
+                                  >
                                     <img
                                       src={img.imagen_url || img.imagen}
                                       alt={img.descripcion || `Imagen Zona ${zona.nombre || zona.id_zona}`}

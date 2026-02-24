@@ -115,6 +115,70 @@ const DashboardPage = () => {
     return numeric.toFixed(1);
   };
 
+  const getRiskLevel = (weather) => {
+    const probability = Number(weather?.precipitation_probability);
+    const precipitation = Number(weather?.precipitation_sum_mm);
+
+    const hasProbability = !Number.isNaN(probability);
+    const hasPrecipitation = !Number.isNaN(precipitation);
+
+    if ((hasProbability && probability >= 70) || (hasPrecipitation && precipitation >= 10)) {
+      return { label: 'Alto', className: 'bg-red-900 text-red-300 border-red-700' };
+    }
+
+    if ((hasProbability && probability >= 40) || (hasPrecipitation && precipitation >= 3)) {
+      return { label: 'Medio', className: 'bg-yellow-900 text-yellow-300 border-yellow-700' };
+    }
+
+    return { label: 'Bajo', className: 'bg-emerald-900 text-emerald-300 border-emerald-700' };
+  };
+
+  const toDateKey = (value) => {
+    const date = parseDateValue(value);
+    if (!date) return null;
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const buildReservedDateForecast = (forecast) => {
+    const forecastByDate = new Map(
+      (forecast?.forecast || [])
+        .map((day) => {
+          const key = toDateKey(day?.date);
+          return key ? [key, day] : null;
+        })
+        .filter(Boolean)
+    );
+
+    const grouped = new Map();
+
+    (forecast?.reservas || []).forEach((reserva) => {
+      const key = toDateKey(reserva?.fecha_reserva);
+      if (!key) return;
+
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          dateKey: key,
+          displayDate: reserva?.fecha_reserva,
+          weather: forecastByDate.get(key) || null,
+          reservas: []
+        });
+      }
+
+      grouped.get(key).reservas.push(reserva);
+    });
+
+    return Array.from(grouped.values())
+      .filter((item) => !!item.weather)
+      .sort((a, b) => {
+        const left = parseDateValue(a.dateKey)?.getTime() || 0;
+        const right = parseDateValue(b.dateKey)?.getTime() || 0;
+        return left - right;
+      });
+  };
+
   const resolveSuggestedDatetime = (alerta) => {
     if (!alerta) return formatDatetimeLocal(new Date().toISOString());
     const candidate = alerta?.reserva_detalle?.fecha_reprogramada_sugerida
@@ -415,7 +479,7 @@ const DashboardPage = () => {
                   <MapPin className="w-6 h-6 text-emerald-400" />
                   <div>
                     <h2 className="text-lg font-semibold text-white">Pronóstico por ciudad</h2>
-                    <p className="text-sm text-gray-400">Temperatura y probabilidad de lluvia para los próximos 7 días</p>
+                    <p className="text-sm text-gray-400">Clima solo en fechas con reservas asociadas</p>
                   </div>
                 </div>
                 <button
@@ -441,6 +505,11 @@ const DashboardPage = () => {
                         key={forecast?.localidad?.id || `${forecast.display_name}-${forecast.latitude}-${forecast.longitude}`}
                         className="bg-gray-800 rounded-lg p-5 shadow-lg border border-gray-700"
                       >
+                        {(() => {
+                          const reservedDateForecast = buildReservedDateForecast(forecast);
+
+                          return (
+                            <>
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-sm text-gray-400">Localidad</p>
@@ -456,44 +525,46 @@ const DashboardPage = () => {
                         </div>
 
                         <div className="mt-4">
-                          <p className="text-sm text-gray-400 mb-2">Próximas reservas</p>
-                          {forecast.reservas && forecast.reservas.length > 0 ? (
-                            <div className="flex flex-wrap gap-2">
-                              {forecast.reservas.map((reserva) => (
-                                <span key={reserva.id_reserva} className="text-xs bg-gray-700 text-gray-200 px-3 py-1 rounded-full">
-                                  #{reserva.id_reserva} · {formatDateForDisplay(reserva.fecha_reserva)}
-                                </span>
+                          <p className="text-sm text-gray-400 mb-2">Clima en fechas con reservas</p>
+                          {reservedDateForecast.length > 0 ? (
+                            <ul className="divide-y divide-gray-700 rounded-md border border-gray-700 bg-gray-900/40">
+                              {reservedDateForecast.map((item) => (
+                                <li key={`${forecast.display_name}-${item.dateKey}`} className="p-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-sm text-white font-medium">{formatForecastDate(item.dateKey)}</p>
+                                      <span className={`text-[11px] px-2 py-0.5 rounded-full border ${getRiskLevel(item.weather).className}`}>
+                                        Riesgo {getRiskLevel(item.weather).label}
+                                      </span>
+                                    </div>
+                                    <div className="mt-1 flex flex-wrap gap-2">
+                                      {item.reservas.map((reserva) => (
+                                        <span key={reserva.id_reserva} className="text-xs bg-gray-700 text-gray-200 px-2 py-1 rounded-full">
+                                          #{reserva.id_reserva}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <div className="text-xs text-gray-300 md:text-right">
+                                    <p>
+                                      Máx {item.weather?.temperature_max !== null && item.weather?.temperature_max !== undefined ? `${Math.round(item.weather.temperature_max)}°` : '--'} ·
+                                      Mín {item.weather?.temperature_min !== null && item.weather?.temperature_min !== undefined ? `${Math.round(item.weather.temperature_min)}°` : '--'}
+                                    </p>
+                                    <p>
+                                      Prob. lluvia {item.weather?.precipitation_probability !== null && item.weather?.precipitation_probability !== undefined ? `${item.weather.precipitation_probability}%` : '--'} ·
+                                      Lluvia {formatPrecipValue(item.weather?.precipitation_sum_mm)} mm
+                                    </p>
+                                  </div>
+                                </li>
                               ))}
-                            </div>
+                            </ul>
                           ) : (
-                            <p className="text-xs text-gray-500">Sin reservas activas en la ventana seleccionada.</p>
+                            <p className="text-xs text-gray-500">No hay coincidencias entre reservas y fechas de pronóstico.</p>
                           )}
                         </div>
-
-                        <div className="mt-4 overflow-x-auto">
-                          <table className="w-full text-xs text-gray-400">
-                            <thead>
-                              <tr className="text-gray-500">
-                                <th className="py-2 text-left">Fecha</th>
-                                <th className="py-2 text-right">Temp Máx</th>
-                                <th className="py-2 text-right">Temp Mín</th>
-                                <th className="py-2 text-right">Prob. Lluvia</th>
-                                <th className="py-2 text-right">Lluvia (mm)</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {(forecast.forecast || []).map((day) => (
-                                <tr key={`${forecast.display_name}-${day.date}`} className="border-t border-gray-700">
-                                  <td className="py-2 text-white">{formatForecastDate(day.date)}</td>
-                                  <td className="py-2 text-right text-gray-100">{day.temperature_max !== null && day.temperature_max !== undefined ? `${Math.round(day.temperature_max)}°` : '--'}</td>
-                                  <td className="py-2 text-right text-gray-100">{day.temperature_min !== null && day.temperature_min !== undefined ? `${Math.round(day.temperature_min)}°` : '--'}</td>
-                                  <td className="py-2 text-right">{day.precipitation_probability !== null && day.precipitation_probability !== undefined ? `${day.precipitation_probability}%` : '--'}</td>
-                                  <td className="py-2 text-right">{formatPrecipValue(day.precipitation_sum_mm)}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
+                            </>
+                          );
+                        })()}
                       </div>
                     ))}
                   </div>

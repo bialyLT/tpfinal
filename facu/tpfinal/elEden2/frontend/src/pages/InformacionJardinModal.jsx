@@ -58,22 +58,46 @@ const InformacionJardinModal = ({ reserva, isOpen, onClose, onJardinSaved }) => 
   const handleRemove = (i) => setZonas(prev => prev.filter((_, idx) => idx !== i));
 
   const handleAddImagen = (zi, file) => {
-    setZonas(prev => {
-      const next = [...prev];
-      const zone = next[zi];
-      if (!zone.imagenes) zone.imagenes = [];
-      if (zone.imagenes.length >= 3) return next; // limit
-      zone.imagenes = [...zone.imagenes, { file, preview: URL.createObjectURL(file), descripcion: '' }];
-      return next;
-    });
+    if (!file) return;
+    setZonas((prev) =>
+      prev.map((zona, idx) => {
+        if (idx !== zi) return zona;
+
+        const imagenesActuales = Array.isArray(zona.imagenes) ? zona.imagenes : [];
+        if (imagenesActuales.length >= 3) return zona; // limit
+
+        const yaExiste = imagenesActuales.some((img) => {
+          const existing = img?.file;
+          if (!existing) return false;
+          return (
+            existing.name === file.name
+            && existing.size === file.size
+            && existing.lastModified === file.lastModified
+          );
+        });
+        if (yaExiste) return zona;
+
+        return {
+          ...zona,
+          imagenes: [
+            ...imagenesActuales,
+            { file, preview: URL.createObjectURL(file), descripcion: '' }
+          ]
+        };
+      })
+    );
   };
 
   const handleRemoveImagen = (zi, idx) => {
-    setZonas(prev => {
-      const next = [...prev];
-      next[zi].imagenes = next[zi].imagenes.filter((_, i) => i !== idx);
-      return next;
-    });
+    setZonas((prev) =>
+      prev.map((zona, zoneIndex) => {
+        if (zoneIndex !== zi) return zona;
+        return {
+          ...zona,
+          imagenes: (zona.imagenes || []).filter((_, imageIndex) => imageIndex !== idx)
+        };
+      })
+    );
   };
 
   const handleSave = async () => {
@@ -165,6 +189,7 @@ const InformacionJardinModal = ({ reserva, isOpen, onClose, onJardinSaved }) => 
                               const file = e.target.files[0];
                               if (!file) return;
                               handleAddImagen(zi, file);
+                              e.target.value = '';
                             }} />
                             <span className="text-xs text-gray-300">+ Foto</span>
                           </label>

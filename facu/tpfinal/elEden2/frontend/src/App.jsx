@@ -1,4 +1,5 @@
 import { BrowserRouter, HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { Menu } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -15,13 +16,11 @@ import LoginPage from './pages/registro/LoginPage';
 import RegisterPage from './pages/registro/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import ProductosPage from './pages/ProductosPage';
-import ServiciosPage from './pages/ServiciosPage';
 import EncuestasPage from './pages/EncuestasPage';
 import GestionEncuestasPage from './pages/GestionEncuestasPage';
 import EmpleadosPage from './pages/EmpleadosPage';
 import SolicitarServicioPage from './pages/SolicitarServicioPage';
 import MiPerfil from './pages/MiPerfil';
-import DisenosPage from './pages/DisenosPage';
 import MisDisenosPage from './pages/MisDisenosPage';
 import PagoExitoso from './pages/reservas/PagoExitoso';
 // ❌ DEPRECADO - Ya no se usa
@@ -36,6 +35,9 @@ import ProveedoresPage from './pages/ProveedoresPage';
 import AuditLogPage from './pages/AuditLogPage';
 import EstadisticasPage from './pages/EstadisticasPage';
 import ConfiguracionesPage from './pages/ConfiguracionesPage';
+
+const ServiciosPage = lazy(() => import('./pages/ServiciosPage'));
+const DisenosPage = lazy(() => import('./pages/DisenosPage'));
 
 // Basic Protected Route Component (solo requiere autenticación)
 const BasicProtectedRoute = ({ children }) => {
@@ -256,7 +258,9 @@ function App() {
               path="/servicios" 
               element={
                 <ProtectedRoute allowedRoles={['empleado', 'diseñador', 'administrador']}>
-                  <ServiciosPage />
+                  <Suspense fallback={<Loading message="Cargando servicios..." />}>
+                    <ServiciosPage />
+                  </Suspense>
                 </ProtectedRoute>
               } 
             />
@@ -370,7 +374,9 @@ function App() {
               path="/mis-servicios" 
               element={
                 <ProtectedRoute allowedRoles={['cliente']}>
-                  <ServiciosPage />
+                  <Suspense fallback={<Loading message="Cargando servicios..." />}>
+                    <ServiciosPage />
+                  </Suspense>
                 </ProtectedRoute>
               } 
             />
@@ -390,7 +396,9 @@ function App() {
               path="/disenos" 
               element={
                 <ProtectedRoute allowedRoles={['empleado', 'diseñador', 'administrador']}>
-                  <DisenosPage />
+                  <Suspense fallback={<Loading message="Cargando diseños..." />}>
+                    <DisenosPage />
+                  </Suspense>
                 </ProtectedRoute>
               } 
             />

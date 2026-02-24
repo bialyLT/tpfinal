@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { encuestasService } from '../services';
 import { useAuth } from '../context/AuthContext';
 import { handleApiError } from '../utils/notifications';
+import jsPDF from 'jspdf';
 import { 
   ClipboardDocumentListIcon, 
   FunnelIcon, 
@@ -19,6 +20,10 @@ const EncuestasPage = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [responsesModal, setResponsesModal] = useState({ open: false, encuesta: null });
+  const [responsesLoading, setResponsesLoading] = useState(false);
+  const [responsesError, setResponsesError] = useState('');
+  const [responsesList, setResponsesList] = useState([]);
   const { user } = useAuth();
 
   const isAdmin = user?.groups?.includes('Administradores');
@@ -86,6 +91,130 @@ const EncuestasPage = () => {
     const matchesStatus = !statusFilter || encuesta.estado === statusFilter;
     return matchesSearch && matchesStatus;
   });
+  const resolveEncuestaId = (encuesta) => encuesta?.id_encuesta ?? encuesta?.id;
+
+  const buildResponseRows = (encuestaRespuestas, respuestasById) => encuestaRespuestas.map((item) => {
+    const respuestas = respuestasById.get(item.id_encuesta_respuesta) || [];
+    const valores = respuestas
+      .map((respuesta) => Number(respuesta?.valor_numerico))
+      .filter((valor) => Number.isFinite(valor));
+    const promedio = valores.length > 0
+      ? valores.reduce((acc, v) => acc + v, 0) / valores.length
+      : null;
+    return {
+      id: item.id_encuesta_respuesta,
+      cliente: `${item.cliente_nombre || ''} ${item.cliente_apellido || ''}`.trim() || 'Cliente',
+      fecha: item.fecha_realizacion || item.fecha_creacion || item.fecha_envio || null,
+      promedio,
+      valores,
+    };
+  });
+
+  const handleOpenResponses = async (encuesta) => {
+    const encuestaId = resolveEncuestaId(encuesta);
+    if (!encuestaId) return;
+
+    setResponsesModal({ open: true, encuesta });
+    setResponsesLoading(true);
+    setResponsesError('');
+    setResponsesList([]);
+
+    try {
+      const encuestasRespuestasData = await encuestasService.getEncuestaRespuestas({
+        encuesta: encuestaId,
+        estado: 'completada',
+      });
+      const encuestasRespuestas = Array.isArray(encuestasRespuestasData.results)
+        ? encuestasRespuestasData.results
+        : Array.isArray(encuestasRespuestasData)
+          ? encuestasRespuestasData
+          : [];
+
+      const respuestasById = new Map();
+      for (const respuestaItem of encuestasRespuestas) {
+        const respuestaData = await encuestasService.getRespuestas({
+          encuesta_respuesta: respuestaItem.id_encuesta_respuesta,
+        });
+        const respuestas = Array.isArray(respuestaData.results)
+          ? respuestaData.results
+          : Array.isArray(respuestaData)
+            ? respuestaData
+            : [];
+        respuestasById.set(respuestaItem.id_encuesta_respuesta, respuestas);
+      }
+
+      setResponsesList(buildResponseRows(encuestasRespuestas, respuestasById));
+    } catch (error) {
+      console.error('Error al cargar respuestas de encuesta', error);
+      setResponsesError('No se pudieron cargar las respuestas.');
+    } finally {
+      setResponsesLoading(false);
+    }
+  };
+
+  const handleCloseResponses = () => {
+    if (!responsesLoading) {
+      setResponsesModal({ open: false, encuesta: null });
+      setResponsesError('');
+      setResponsesList([]);
+    }
+  };
+
+  const exportRespuestasPDF = () => {
+    if (!responsesModal.encuesta) return;
+    const encuestaTitle = responsesModal.encuesta.titulo || `Encuesta #${resolveEncuestaId(responsesModal.encuesta)}`;
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+
+    let y = 40;
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFontSize(14);
+    pdf.text(`Calificaciones - ${encuestaTitle}`, 40, y);
+    y += 18;
+    pdf.setFontSize(10);
+    pdf.text(`Generado: ${new Date().toLocaleString('es-AR')}`, 40, y);
+    y += 16;
+
+    const renderHeader = () => {
+      pdf.setFontSize(10);
+      pdf.text('Cliente', 40, y);
+      pdf.text('Fecha', 260, y);
+      pdf.text('Promedio', 420, y);
+      y += 8;
+      pdf.setDrawColor(200);
+      pdf.line(40, y, pageWidth - 40, y);
+      y += 10;
+    };
+
+    renderHeader();
+
+    responsesList.forEach((row) => {
+      if (y > pageHeight - 60) {
+        pdf.addPage();
+        y = 40;
+        renderHeader();
+      }
+      const fecha = row.fecha ? new Date(row.fecha).toLocaleDateString('es-AR') : '—';
+      const promedio = row.promedio == null ? '—' : row.promedio.toFixed(2);
+      pdf.setFontSize(10);
+      pdf.text(row.cliente || 'Cliente', 40, y);
+      pdf.text(fecha, 260, y);
+      pdf.text(promedio, 420, y);
+      y += 18;
+    });
+
+    const totalPages = pdf.getNumberOfPages();
+    pdf.setFontSize(9);
+    for (let page = 1; page <= totalPages; page += 1) {
+      pdf.setPage(page);
+      pdf.text(`Página ${page} de ${totalPages}`, pageWidth - 40, pageHeight - 20, { align: 'right' });
+    }
+
+    pdf.save(`reporte-financiero-estadistico-calificaciones-${timestamp}.pdf`);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -262,9 +391,16 @@ const EncuestasPage = () => {
                           </div>
                         )}
 
-                        <button className="p-2 text-gray-400 hover:text-white hover:bg-gray-600 rounded-lg transition-colors">
-                          <EyeIcon className="w-5 h-5" />
-                        </button>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenResponses(encuesta)}
+                            className="px-3 py-2 text-sm text-white bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors flex items-center gap-2"
+                          >
+                            <EyeIcon className="w-5 h-5" />
+                            Ver respuestas
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -281,6 +417,73 @@ const EncuestasPage = () => {
           </div>
         </div>
       </div>
+
+      {responsesModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+              <div>
+                <h2 className="text-lg font-bold text-white">Respuestas de encuesta</h2>
+                <p className="text-sm text-gray-400">
+                  {responsesModal.encuesta?.titulo || `Encuesta #${resolveEncuestaId(responsesModal.encuesta)}`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseResponses}
+                className="text-sm text-gray-300 hover:text-white"
+                disabled={responsesLoading}
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[65vh]">
+              {responsesLoading ? (
+                <p className="text-gray-300">Cargando respuestas...</p>
+              ) : responsesError ? (
+                <p className="text-red-300">{responsesError}</p>
+              ) : responsesList.length === 0 ? (
+                <p className="text-gray-400">No hay respuestas completadas para esta encuesta.</p>
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 text-xs uppercase tracking-wide text-gray-400 border-b border-gray-700 pb-2">
+                    <span>Cliente</span>
+                    <span>Fecha</span>
+                    <span className="text-right">Promedio</span>
+                  </div>
+                  {responsesList.map((row) => (
+                    <div key={row.id} className="grid grid-cols-3 items-center text-sm text-gray-200 border-b border-gray-800 py-2">
+                      <span>{row.cliente}</span>
+                      <span>{row.fecha ? new Date(row.fecha).toLocaleDateString('es-AR') : '—'}</span>
+                      <span className="text-right">{row.promedio == null ? '—' : row.promedio.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2 px-6 py-4 border-t border-gray-700">
+              <button
+                type="button"
+                onClick={handleCloseResponses}
+                className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
+                disabled={responsesLoading}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={exportRespuestasPDF}
+                className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-400 disabled:opacity-50"
+                disabled={responsesLoading || responsesList.length === 0}
+              >
+                Exportar PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

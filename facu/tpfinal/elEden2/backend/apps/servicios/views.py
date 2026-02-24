@@ -651,6 +651,22 @@ class ReservaViewSet(viewsets.ModelViewSet):
         except Jardin.DoesNotExist:
             jardin = None
 
+        # Mantener respaldo de imágenes por índice de zona para no perderlas
+        # cuando se actualiza el jardín sin subir nuevas imágenes en una zona.
+        imagenes_previas_por_zona = []
+        if jardin is not None:
+            zonas_previas = list(jardin.zonas.order_by("id_zona").prefetch_related("imagenes"))
+            for zona_previa in zonas_previas:
+                imagenes_previas_por_zona.append(
+                    [
+                        {
+                            "imagen": imagen_previa.imagen,
+                            "descripcion": imagen_previa.descripcion,
+                        }
+                        for imagen_previa in zona_previa.imagenes.order_by("id_imagen_zona")
+                    ]
+                )
+
         if request.method == "GET":
             if jardin is None:
                 return Response(
@@ -661,7 +677,25 @@ class ReservaViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
 
         # Crear o actualizar
-        data = request.data.copy()
+        # En multipart/form-data, `zonas` llega como string JSON y debe parsearse
+        # antes de validar el serializer, si no `validated_data` queda sin zonas.
+        import json
+
+        data = {}
+        for key in request.data.keys():
+            if key == "zonas":
+                continue
+            data[key] = request.data.get(key)
+
+        zonas_raw = request.data.get("zonas")
+        if isinstance(zonas_raw, str):
+            try:
+                data["zonas"] = json.loads(zonas_raw)
+            except json.JSONDecodeError:
+                data["zonas"] = []
+        elif zonas_raw is not None:
+            data["zonas"] = zonas_raw
+
         data["reserva"] = reserva.id_reserva
         # Extract zone images payloads from request.FILES (if present)
         # Expect files grouped by key like 'imagenes_zona_0', 'imagenes_zona_1', etc.
@@ -675,7 +709,6 @@ class ReservaViewSet(viewsets.ModelViewSet):
                 except ValueError:
                     continue
         # Descripciones pueden venir como JSON arrays por zona con clave 'descripciones_zona_{i}'
-        import json
 
         for k, v in request.data.items():
             if k.startswith("descripciones_zona_"):
@@ -703,22 +736,29 @@ class ReservaViewSet(viewsets.ModelViewSet):
             # Map by index: zones in saved_zonas assumed to be in the input order
             for idx, zona_obj in enumerate(saved_zonas):
                 files = imagenes_por_zona.get(idx, [])
-                if not files:
-                    continue
-                # Limit to 3 files per requirements
-                files = files[:3]
                 descripciones = descripciones_por_zona.get(idx, [])
                 from .models import ImagenZona
 
-                # Remove existing zone images if any (we'll re-create to replace)
-                zona_obj.imagenes.all().delete()
-                for file_idx, file in enumerate(files):
-                    descripcion = descripciones[file_idx] if file_idx < len(descripciones) else ""
-                    ImagenZona.objects.create(
-                        zona=zona_obj,
-                        imagen=file,
-                        descripcion=descripcion,
-                    )
+                if files:
+                    # Si llegan nuevas imágenes para la zona, reemplazar por el nuevo set
+                    files = files[:3]
+                    zona_obj.imagenes.all().delete()
+                    for file_idx, file in enumerate(files):
+                        descripcion = descripciones[file_idx] if file_idx < len(descripciones) else ""
+                        ImagenZona.objects.create(
+                            zona=zona_obj,
+                            imagen=file,
+                            descripcion=descripcion,
+                        )
+                else:
+                    # Si no llegaron nuevas imágenes, restaurar las previas por índice
+                    imagenes_previas = imagenes_previas_por_zona[idx] if idx < len(imagenes_previas_por_zona) else []
+                    for imagen_previa in imagenes_previas[:3]:
+                        ImagenZona.objects.create(
+                            zona=zona_obj,
+                            imagen=imagen_previa["imagen"],
+                            descripcion=imagen_previa.get("descripcion", "") or "",
+                        )
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
             logger.error(f"Error al crear/actualizar jardín: {str(e)}")

@@ -1,24 +1,40 @@
-# Admin - Compras (admin-compras.cy.js)
+# N.º referencia
+CP-10
 
-## Objetivo
-- Verificar alta y baja de compras desde la UI.
+# Título
+Admin: Alta y baja de compras.
 
-## Precondiciones
-- Usuario admin valido.
+# Descripción
+Validar la creación y eliminación de compras desde la interfaz administrativa.
+
+# Pre-condición
+- Usuario admin válido.
 - Backend disponible.
 - BaseUrl de Cypress apuntando al frontend.
 
-## Pasos automatizados
-- Login por API.
-- Crear categoria, marca, tarea y proveedor por API.
-- Crear producto desde la UI.
-- Crear compra desde la UI.
-- Eliminar compra.
-- Limpiar datos auxiliares (API).
+# Referencias
+- CU: Gestión de compras.
 
-## Datos
-- Proveedor y producto con nombres unicos.
+# Dependencias
+- Categoría, marca, tarea, proveedor y producto deben existir.
 
-## Variables
-- E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD (o E2E_EMAIL / E2E_PASSWORD)
-- API_BASE_URL (opcional, default http://localhost:8000/api/v1)
+# Pasos de prueba
+N° | Acción
+1 | Iniciar sesión por API con credenciales admin.
+2 | Crear categoría, marca, tarea y proveedor por API.
+3 | Crear producto desde la UI.
+4 | Crear compra desde la UI.
+5 | Eliminar la compra creada.
+6 | Limpiar datos auxiliares por API.
+
+# Supuestos
+La compra actualiza stock y totales correctamente.
+
+# Datos de prueba
+- Caso 1: Proveedor y producto con nombres únicos.
+
+# Tipo de prueba
+Automatizada.
+
+# Resultado esperado de prueba
+- Caso 1: La compra se crea y se elimina correctamente; los datos auxiliares se limpian.

@@ -1,22 +1,38 @@
-# Admin - Categorias (admin-categorias.cy.js)
+# N.º referencia
+CP-11
 
-## Objetivo
-- Verificar el CRUD de categorias desde la UI.
+# Título
+Admin: CRUD de categorías.
 
-## Precondiciones
-- Usuario admin valido.
+# Descripción
+Validar la creación, edición y eliminación de categorías desde la interfaz administrativa.
+
+# Pre-condición
+- Usuario admin válido.
 - Backend disponible.
 - BaseUrl de Cypress apuntando al frontend.
 
-## Pasos automatizados
-- Login por API y acceso a /categorias.
-- Crear categoria.
-- Editar categoria.
-- Eliminar categoria.
+# Referencias
+- CU: Gestión de categorías.
 
-## Datos
-- Categoria con nombre unico basado en timestamp.
+# Dependencias
+Ninguna.
 
-## Variables
-- E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD (o E2E_EMAIL / E2E_PASSWORD)
-- API_BASE_URL (opcional, default http://localhost:8000/api/v1)
+# Pasos de prueba
+N° | Acción
+1 | Iniciar sesión por API con credenciales admin y acceder a /categorias.
+2 | Crear una categoría con nombre único.
+3 | Editar la categoría creada.
+4 | Eliminar la categoría creada.
+
+# Supuestos
+El backend valida nombres únicos para categorías.
+
+# Datos de prueba
+- Caso 1: Categoría con nombre único basado en timestamp.
+
+# Tipo de prueba
+Automatizada.
+
+# Resultado esperado de prueba
+- Caso 1: La categoría se crea, edita y elimina correctamente.

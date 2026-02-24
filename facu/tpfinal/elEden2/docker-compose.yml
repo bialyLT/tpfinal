@@ -43,7 +43,7 @@ services:
     volumes:
       - ./backend:/app
       - backend_static:/app/static
-      - backend_media:/app/media
+      - ./backend/media:/app/media
     ports:
       - "8000:8000"
     environment:
@@ -112,4 +112,3 @@ volumes:
       device: ${PWD}/postgres_data
       o: bind
   backend_static:
-  backend_media:

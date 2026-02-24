@@ -662,25 +662,33 @@ const ProductosPage = () => {
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       Tareas (opcionales)
                     </label>
-                    <select
-                      multiple
-                      value={formData.tareas}
-                      onChange={(e) => {
-                        const selected = Array.from(e.target.selectedOptions).map((opt) => opt.value);
-                        setFormData({ ...formData, tareas: selected });
-                      }}
-                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                      size={Math.min(6, Math.max(3, tareas.length || 3))}
-                    >
-                      {tareas.map((tarea) => (
-                        <option key={tarea.id_tarea} value={String(tarea.id_tarea)}>
-                          {tarea.nombre}
-                        </option>
-                      ))}
-                    </select>
-                    {tareas.length === 0 && (
-                      <p className="text-xs text-yellow-400 mt-1">⚠️ No hay tareas registradas</p>
+                    {tareas.length > 0 ? (
+                      <div className="border border-gray-600 rounded-lg bg-gray-700 p-3 space-y-2 max-h-48 overflow-y-auto">
+                        {tareas.map((tarea) => {
+                          const id = String(tarea.id_tarea);
+                          const checked = formData.tareas.includes(id);
+                          return (
+                            <label key={tarea.id_tarea} className="flex items-center gap-2 text-sm text-gray-200">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => {
+                                  const next = e.target.checked
+                                    ? [...formData.tareas, id]
+                                    : formData.tareas.filter((value) => value !== id);
+                                  setFormData({ ...formData, tareas: next });
+                                }}
+                                className="h-4 w-4 rounded bg-gray-800 border-gray-500 text-emerald-500 focus:ring-emerald-500"
+                              />
+                              <span>{tarea.nombre}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-yellow-400">⚠️ No hay tareas registradas</p>
                     )}
+                    <p className="text-xs text-gray-400 mt-2">Selecciona todas las tareas que correspondan al producto.</p>
                   </div>
 
                   {/* Imagen */}

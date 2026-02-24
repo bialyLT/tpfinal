@@ -42,6 +42,7 @@ urlpatterns = [
     path("api/v1/", include("apps.users.urls")),
     path("api/v1/", include("apps.servicios.urls")),
     path("api/v1/", include("apps.encuestas.urls")),
+    path("api/v1/", include("apps.emails.urls")),
     path("api/v1/", include("apps.ventas.urls")),
     path("api/v1/mercadopago/", include("apps.mercadopago.urls")),  # Nueva app de MercadoPago
     path("api/v1/", include("apps.weather.urls")),

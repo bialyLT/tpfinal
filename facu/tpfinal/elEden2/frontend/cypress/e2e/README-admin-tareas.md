@@ -1,22 +1,38 @@
-# Admin - Tareas (admin-tareas.cy.js)
+# N.º referencia
+CP-03
 
-## Objetivo
-- Verificar el CRUD de tareas desde la UI.
+# Título
+Admin: CRUD de tareas.
 
-## Precondiciones
-- Usuario admin valido.
+# Descripción
+Validar la creación, edición y eliminación de tareas desde la interfaz administrativa.
+
+# Pre-condición
+- Usuario admin válido.
 - Backend disponible.
 - BaseUrl de Cypress apuntando al frontend.
 
-## Pasos automatizados
-- Login por API y acceso a /tareas.
-- Crear tarea (nombre, duracion, personal minimo).
-- Editar tarea.
-- Eliminar tarea.
+# Referencias
+- CU: Gestión de tareas.
 
-## Datos
-- Tarea con nombre unico basado en timestamp.
+# Dependencias
+Ninguna.
 
-## Variables
-- E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD (o E2E_EMAIL / E2E_PASSWORD)
-- API_BASE_URL (opcional, default http://localhost:8000/api/v1)
+# Pasos de prueba
+N° | Acción
+1 | Iniciar sesión por API con credenciales admin y acceder a /tareas.
+2 | Crear una tarea con nombre, duración y personal mínimo.
+3 | Editar la tarea creada.
+4 | Eliminar la tarea creada.
+
+# Supuestos
+El backend permite alta, edición y baja de tareas.
+
+# Datos de prueba
+- Caso 1: Tarea con nombre único basado en timestamp.
+
+# Tipo de prueba
+Automatizada.
+
+# Resultado esperado de prueba
+- Caso 1: La tarea se crea, edita y elimina correctamente sin errores.

@@ -1,21 +1,37 @@
-# Admin - Gestion Encuestas (admin-gestion-encuestas.cy.js)
+# N.º referencia
+CP-07
 
-## Objetivo
-- Verificar alta y baja de encuestas desde la UI.
+# Título
+Admin: Gestión de encuestas.
 
-## Precondiciones
-- Usuario admin valido.
+# Descripción
+Validar el alta y baja de encuestas desde la interfaz administrativa.
+
+# Pre-condición
+- Usuario admin válido.
 - Backend disponible.
 - BaseUrl de Cypress apuntando al frontend.
 
-## Pasos automatizados
-- Login por API y acceso a /gestion-encuestas.
-- Crear encuesta (inactiva) con una pregunta.
-- Eliminar encuesta creada.
+# Referencias
+- CU: Gestión de encuestas.
 
-## Datos
-- Encuesta con titulo unico.
+# Dependencias
+Ninguna.
 
-## Variables
-- E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD (o E2E_EMAIL / E2E_PASSWORD)
-- API_BASE_URL (opcional, default http://localhost:8000/api/v1)
+# Pasos de prueba
+N° | Acción
+1 | Iniciar sesión por API con credenciales admin y acceder a /gestion-encuestas.
+2 | Crear encuesta inactiva con una pregunta.
+3 | Eliminar la encuesta creada.
+
+# Supuestos
+Solo puede existir una encuesta activa a la vez.
+
+# Datos de prueba
+- Caso 1: Encuesta con título único y una pregunta.
+
+# Tipo de prueba
+Automatizada.
+
+# Resultado esperado de prueba
+- Caso 1: La encuesta se crea y se elimina correctamente.

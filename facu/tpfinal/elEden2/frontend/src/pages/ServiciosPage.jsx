@@ -1,13 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
+import { lazy, Suspense, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { serviciosService } from '../services';
 import { useAuth } from '../context/AuthContext';
 import { success, handleApiError } from '../utils/notifications';
-import { Calendar, Clock, CheckCircle, XCircle, Users, Filter, Search, Eye, Palette, MapPin } from 'lucide-react';
-import CrearDisenoModal from './CrearDisenoModal';
+import { Calendar, Clock, CheckCircle, XCircle, Users, Filter, Search, Eye, Palette, MapPin, Copy } from 'lucide-react';
 import InformacionJardinModal from './InformacionJardinModal';
 import DisenoClienteModal from './DisenoClienteModal';
 import Pagination from '../components/Pagination';
+
+const CrearDisenoModal = lazy(() => import('./CrearDisenoModal'));
 
 const ServiciosPage = () => {
   const navigate = useNavigate();
@@ -170,6 +171,25 @@ const ServiciosPage = () => {
   const handleCargarJardin = (reserva) => {
     setServicioParaJardin(reserva);
     setIsJardinModalOpen(true);
+  };
+
+  const handleCrearDisenoEnDisenos = (reserva) => {
+    const reservaId = reserva?.id_reserva;
+    if (!reservaId) return;
+    navigate(`/disenos?crear=1&reservaId=${reservaId}`, {
+      state: { reservaParaDiseno: reserva }
+    });
+  };
+
+  const handleCopyReservaId = async (reservaId) => {
+    if (!reservaId) return;
+    try {
+      await navigator.clipboard.writeText(String(reservaId));
+      success(`ID de reserva #${reservaId} copiado`);
+    } catch {
+      console.error('No se pudo copiar el ID de la reserva');
+      alert('No se pudo copiar el ID de la reserva');
+    }
   };
 
   const handleCloseDisenoModal = () => {
@@ -413,7 +433,15 @@ const ServiciosPage = () => {
                         <td className="px-6 py-4">
                           <div>
                             <p className="font-bold text-white text-lg">
-                              #{id}
+                              <button
+                                type="button"
+                                onClick={() => handleCopyReservaId(id)}
+                                className="inline-flex items-center gap-1 text-left hover:text-cyan-300 transition-colors"
+                                title="Click para copiar ID"
+                              >
+                                #{id}
+                                <Copy className="w-3 h-3" />
+                              </button>
                             </p>
                             <p className="text-sm text-gray-300 mt-1">
                               {nombre || 'Sin título'}
@@ -525,15 +553,36 @@ const ServiciosPage = () => {
                                   const todosRechazados = item.disenos.every(d => d.estado === 'rechazado');
                                   return todosRechazados;
                                 })() && (
+                                  item?.jardin ? (
+                                    <>
+                                      <button
+                                        onClick={() => handleCrearDisenoEnDisenos(item)}
+                                        className="inline-flex items-center px-2 py-1 text-xs font-medium rounded text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                        title="Crear diseño para esta reserva"
+                                      >
+                                        <Palette className="w-3 h-3 mr-1" />
+                                        Crear diseño
+                                      </button>
+                                      <button
+                                        onClick={() => handleCargarJardin(item)}
+                                        className="inline-flex items-center px-2 py-1 text-xs font-medium rounded text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                                        title="Actualizar información del jardín"
+                                      >
+                                        <Palette className="w-3 h-3 mr-1" />
+                                        Actualizar jardín
+                                      </button>
+                                    </>
+                                  ) : (
                                     <button
                                       onClick={() => handleCargarJardin(item)}
                                       className="inline-flex items-center px-2 py-1 text-xs font-medium rounded text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-                                      title={item && item.jardin ? 'Actualizar información del jardín' : 'Cargar información del jardín'}
+                                      title="Cargar información del jardín"
                                     >
                                       <Palette className="w-3 h-3 mr-1" />
-                                      {item && item.jardin ? 'Actualizar información del jardín' : 'Cargar información del jardín'}
+                                      Cargar información del jardín
                                     </button>
-                                  )}
+                                  )
+                                )}
 
                                 {/* Botón Finalizar Servicio - solo para empleados asignados y administradores */}
                                 {puedeFinalizarServicio(item) && item.estado !== 'completada' && item.estado !== 'cancelada' && (
@@ -592,14 +641,16 @@ const ServiciosPage = () => {
       </div>
 
       {/* Modal de Crear Diseño */}
-      <CrearDisenoModal
-        servicio={servicioParaDiseno}
-        isOpen={isDisenoModalOpen}
-        onClose={handleCloseDisenoModal}
-        onDisenoCreado={handleDisenoCreado}
-        mode="diseno"
-        onCargarJardin={handleCargarJardin}
-      />
+      <Suspense fallback={null}>
+        <CrearDisenoModal
+          servicio={servicioParaDiseno}
+          isOpen={isDisenoModalOpen}
+          onClose={handleCloseDisenoModal}
+          onDisenoCreado={handleDisenoCreado}
+          mode="diseno"
+          onCargarJardin={handleCargarJardin}
+        />
+      </Suspense>
 
       <InformacionJardinModal
         reserva={servicioParaJardin}

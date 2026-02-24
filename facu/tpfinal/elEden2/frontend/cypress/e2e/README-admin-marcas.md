@@ -1,22 +1,38 @@
-# Admin - Marcas (admin-marcas.cy.js)
+# N.º referencia
+CP-06
 
-## Objetivo
-- Verificar el CRUD de marcas desde la UI.
+# Título
+Admin: CRUD de marcas.
 
-## Precondiciones
-- Usuario admin valido.
+# Descripción
+Validar la creación, edición y eliminación de marcas desde la interfaz administrativa.
+
+# Pre-condición
+- Usuario admin válido.
 - Backend disponible.
 - BaseUrl de Cypress apuntando al frontend.
 
-## Pasos automatizados
-- Login por API y acceso a /marcas.
-- Crear marca.
-- Editar marca.
-- Eliminar marca.
+# Referencias
+- CU: Gestión de marcas.
 
-## Datos
-- Marca con nombre unico basado en timestamp.
+# Dependencias
+Ninguna.
 
-## Variables
-- E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD (o E2E_EMAIL / E2E_PASSWORD)
-- API_BASE_URL (opcional, default http://localhost:8000/api/v1)
+# Pasos de prueba
+N° | Acción
+1 | Iniciar sesión por API con credenciales admin y acceder a /marcas.
+2 | Crear una marca con nombre único.
+3 | Editar la marca creada.
+4 | Eliminar la marca creada.
+
+# Supuestos
+El backend valida nombres únicos para marcas.
+
+# Datos de prueba
+- Caso 1: Marca con nombre único basado en timestamp.
+
+# Tipo de prueba
+Automatizada.
+
+# Resultado esperado de prueba
+- Caso 1: La marca se crea, edita y elimina correctamente.

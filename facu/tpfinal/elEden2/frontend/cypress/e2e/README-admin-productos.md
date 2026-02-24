@@ -1,24 +1,40 @@
-# Admin - Productos (admin-productos.cy.js)
+# N.º referencia
+CP-05
 
-## Objetivo
-- Verificar el CRUD de productos desde la UI.
+# Título
+Admin: CRUD de productos.
 
-## Precondiciones
-- Usuario admin valido.
+# Descripción
+Validar la creación, edición y eliminación de productos desde la interfaz administrativa.
+
+# Pre-condición
+- Usuario admin válido.
 - Backend disponible.
 - BaseUrl de Cypress apuntando al frontend.
 
-## Pasos automatizados
-- Login por API.
-- Crear categoria, marca y tarea por API.
-- Crear producto desde la UI.
-- Editar producto.
-- Eliminar producto.
-- Limpiar datos auxiliares (API).
+# Referencias
+- CU: Gestión de productos.
 
-## Datos
-- Categoria, marca, tarea y producto con nombres unicos.
+# Dependencias
+- Categoría, marca y tarea deben existir.
 
-## Variables
-- E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD (o E2E_EMAIL / E2E_PASSWORD)
-- API_BASE_URL (opcional, default http://localhost:8000/api/v1)
+# Pasos de prueba
+N° | Acción
+1 | Iniciar sesión por API con credenciales admin.
+2 | Crear categoría, marca y tarea por API.
+3 | Crear producto desde la UI.
+4 | Editar el producto creado.
+5 | Eliminar el producto creado.
+6 | Limpiar datos auxiliares por API.
+
+# Supuestos
+Las entidades auxiliares se crean correctamente por API.
+
+# Datos de prueba
+- Caso 1: Categoría, marca, tarea y producto con nombres únicos.
+
+# Tipo de prueba
+Automatizada.
+
+# Resultado esperado de prueba
+- Caso 1: El producto se crea, edita y elimina correctamente; los datos auxiliares se limpian.

@@ -204,13 +204,17 @@ class CurrentUserView(APIView):
                 }
 
             # Verificar si es Empleado
-            elif hasattr(persona, "empleado"):
+            if hasattr(persona, "empleado"):
                 empleado_data = {
                     "id_empleado": persona.empleado.id_empleado,
                     "cargo": persona.empleado.cargo or "",
                     "fecha_contratacion": persona.empleado.fecha_contratacion,
                     "telefono": persona.telefono,
                     "nombre_completo": f"{persona.nombre} {persona.apellido}",
+                    "puntuacion_promedio": persona.empleado.puntuacion_promedio,
+                    "puntuacion_cantidad": persona.empleado.puntuacion_cantidad,
+                    "puntuacion_acumulada": persona.empleado.puntuacion_acumulada,
+                    "fecha_ultima_puntuacion": persona.empleado.fecha_ultima_puntuacion,
                 }
 
         return Response(

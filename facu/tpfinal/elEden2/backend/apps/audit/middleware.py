@@ -178,6 +178,10 @@ class AuditLogMiddleware(MiddlewareMixin):
         return sanitize_payload(data)
 
     def _extract_entity(self, path: str) -> str:
+        normalized_path = path if path.endswith("/") else f"{path}/"
+        if normalized_path == "/api/v1/users/address/lookup/":
+            return "direccion"
+
         segments = [segment for segment in path.rstrip("/").split("/") if segment]
         if not segments:
             return "root"
@@ -243,6 +247,14 @@ class AuditLogMiddleware(MiddlewareMixin):
 
         user_display = self._get_user_display(user)
 
+        # Users: address lookup
+        # Example: /api/v1/users/address/lookup/
+        if normalized_method == "POST" and normalized_path == "/api/v1/users/address/lookup/":
+            address = self._extract_address_text(payload, response_body)
+            if address:
+                return f"El usuario {user_display} consulto direccion: {address}"
+            return f"El usuario {user_display} consulto una direccion"
+
         # Weather: cancel rescheduling (dismiss alert)
         # Example: /api/v1/weather/alerts/18/dismiss/
         if normalized_method == "POST" and normalized_path.startswith("/api/v1/weather/alerts/") and normalized_path.endswith("/dismiss/"):
@@ -274,6 +286,24 @@ class AuditLogMiddleware(MiddlewareMixin):
         if normalized_method == "POST" and normalized_path.startswith("/api/v1/servicios/reservas/") and normalized_path.endswith("/finalizar-servicio/"):
             return f"El usuario {user_display} finalizó el servicio"
 
+        return None
+
+    def _extract_address_text(self, payload: Any, response_body: Any) -> str | None:
+        for source in (payload, response_body):
+            if not isinstance(source, dict):
+                continue
+            for key in ("address", "direccion_formateada", "direccion", "query"):
+                value = source.get(key)
+                if isinstance(value, (str, int)) and str(value).strip():
+                    text = str(value).strip()
+                    return text[:120]
+            nested = source.get("data") if isinstance(source.get("data"), dict) else None
+            if nested:
+                for key in ("address", "direccion_formateada", "direccion", "query"):
+                    value = nested.get(key)
+                    if isinstance(value, (str, int)) and str(value).strip():
+                        text = str(value).strip()
+                        return text[:120]
         return None
 
     def _get_user_display(self, user) -> str:

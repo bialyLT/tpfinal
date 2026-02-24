@@ -520,19 +520,19 @@ const SolicitarServicioPage = () => {
           return false;
         }
         if (!formData.direccion_servicio.trim()) {
-          error('Por favor ingresa la dirección del servicio');
+          setAddressError('Por favor ingresa la dirección del servicio');
           return false;
         }
         if (!formData.localidad_id) {
-          error('Busca tu dirección o selecciona una localidad para continuar');
+          setAddressError('Busca tu dirección o selecciona una localidad para continuar');
           return false;
         }
         if (!selectedLocalidad) {
-          error(OPERATIONAL_MESSAGE);
+          setAddressError(OPERATIONAL_MESSAGE);
           return false;
         }
         if (!isLocationWithinOperationalArea(selectedLocalidad.provincia, selectedLocalidad.pais)) {
-          error(OPERATIONAL_MESSAGE);
+          setAddressError(OPERATIONAL_MESSAGE);
           return false;
         }
         break;
@@ -583,8 +583,7 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
       }
 
       const ubicacionExtra = [
-        locationSummaryText && `Ubicación detectada: ${locationSummaryText}`,
-        formData.localidad_id && `Localidad asociada (ID): ${formData.localidad_id}`,
+        locationSummaryText && `Ubicación: ${locationSummaryText}`,
       ].filter(Boolean).join('\n');
 
       if (ubicacionExtra) {

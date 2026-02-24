@@ -17,6 +17,39 @@ class EmailService:
     """Servicio centralizado para el envío de emails"""
 
     @staticmethod
+    def _log_notification(subject, message, recipient_email):
+        try:
+            from .models import Notification
+
+            User = get_user_model()
+            user = None
+            if recipient_email:
+                user = User.objects.filter(email__iexact=recipient_email).first()
+
+            Notification.objects.create(
+                recipient=user,
+                recipient_email=recipient_email or "",
+                subject=subject,
+                body=message,
+            )
+        except Exception as exc:
+            logger.warning("No se pudo registrar notificacion de email: %s", exc)
+
+    @staticmethod
+    def _send_and_log(subject, message, recipient_list, from_email=None, **kwargs):
+        from_email = from_email or settings.DEFAULT_FROM_EMAIL
+        sent = send_mail(
+            subject=subject,
+            message=message,
+            from_email=from_email,
+            recipient_list=recipient_list,
+            **kwargs,
+        )
+        for recipient in recipient_list or []:
+            EmailService._log_notification(subject, message, recipient)
+        return sent
+
+    @staticmethod
     def send_welcome_email(user_email, user_name, username, password=None):
         """
         Envía un email de bienvenida al nuevo cliente registrado
@@ -83,7 +116,7 @@ El equipo de El Edén 🌱
                 """.strip()
 
             # Enviar el email
-            send_mail(
+            EmailService._send_and_log(
                 subject=subject,
                 message=message,
                 from_email=settings.DEFAULT_FROM_EMAIL,
@@ -157,7 +190,7 @@ El equipo de administración de El Edén 🌱
             """.strip()
 
             # Enviar el email
-            send_mail(
+            EmailService._send_and_log(
                 subject=subject,
                 message=message,
                 from_email=settings.DEFAULT_FROM_EMAIL,
@@ -206,7 +239,7 @@ Saludos,
 El equipo de El Edén 🌱
             """.strip()
 
-            send_mail(
+            EmailService._send_and_log(
                 subject=subject,
                 message=message,
                 from_email=settings.DEFAULT_FROM_EMAIL,
@@ -257,7 +290,7 @@ Saludos cordiales,
 El equipo de El Edén 🌱
             """.strip()
 
-            send_mail(
+            EmailService._send_and_log(
                 subject=subject,
                 message=message,
                 from_email=settings.DEFAULT_FROM_EMAIL,
@@ -350,7 +383,7 @@ Saludos cordiales,
 El equipo de El Edén
             """.strip()
 
-            send_mail(
+            EmailService._send_and_log(
                 subject=subject,
                 message=message,
                 from_email=settings.DEFAULT_FROM_EMAIL,
@@ -478,7 +511,7 @@ Ver detalles en el panel de administración:
 Sistema de Notificaciones - El Edén
             """.strip()
 
-            send_mail(
+            EmailService._send_and_log(
                 subject=subject,
                 message=message,
                 from_email=settings.DEFAULT_FROM_EMAIL,
@@ -528,7 +561,7 @@ El sistema de alertas de El Edén
             recipients = [settings.DEFAULT_FROM_EMAIL]
 
         try:
-            send_mail(
+            EmailService._send_and_log(
                 subject=subject,
                 message=message,
                 from_email=settings.DEFAULT_FROM_EMAIL,
@@ -565,7 +598,7 @@ Se marcó la reserva como pendiente de reprogramación.
             recipients = [settings.DEFAULT_FROM_EMAIL]
 
         try:
-            send_mail(
+            EmailService._send_and_log(
                 subject=subject,
                 message=message,
                 from_email=settings.DEFAULT_FROM_EMAIL,
@@ -599,7 +632,7 @@ Equipo de El Edén
 """.strip()
 
         try:
-            send_mail(
+            EmailService._send_and_log(
                 subject=subject,
                 message=mensaje_cliente,
                 from_email=settings.DEFAULT_FROM_EMAIL,
@@ -623,7 +656,7 @@ Revisar y gestionar en el dashboard:
 {dashboard_url}
 """.strip()
             try:
-                send_mail(
+                EmailService._send_and_log(
                     subject=f"[Admin] {subject}",
                     message=mensaje_admin,
                     from_email=settings.DEFAULT_FROM_EMAIL,
@@ -657,7 +690,7 @@ Por favor, ajusta tu agenda correspondiente.
 Equipo de El Edén
 """.strip()
             try:
-                send_mail(
+                EmailService._send_and_log(
                     subject=f"[Empleado] {subject}",
                     message=mensaje_empleado,
                     from_email=settings.DEFAULT_FROM_EMAIL,
@@ -809,7 +842,7 @@ Saludos cordiales,
 El equipo de El Edén
             """.strip()
 
-            send_mail(
+            EmailService._send_and_log(
                 subject=subject,
                 message=message,
                 from_email=settings.DEFAULT_FROM_EMAIL,
@@ -938,7 +971,7 @@ Saludos,
 Sistema de Gestión - El Edén
             """.strip()
 
-            send_mail(
+            EmailService._send_and_log(
                 subject=subject,
                 message=message,
                 from_email=settings.DEFAULT_FROM_EMAIL,
@@ -1068,7 +1101,7 @@ Saludos cordiales,
 El equipo de El Edén
             """.strip()
 
-            send_mail(
+            EmailService._send_and_log(
                 subject=subject,
                 message=message,
                 from_email=settings.DEFAULT_FROM_EMAIL,
@@ -1149,7 +1182,7 @@ Saludos cordiales,
 El equipo de El Edén
             """.strip()
 
-            send_mail(
+            EmailService._send_and_log(
                 subject=subject,
                 message=message,
                 from_email=settings.DEFAULT_FROM_EMAIL,
@@ -1245,7 +1278,7 @@ El equipo de El Edén
             # Enviar individualmente para no exponer correos entre empleados
             for email in destinatarios:
                 try:
-                    send_mail(
+                    EmailService._send_and_log(
                         subject=subject,
                         message=message,
                         from_email=settings.DEFAULT_FROM_EMAIL,

@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { lazy, Suspense, useState, useEffect, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { serviciosService } from '../services';
 import { useAuth } from '../context/AuthContext';
 import { handleApiError } from '../utils/notifications';
@@ -7,10 +8,13 @@ import {
   User, DollarSign, CheckCircle, XCircle, 
   Clock, Package, Image as ImageIcon, Edit
 } from 'lucide-react';
-import CrearDisenoModal from './CrearDisenoModal';
 import Pagination from '../components/Pagination';
 
+const CrearDisenoModal = lazy(() => import('./CrearDisenoModal'));
+
 const DisenosPage = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [disenosData, setDisenosData] = useState({
     results: [],
     count: 0,
@@ -24,6 +28,7 @@ const DisenosPage = () => {
   const [isDetalleModalOpen, setIsDetalleModalOpen] = useState(false);
   const [isDisenoModalOpen, setIsDisenoModalOpen] = useState(false);
   const [disenoParaEditar, setDisenoParaEditar] = useState(null);
+  const [reservaParaCrear, setReservaParaCrear] = useState(null);
   const [disenosPage, setDisenosPage] = useState(1);
   const [disenosPageSize, setDisenosPageSize] = useState(10);
   const [debouncedFilters, setDebouncedFilters] = useState({ search: '', estado: '' });
@@ -93,6 +98,49 @@ const DisenosPage = () => {
     fetchCurrentDisenos();
   }, [fetchCurrentDisenos]);
 
+  useEffect(() => {
+    if (!(isAdmin || isEmpleado)) return;
+
+    const params = new URLSearchParams(location.search);
+    const shouldOpenCreate = params.get('crear') === '1';
+    const reservaIdParam = params.get('reservaId');
+
+    if (!shouldOpenCreate || !reservaIdParam) return;
+
+    const reservaId = Number(reservaIdParam);
+    if (Number.isNaN(reservaId) || reservaId <= 0) return;
+
+    let active = true;
+
+    const openCreateModalFromReserva = async () => {
+      try {
+        const reservaFromState = location.state?.reservaParaDiseno;
+        if (reservaFromState?.id_reserva === reservaId) {
+          if (!active) return;
+          setDisenoParaEditar(null);
+          setReservaParaCrear(reservaFromState);
+          setIsDisenoModalOpen(true);
+        } else {
+          const reservaData = await serviciosService.getReservaById(reservaId);
+          if (!active) return;
+          setDisenoParaEditar(null);
+          setReservaParaCrear(reservaData);
+          setIsDisenoModalOpen(true);
+        }
+      } catch (error) {
+        handleApiError(error, 'No se pudo cargar la reserva para crear el diseño');
+      } finally {
+        navigate('/disenos', { replace: true });
+      }
+    };
+
+    openCreateModalFromReserva();
+
+    return () => {
+      active = false;
+    };
+  }, [isAdmin, isEmpleado, location.search, location.state, navigate]);
+
   const handleEditarDiseno = (diseno) => {
     setDisenoParaEditar(diseno);
     setIsDisenoModalOpen(true);
@@ -101,6 +149,7 @@ const DisenosPage = () => {
   const handleCloseDisenoModal = () => {
     setIsDisenoModalOpen(false);
     setDisenoParaEditar(null);
+    setReservaParaCrear(null);
     fetchCurrentDisenos(); // Recargar lista después de editar
   };
 
@@ -183,6 +232,12 @@ const DisenosPage = () => {
     }
   };
 
+  const handleVerReservaAsociada = (diseno) => {
+    const reservaAsociadaId = diseno?.reserva_id || diseno?.reserva?.id_reserva || diseno?.reserva;
+    if (!reservaAsociadaId) return;
+    navigate(`/servicios/reservas/${reservaAsociadaId}`);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -226,6 +281,7 @@ const DisenosPage = () => {
                   }
                   // Open modal and preselect nothing - choose in modal
                   setDisenoParaEditar(null);
+                  setReservaParaCrear(null);
                   setIsDisenoModalOpen(true);
                 } catch (err) {
                   handleApiError(err, 'Error al obtener reservas');
@@ -389,6 +445,16 @@ const DisenosPage = () => {
                           <Eye className="w-4 h-4 mr-1" />
                           Ver Detalle
                         </button>
+
+                        {(diseno?.reserva_id || diseno?.reserva) && (
+                          <button
+                            onClick={() => handleVerReservaAsociada(diseno)}
+                            className="inline-flex items-center px-3 py-1 text-sm font-medium rounded text-white bg-cyan-600 hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500"
+                          >
+                            <Eye className="w-4 h-4 mr-1" />
+                            Ver Reserva
+                          </button>
+                        )}
                         
                         {/* Botón Editar - Solo para diseños en borrador y si el usuario es el creador o admin */}
                         {diseno.estado === 'borrador' && (isAdmin || isEmpleado) && (() => {
@@ -454,13 +520,15 @@ const DisenosPage = () => {
         )}
 
         {/* Modal de Editar Diseño */}
-        <CrearDisenoModal
-          servicio={null}
-          diseno={disenoParaEditar}
-          isOpen={isDisenoModalOpen}
-          onClose={handleCloseDisenoModal}
-          onDisenoCreado={handleDisenoActualizado}
-        />
+        <Suspense fallback={null}>
+          <CrearDisenoModal
+            servicio={reservaParaCrear}
+            diseno={disenoParaEditar}
+            isOpen={isDisenoModalOpen}
+            onClose={handleCloseDisenoModal}
+            onDisenoCreado={handleDisenoActualizado}
+          />
+        </Suspense>
       </div>
     </div>
   );
