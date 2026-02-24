@@ -176,9 +176,6 @@ class EncuestaViewSet(viewsets.ModelViewSet):
                     reserva=reserva,
                 )
 
-                # Eliminar respuestas anteriores si existe (por si quedó incompleta)
-                encuesta_respuesta.respuestas.all().delete()
-
                 # Validar que todas las preguntas obligatorias estén respondidas
                 preguntas_obligatorias = encuesta_activa.preguntas.filter(obligatoria=True)
                 preguntas_respondidas = [r.get("pregunta_id") for r in respuestas_data]
@@ -191,7 +188,9 @@ class EncuestaViewSet(viewsets.ModelViewSet):
                             status=status.HTTP_400_BAD_REQUEST,
                         )
 
-                # Crear las respuestas
+                respuestas_preparadas = []
+
+                # Validar y preparar las respuestas
                 for respuesta_data in respuestas_data:
                     pregunta_id = respuesta_data.get("pregunta_id")
                     if pregunta_id is None:
@@ -253,13 +252,20 @@ class EncuestaViewSet(viewsets.ModelViewSet):
                                 status=status.HTTP_400_BAD_REQUEST,
                             )
 
-                    Respuesta.objects.create(
-                        encuesta_respuesta=encuesta_respuesta,
-                        pregunta=pregunta,
-                        valor_texto=valor_texto,
-                        valor_numerico=valor_numerico_int,
-                        valor_boolean=None,
+                    respuestas_preparadas.append(
+                        Respuesta(
+                            encuesta_respuesta=encuesta_respuesta,
+                            pregunta=pregunta,
+                            valor_texto=valor_texto,
+                            valor_numerico=valor_numerico_int,
+                            valor_boolean=None,
+                        )
                     )
+
+                # Reemplazar respuestas solo cuando todo el payload es válido
+                encuesta_respuesta.respuestas.all().delete()
+                if respuestas_preparadas:
+                    Respuesta.objects.bulk_create(respuestas_preparadas)
 
                 # Marcar como completada
                 encuesta_respuesta.estado = "completada"
