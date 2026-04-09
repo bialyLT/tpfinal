@@ -27,3 +27,14 @@ class ProductoStockModelTest(TestCase):
         Stock.objects.create(producto=self.producto, cantidad=10)
         self.producto.refresh_from_db()
         self.assertEqual(self.producto.stock_actual, 10)
+
+    def test_producto_delete_es_borrado_logico(self):
+        producto_id = self.producto.id_producto
+
+        self.producto.delete()
+
+        self.assertTrue(Producto.objects.filter(id_producto=producto_id).exists())
+
+        self.producto.refresh_from_db()
+        self.assertFalse(self.producto.activo)
+        self.assertIsNotNone(self.producto.fecha_baja)

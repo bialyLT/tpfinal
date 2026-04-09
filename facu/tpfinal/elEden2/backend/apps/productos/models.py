@@ -1,5 +1,6 @@
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.utils import timezone
 
 
 class Categoria(models.Model):
@@ -116,6 +117,8 @@ class Producto(models.Model):
     tareas = models.ManyToManyField(Tarea, through="ProductoTarea", related_name="productos", blank=True)
 
     # Metadatos
+    activo = models.BooleanField(default=True)
+    fecha_baja = models.DateTimeField(null=True, blank=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
 
@@ -130,6 +133,7 @@ class Producto(models.Model):
             models.Index(fields=["marca"]),
             models.Index(fields=["especie"]),
             models.Index(fields=["tipo_producto"]),
+            models.Index(fields=["activo"]),
         ]
 
     def __str__(self):
@@ -138,6 +142,20 @@ class Producto(models.Model):
             return f"{self.nombre} - {marca}"
         especie = self.especie.nombre_especie if self.especie else "Sin especie"
         return f"{self.nombre} - {especie}"
+
+    def delete(self, using=None, keep_parents=False):
+        """Soft delete: marca el producto como inactivo sin borrar la fila."""
+        if self.activo:
+            self.activo = False
+            self.fecha_baja = timezone.now()
+            self.save(update_fields=["activo", "fecha_baja", "fecha_actualizacion"])
+
+    def restaurar(self):
+        """Restaura un producto previamente dado de baja."""
+        if not self.activo:
+            self.activo = True
+            self.fecha_baja = None
+            self.save(update_fields=["activo", "fecha_baja", "fecha_actualizacion"])
 
     def calcular_precio_desde_compras(self, porcentaje_ganancia=None):
         """Calcula y actualiza el precio del producto desde las compras.

@@ -71,7 +71,11 @@ class TareaViewSet(viewsets.ModelViewSet):
 
 
 class ProductoViewSet(viewsets.ModelViewSet):
-    queryset = Producto.objects.select_related("categoria", "marca", "especie").prefetch_related("tareas").all()
+    queryset = (
+        Producto.objects.select_related("categoria", "marca", "especie")
+        .prefetch_related("tareas")
+        .filter(activo=True)
+    )
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = {
@@ -149,6 +153,12 @@ class ProductoViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
         return Response(serializer.data)
+
+    def destroy(self, request, *args, **kwargs):
+        """Borrado lógico de producto (no elimina fila en base)."""
+        instance = self.get_object()
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=["get"])
     def sin_stock(self, request):

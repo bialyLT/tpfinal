@@ -54,6 +54,17 @@ class ProductoAdmin(admin.ModelAdmin):
     ordering = ("nombre",)
     inlines = [StockInline]
 
+    def has_delete_permission(self, request, obj=None):
+        # En lugar de delete físico desde admin, se usa borrado lógico vía save.
+        return False
+
+    def delete_model(self, request, obj):
+        obj.delete()
+
+    def delete_queryset(self, request, queryset):
+        for obj in queryset:
+            obj.delete()
+
     def get_stock(self, obj):
         try:
             return obj.stock.cantidad
