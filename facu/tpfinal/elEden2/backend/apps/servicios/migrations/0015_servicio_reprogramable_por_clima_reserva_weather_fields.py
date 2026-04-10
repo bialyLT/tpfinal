@@ -7,7 +7,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("weather", "0001_initial"),
+        ("weather", "0002_rename_weather_models_es"),
         ("servicios", "0014_reserva_encuesta_token"),
     ]
 
@@ -58,7 +58,7 @@ class Migration(migrations.Migration):
                 null=True,
                 on_delete=django.db.models.deletion.SET_NULL,
                 related_name="reservas_afectadas",
-                to="weather.weatheralert",
+                to="weather.alertaclimatica",
             ),
         ),
     ]
