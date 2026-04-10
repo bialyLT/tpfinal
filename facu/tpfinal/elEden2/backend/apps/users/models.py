@@ -5,6 +5,7 @@ from django.db import models
 from django.utils import timezone
 
 from apps.emails.services import EmailService
+from core.models import SoftDeleteBehaviorMixin
 
 
 class Genero(models.Model):
@@ -135,7 +136,9 @@ class Cliente(models.Model):
         return f"Cliente: {self.persona.apellido}, {self.persona.nombre}"
 
 
-class Empleado(models.Model):
+class Empleado(SoftDeleteBehaviorMixin, models.Model):
+    SOFT_DELETE_DELETED_AT_FIELD = "fecha_baja_automatica"
+
     id_empleado = models.AutoField(primary_key=True)
     persona = models.OneToOneField(Persona, on_delete=models.CASCADE, related_name="empleado")
     fecha_contratacion = models.DateTimeField(auto_now_add=True)
@@ -266,7 +269,7 @@ class Empleado(models.Model):
             )
 
 
-class Proveedor(models.Model):
+class Proveedor(SoftDeleteBehaviorMixin, models.Model):
     id_proveedor = models.AutoField(primary_key=True)
     razon_social = models.CharField(max_length=200)
     cuit = models.CharField(max_length=13, unique=True)
@@ -282,6 +285,7 @@ class Proveedor(models.Model):
     # Metadatos
     fecha_alta = models.DateTimeField(auto_now_add=True)
     activo = models.BooleanField(default=True)
+    fecha_baja = models.DateTimeField(null=True, blank=True)
     observaciones = models.TextField(blank=True, null=True)
 
     class Meta:

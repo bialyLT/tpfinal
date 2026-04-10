@@ -2,9 +2,10 @@
 from django.db.models import Q
 
 from apps.users.models import Cliente
+from core.models import SoftDeleteBehaviorMixin
 
 
-class Encuesta(models.Model):
+class Encuesta(SoftDeleteBehaviorMixin, models.Model):
     """
     Modelo para encuestas según diagrama ER.
     Representa una encuesta que puede ser respondida por clientes.
@@ -14,6 +15,8 @@ class Encuesta(models.Model):
     id_encuesta = models.AutoField(primary_key=True)
     titulo = models.CharField(max_length=200)
     descripcion = models.TextField(blank=True, null=True)
+    activo = models.BooleanField(default=True)
+    fecha_baja = models.DateTimeField(null=True, blank=True)
     activa = models.BooleanField(default=True)
 
     class Meta:
@@ -37,21 +40,21 @@ class Encuesta(models.Model):
         Sobrescribir save para asegurar que solo haya una encuesta activa.
         Si esta encuesta se marca como activa, desactivar todas las demás.
         """
-        if self.activa:
+        if self.activa and self.activo:
             # Desactivar todas las demás encuestas
-            Encuesta.objects.exclude(pk=self.pk).update(activa=False)
+            Encuesta.objects.filter(activo=True).exclude(pk=self.pk).update(activa=False)
         super().save(*args, **kwargs)
 
     @classmethod
     def obtener_activa(cls):
         """Obtiene la encuesta activa actual"""
         try:
-            return cls.objects.get(activa=True)
+            return cls.objects.get(activo=True, activa=True)
         except cls.DoesNotExist:
             return None
         except cls.MultipleObjectsReturned:
             # Si por alguna razón hay múltiples activas, retornar la más reciente
-            return cls.objects.filter(activa=True).order_by("-id_encuesta").first()
+            return cls.objects.filter(activo=True, activa=True).order_by("-id_encuesta").first()
 
 
 class Pregunta(models.Model):

@@ -19,7 +19,7 @@ from .serializers import (
 
 
 class CategoriaViewSet(viewsets.ModelViewSet):
-    queryset = Categoria.objects.all()
+    queryset = Categoria.objects.filter(activo=True)
     serializer_class = CategoriaSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -27,9 +27,14 @@ class CategoriaViewSet(viewsets.ModelViewSet):
     ordering_fields = ["nombre_categoria", "id_categoria"]
     ordering = ["nombre_categoria"]
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class MarcaViewSet(viewsets.ModelViewSet):
-    queryset = Marca.objects.all()
+    queryset = Marca.objects.filter(activo=True)
     serializer_class = MarcaSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -37,9 +42,14 @@ class MarcaViewSet(viewsets.ModelViewSet):
     ordering_fields = ["nombre_marca", "id_marca"]
     ordering = ["nombre_marca"]
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class EspecieViewSet(viewsets.ModelViewSet):
-    queryset = Especie.objects.all()
+    queryset = Especie.objects.filter(activo=True)
     serializer_class = EspecieSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -47,15 +57,25 @@ class EspecieViewSet(viewsets.ModelViewSet):
     ordering_fields = ["nombre_especie", "id_especie"]
     ordering = ["nombre_especie"]
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class TareaViewSet(viewsets.ModelViewSet):
-    queryset = Tarea.objects.all()
+    queryset = Tarea.objects.filter(activo=True)
     serializer_class = TareaSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     search_fields = ["nombre"]
     ordering_fields = ["nombre", "id_tarea", "duracion_base", "cantidad_personal_minimo"]
     ordering = ["nombre"]
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # UnidadViewSet comentado - modelo no existe en el diagrama ER

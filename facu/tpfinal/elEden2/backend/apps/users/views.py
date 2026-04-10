@@ -361,7 +361,7 @@ class ClienteViewSet(viewsets.ModelViewSet):
 
 
 class ProveedorViewSet(viewsets.ModelViewSet):
-    queryset = Proveedor.objects.all()
+    queryset = Proveedor.objects.filter(activo=True)
     serializer_class = ProveedorSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = {
@@ -371,6 +371,11 @@ class ProveedorViewSet(viewsets.ModelViewSet):
     search_fields = ["razon_social", "cuit", "nombre_contacto", "email"]
     ordering_fields = ["razon_social", "nombre_contacto"]
     ordering = ["razon_social"]
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class EmpleadoViewSet(viewsets.ModelViewSet):
@@ -389,7 +394,7 @@ class EmpleadoViewSet(viewsets.ModelViewSet):
         """Obtener solo usuarios que pertenecen al grupo 'Empleados'"""
         empleados_group = Group.objects.filter(name="Empleados").first()
         if empleados_group:
-            return User.objects.filter(groups=empleados_group).select_related(
+            return User.objects.filter(groups=empleados_group, is_active=True).select_related(
                 "persona",
                 "persona__empleado",
                 "persona__localidad",
@@ -484,6 +489,9 @@ class EmpleadoViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         instance.is_active = False
         instance.save()
+        persona = getattr(instance, "persona", None)
+        if persona and getattr(persona, "empleado", None):
+            persona.empleado.delete()
         return Response({"detail": "Empleado desactivado exitosamente."}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"])

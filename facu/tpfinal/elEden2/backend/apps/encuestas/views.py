@@ -35,14 +35,14 @@ class EncuestaViewSet(viewsets.ModelViewSet):
     Solo administradores pueden gestionar encuestas.
     """
 
-    queryset = Encuesta.objects.prefetch_related("preguntas").all()
+    queryset = Encuesta.objects.prefetch_related("preguntas").filter(activo=True)
     permission_classes = [IsAuthenticated, IsAdminUser]
     filter_backends = [
         DjangoFilterBackend,
         filters.SearchFilter,
         filters.OrderingFilter,
     ]
-    filterset_fields = ["activa"]
+    filterset_fields = ["activa", "activo"]
     search_fields = ["titulo", "descripcion"]
     ordering_fields = ["id_encuesta", "titulo"]
     ordering = ["-id_encuesta"]
@@ -54,6 +54,13 @@ class EncuestaViewSet(viewsets.ModelViewSet):
         elif self.action in ["create", "update", "partial_update"]:
             return EncuestaCreateUpdateSerializer
         return EncuestaSerializer
+
+    def destroy(self, request, *args, **kwargs):
+        encuesta = self.get_object()
+        encuesta.activa = False
+        encuesta.save(update_fields=["activa"])
+        encuesta.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsAdminUser])
     def toggle_activa(self, request, pk=None):

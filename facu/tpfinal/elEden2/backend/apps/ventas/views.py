@@ -1,5 +1,7 @@
 ﻿from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, viewsets
+from rest_framework import status
+from rest_framework.response import Response
 
 from .models import Compra, DetalleCompra, Pago
 from .serializers import (
@@ -24,7 +26,7 @@ class PagoViewSet(viewsets.ModelViewSet):
 
 
 class CompraViewSet(viewsets.ModelViewSet):
-    queryset = Compra.objects.select_related("proveedor").prefetch_related("detalles").all()
+    queryset = Compra.objects.select_related("proveedor").prefetch_related("detalles").filter(activo=True)
     serializer_class = CompraSerializer
     filter_backends = [
         DjangoFilterBackend,
@@ -39,6 +41,11 @@ class CompraViewSet(viewsets.ModelViewSet):
     search_fields = ["proveedor__razon_social", "observaciones"]
     ordering_fields = ["fecha", "total"]
     ordering = ["-fecha"]
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def get_serializer_class(self):
         """Usa CompraCreateSerializer para crear, CompraSerializer para el resto"""

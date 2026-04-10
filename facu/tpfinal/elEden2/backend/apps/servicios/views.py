@@ -142,30 +142,45 @@ class ServicioViewSet(viewsets.ModelViewSet):
 
 
 class ObjetivoDisenoViewSet(viewsets.ModelViewSet):
-    queryset = ObjetivoDiseno.objects.all()
+    queryset = ObjetivoDiseno.objects.filter(activo=True)
     serializer_class = ObjetivoDisenoSerializer
     permission_classes = [SoloAdministrador]
     filter_backends = [SearchFilter, OrderingFilter]
     search_fields = ["codigo", "nombre"]
     ordering = ["nombre"]
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class OpcionNivelIntervencionViewSet(viewsets.ModelViewSet):
-    queryset = OpcionNivelIntervencion.objects.all()
+    queryset = OpcionNivelIntervencion.objects.filter(activo=True)
     serializer_class = OpcionNivelIntervencionSerializer
     permission_classes = [SoloAdministrador]
     filter_backends = [SearchFilter, OrderingFilter]
     search_fields = ["codigo", "nombre"]
     ordering = ["orden", "nombre"]
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class OpcionPresupuestoAproximadoViewSet(viewsets.ModelViewSet):
-    queryset = OpcionPresupuestoAproximado.objects.all()
+    queryset = OpcionPresupuestoAproximado.objects.filter(activo=True)
     serializer_class = OpcionPresupuestoAproximadoSerializer
     permission_classes = [SoloAdministrador]
     filter_backends = [SearchFilter, OrderingFilter]
     search_fields = ["codigo", "nombre"]
     ordering = ["orden", "nombre"]
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ReservaViewSet(viewsets.ModelViewSet):
@@ -1484,7 +1499,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
 class FormaTerrenoViewSet(viewsets.ModelViewSet):
     """ViewSet para CRUD de formas de terreno (podrán acceder admin vía API)"""
 
-    queryset = FormaTerreno.objects.all()
+    queryset = FormaTerreno.objects.filter(activo=True)
     serializer_class = FormaTerrenoSerializer
     # Allow safe methods (GET/HEAD/OPTIONS) to be public/read-only, while keeping admin-only for write operations
     permission_classes = [AllowAny]
@@ -1493,6 +1508,11 @@ class FormaTerrenoViewSet(viewsets.ModelViewSet):
         if self.request.method in SAFE_METHODS:
             return [AllowAny()]
         return [IsAdminUser()]
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     pagination_class = None
 

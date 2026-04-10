@@ -5,6 +5,8 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
 
+from core.models import SoftDeleteBehaviorMixin
+
 
 class ConfiguracionPago(models.Model):
     """Configuración del monto de seña para reservas"""
@@ -67,13 +69,14 @@ class Servicio(models.Model):
         return self.nombre
 
 
-class ObjetivoDiseno(models.Model):
+class ObjetivoDiseno(SoftDeleteBehaviorMixin, models.Model):
     """Catálogo configurable de objetivos de diseño (no hardcodeado)."""
 
     id_objetivo_diseno = models.AutoField(primary_key=True)
     codigo = models.CharField(max_length=50, unique=True)
     nombre = models.CharField(max_length=120, unique=True)
     activo = models.BooleanField(default=True)
+    fecha_baja = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "Objetivo de Diseño"
@@ -85,7 +88,7 @@ class ObjetivoDiseno(models.Model):
         return self.nombre
 
 
-class OpcionNivelIntervencion(models.Model):
+class OpcionNivelIntervencion(SoftDeleteBehaviorMixin, models.Model):
     """Opciones configurables para nivel de intervención (true/false)."""
 
     id_opcion_nivel = models.AutoField(primary_key=True)
@@ -93,6 +96,7 @@ class OpcionNivelIntervencion(models.Model):
     nombre = models.CharField(max_length=120)
     valor = models.BooleanField(help_text="True=desde cero, False=remodelación")
     activo = models.BooleanField(default=True)
+    fecha_baja = models.DateTimeField(null=True, blank=True)
     orden = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -105,13 +109,14 @@ class OpcionNivelIntervencion(models.Model):
         return self.nombre
 
 
-class OpcionPresupuestoAproximado(models.Model):
+class OpcionPresupuestoAproximado(SoftDeleteBehaviorMixin, models.Model):
     """Opciones configurables para presupuesto aproximado."""
 
     id_opcion_presupuesto = models.AutoField(primary_key=True)
     codigo = models.CharField(max_length=50, unique=True)
     nombre = models.CharField(max_length=120)
     activo = models.BooleanField(default=True)
+    fecha_baja = models.DateTimeField(null=True, blank=True)
     orden = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -459,11 +464,13 @@ class ReservaEmpleado(models.Model):
         return f"{self.empleado.persona.nombre_completo} - {self.reserva.servicio.nombre} ({self.rol})"
 
 
-class FormaTerreno(models.Model):
+class FormaTerreno(SoftDeleteBehaviorMixin, models.Model):
     """Formas de terreno"""
 
     id_forma = models.AutoField(primary_key=True)
     nombre = models.CharField(max_length=100, unique=True)
+    activo = models.BooleanField(default=True)
+    fecha_baja = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "Forma de Terreno"

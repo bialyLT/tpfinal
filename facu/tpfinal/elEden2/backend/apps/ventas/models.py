@@ -2,6 +2,8 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
 
+from core.models import SoftDeleteBehaviorMixin
+
 
 class Pago(models.Model):
     """Modelo para métodos de pago según diagrama ER"""
@@ -20,7 +22,7 @@ class Pago(models.Model):
         return self.tipo
 
 
-class Compra(models.Model):
+class Compra(SoftDeleteBehaviorMixin, models.Model):
     """Modelo para registro de compras a proveedores
 
     El total se calcula automáticamente desde los detalles de la compra.
@@ -44,6 +46,8 @@ class Compra(models.Model):
     proveedor = models.ForeignKey("users.Proveedor", on_delete=models.PROTECT, related_name="compras")
 
     # Metadatos
+    activo = models.BooleanField(default=True)
+    fecha_baja = models.DateTimeField(null=True, blank=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
 

@@ -1,14 +1,17 @@
 from django.core.validators import MinValueValidator
 from django.db import models
-from django.utils import timezone
+
+from core.models import SoftDeleteBehaviorMixin
 
 
-class Categoria(models.Model):
+class Categoria(SoftDeleteBehaviorMixin, models.Model):
     """Modelo para categorías de productos"""
 
     id_categoria = models.AutoField(primary_key=True)
     nombre_categoria = models.CharField(max_length=100, unique=True)
     descripcion = models.TextField(blank=True, null=True)
+    activo = models.BooleanField(default=True)
+    fecha_baja = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "Categoría"
@@ -20,12 +23,14 @@ class Categoria(models.Model):
         return self.nombre_categoria
 
 
-class Marca(models.Model):
+class Marca(SoftDeleteBehaviorMixin, models.Model):
     """Modelo para marcas de productos"""
 
     id_marca = models.AutoField(primary_key=True)
     nombre_marca = models.CharField(max_length=100, unique=True)
     descripcion = models.TextField(blank=True, null=True)
+    activo = models.BooleanField(default=True)
+    fecha_baja = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "Marca"
@@ -37,7 +42,7 @@ class Marca(models.Model):
         return self.nombre_marca
 
 
-class Especie(models.Model):
+class Especie(SoftDeleteBehaviorMixin, models.Model):
     """Modelo para especies de plantas.
 
     Es equivalente a Marca, pero para productos tipo planta.
@@ -46,6 +51,8 @@ class Especie(models.Model):
     id_especie = models.AutoField(primary_key=True)
     nombre_especie = models.CharField(max_length=100, unique=True)
     descripcion = models.TextField(blank=True, null=True)
+    activo = models.BooleanField(default=True)
+    fecha_baja = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "Especie"
@@ -57,7 +64,7 @@ class Especie(models.Model):
         return self.nombre_especie
 
 
-class Tarea(models.Model):
+class Tarea(SoftDeleteBehaviorMixin, models.Model):
     """Modelo para tareas asociables a productos.
 
     - duracion_base: duración estimada base (en minutos)
@@ -68,6 +75,8 @@ class Tarea(models.Model):
     nombre = models.CharField(max_length=150, unique=True)
     duracion_base = models.PositiveIntegerField(validators=[MinValueValidator(0)])
     cantidad_personal_minimo = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    activo = models.BooleanField(default=True)
+    fecha_baja = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "Tarea"
@@ -79,7 +88,7 @@ class Tarea(models.Model):
         return self.nombre
 
 
-class Producto(models.Model):
+class Producto(SoftDeleteBehaviorMixin, models.Model):
     """Modelo para productos según diagrama ER
 
     El precio se calcula dinámicamente desde las compras realizadas.
@@ -142,20 +151,6 @@ class Producto(models.Model):
             return f"{self.nombre} - {marca}"
         especie = self.especie.nombre_especie if self.especie else "Sin especie"
         return f"{self.nombre} - {especie}"
-
-    def delete(self, using=None, keep_parents=False):
-        """Soft delete: marca el producto como inactivo sin borrar la fila."""
-        if self.activo:
-            self.activo = False
-            self.fecha_baja = timezone.now()
-            self.save(update_fields=["activo", "fecha_baja", "fecha_actualizacion"])
-
-    def restaurar(self):
-        """Restaura un producto previamente dado de baja."""
-        if not self.activo:
-            self.activo = True
-            self.fecha_baja = None
-            self.save(update_fields=["activo", "fecha_baja", "fecha_actualizacion"])
 
     def calcular_precio_desde_compras(self, porcentaje_ganancia=None):
         """Calcula y actualiza el precio del producto desde las compras.
