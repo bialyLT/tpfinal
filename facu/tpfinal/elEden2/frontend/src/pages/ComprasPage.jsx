@@ -145,7 +145,10 @@ const ComprasPage = () => {
     e.preventDefault();
 
     if (detalles.length === 0) {
-      handleApiError({ message: 'Debe agregar al menos un producto' }, 'Datos incompletos');
+      handleApiError(
+        { message: 'No se puede realizar la compra si no hay productos seleccionados' },
+        'Datos incompletos'
+      );
       return;
     }
 
@@ -199,6 +202,9 @@ const ComprasPage = () => {
   const calcularTotal = () => {
     return detalles.reduce((sum, detalle) => sum + (detalle.cantidad * detalle.precio_unitario), 0);
   };
+
+  const noHayProductosSeleccionados = detalles.length === 0;
+  const formularioIncompleto = !formData.proveedor || !formData.fecha || noHayProductosSeleccionados;
 
   if (loading && compras.length === 0) {
     return (
@@ -579,6 +585,12 @@ const ComprasPage = () => {
                 </div>
 
                 <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-gray-700">
+                  {noHayProductosSeleccionados && (
+                    <div className="mr-auto rounded-lg border border-amber-600 bg-amber-900/30 px-3 py-2 text-sm text-amber-300">
+                      No se puede realizar la compra si no hay productos seleccionados
+                    </div>
+                  )}
+
                   <button
                     type="button"
                     onClick={handleCloseModal}
@@ -588,8 +600,8 @@ const ComprasPage = () => {
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                    disabled={detalles.length === 0}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-green-600"
+                    disabled={formularioIncompleto}
                   >
                     {selectedCompra ? 'Actualizar' : 'Crear'} Compra
                   </button>

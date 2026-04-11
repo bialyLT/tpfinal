@@ -62,6 +62,18 @@ class EmpleadoSerializer(serializers.ModelSerializer):
 
 
 class ProveedorSerializer(serializers.ModelSerializer):
+    def validate_email(self, value):
+        email = (value or "").strip()
+        queryset = Proveedor.objects.filter(email__iexact=email)
+
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+
+        if queryset.exists():
+            raise serializers.ValidationError("Ya existe un proveedor con este email.")
+
+        return email
+
     class Meta:
         model = Proveedor
         fields = "__all__"

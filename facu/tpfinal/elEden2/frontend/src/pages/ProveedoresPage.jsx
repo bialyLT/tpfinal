@@ -75,6 +75,17 @@ const ProveedoresPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const emailNormalizado = (formData.email || '').trim().toLowerCase();
+    const emailDuplicado = proveedores.some((proveedor) => {
+      const esMismoRegistro = selectedProveedor && proveedor.id_proveedor === selectedProveedor.id_proveedor;
+      return !esMismoRegistro && (proveedor.email || '').trim().toLowerCase() === emailNormalizado;
+    });
+
+    if (emailDuplicado) {
+      handleApiError({ message: 'Ya existe un proveedor con ese email.' }, 'Datos duplicados');
+      return;
+    }
     
     try {
       if (selectedProveedor) {
