@@ -48,6 +48,14 @@ export const loading = (message, options = {}) => {
 export const handleApiError = (apiError, customMessage = null) => {
   console.log('🔴 API Error details:', apiError); // Debug log
   
+  // Ignorar errores relacionados con Private Network / loopback bloqueados por CORS (PNA)
+  const lowerMsg = (apiError?.message || '').toLowerCase();
+  if (!apiError.response && (lowerMsg.includes('loopback') || lowerMsg.includes('private network') || lowerMsg.includes('permission was denied') || lowerMsg.includes('blocked by cors') || lowerMsg.includes('access to xmlhttprequest') || lowerMsg.includes('failed to fetch'))) {
+    // No mostrar notificación al usuario, solo loguear para debug
+    console.warn('🔇 Ignorado error de red/CORS/PNA (no se mostrará notificación):', apiError?.message || apiError);
+    return null;
+  }
+
   let message = customMessage || 'Ocurrió un error inesperado';
   
   // Error de red (servidor caído, sin conexión, etc.)
