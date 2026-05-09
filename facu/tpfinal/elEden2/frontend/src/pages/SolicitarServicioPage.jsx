@@ -1,5 +1,6 @@
 import { Fragment, useState, useEffect, useRef, useMemo } from 'react';
 import flatpickr from 'flatpickr';
+import { Spanish } from 'flatpickr/dist/l10n/es.js';
 import api from '../services/api';
 import { addressService, serviciosService } from '../services';
 import { success, error, handleApiError } from '../utils/notifications';
@@ -224,7 +225,8 @@ const SolicitarServicioPage = () => {
 
       const options = {
         enableTime: false,
-        dateFormat: 'Y-m-d',
+        dateFormat: 'd/m/Y',
+        locale: Spanish,
         minDate: 'today',
         disable: fechasBloqueadas || [],
         defaultDate: formData.fecha_preferida || null,
