@@ -2,7 +2,7 @@ import { Fragment, useState, useEffect, useRef, useMemo } from 'react';
 import flatpickr from 'flatpickr';
 import { Spanish } from 'flatpickr/dist/l10n/es.js';
 import api from '../services/api';
-import { addressService, serviciosService } from '../services';
+import { addressService, configuracionService, serviciosService } from '../services';
 import { success, error, handleApiError } from '../utils/notifications';
 import { useAuth } from '../context/AuthContext';
 import { handlePagarSena } from '../utils/pagoHelpers';
@@ -36,6 +36,51 @@ const OPERATIONAL_MESSAGE = 'Por el momento solo operamos en Corrientes y Mision
 
 const normalizeText = (value) => (value || '').toString().trim().toLowerCase();
 
+const normalizeDateForApi = (dateValue) => {
+  if (!dateValue) return '';
+  const value = String(dateValue).trim();
+
+  // ISO style expected by backend (YYYY-MM-DD)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
+
+  // Accept YYYY/MM/DD and convert to YYYY-MM-DD
+  if (/^\d{4}\/\d{2}\/\d{2}$/.test(value)) {
+    const [year, month, day] = value.split('/');
+    return `${year}-${month}-${day}`;
+  }
+
+  // Backward compatibility for DD/MM/YYYY
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
+    const [day, month, year] = value.split('/');
+    return `${year}-${month}-${day}`;
+  }
+
+  return value;
+};
+
+const ESCALAS_TERRENO_OPCIONES = [
+  {
+    value: 'balcones_patios_pequenos',
+    label: 'Balcones o patios pequeños (menos de 20 m2)',
+  },
+  {
+    value: 'jardines_residenciales',
+    label: 'Jardines residenciales (entre 20 y 100 m2)',
+  },
+  {
+    value: 'grandes_superficies_quintas',
+    label: 'Grandes superficies o quintas (más de 100 m2)',
+  },
+];
+
+const MANTENIMIENTO_OPCIONES = [
+  { value: 'poda_arboles', label: 'Poda de árboles' },
+  { value: 'corte_cesped', label: 'Corte de césped' },
+  { value: 'cambio_abono', label: 'Cambio de abono' },
+];
+
 const isLocationWithinOperationalArea = (province, country) => {
   const provinceValue = normalizeText(province);
   const countryValue = normalizeText(country);
@@ -60,6 +105,7 @@ const SolicitarServicioPage = () => {
   
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [montoSena, setMontoSena] = useState(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [serviciosDisponibles, setServiciosDisponibles] = useState([]);
   const [fechasBloqueadas, setFechasBloqueadas] = useState([]);
@@ -77,13 +123,15 @@ const SolicitarServicioPage = () => {
     superficie_aproximada: '',
     objetivo_diseno: '', // id del objetivo (FK)
     nivel_intervencion: '', // 'true' | 'false' (se envía como boolean)
-    presupuesto_aproximado: ''
+    escala_terreno: '',
+    mantenimiento_tipos: []
   });
   const [referenceData, setReferenceData] = useState({
     localidades: [],
     objetivos_diseno: [],
     niveles_intervencion: [],
-    presupuestos_aproximados: [],
+    escalas_terreno: [],
+    mantenimientos_integrales: [],
   });
   const [addressSearch, setAddressSearch] = useState('');
   const [addressInfo, setAddressInfo] = useState(null);
@@ -131,10 +179,35 @@ const SolicitarServicioPage = () => {
     codigo: op.codigo,
   }));
 
-  const PRESUPUESTO_OPCIONES = (referenceData.presupuestos_aproximados || []).map((op) => ({
-    value: op.codigo,
-    label: op.nombre,
+  const escalaTerrenoBase = referenceData.escalas_terreno.length > 0 ? referenceData.escalas_terreno : ESCALAS_TERRENO_OPCIONES;
+  const ESCALA_TERRENO_OPCIONES = escalaTerrenoBase.map((op) => ({
+    value: op.value || op.codigo,
+    label: op.label || op.nombre,
   }));
+
+  const mantenimientoBase = referenceData.mantenimientos_integrales.length > 0
+    ? referenceData.mantenimientos_integrales
+    : MANTENIMIENTO_OPCIONES;
+  const MANTENIMIENTO_OPCIONES_CONFIG = mantenimientoBase.map((op) => ({
+    value: op.value || op.codigo,
+    label: op.label || op.nombre,
+  }));
+
+  const isMantenimientoIntegral = () => {
+    const mantService = getMantenimientoService();
+    return mantService && String(formData.servicio) === String(mantService.id_servicio);
+  };
+
+  const montoSenaFormateado = (() => {
+    if (montoSena === null || Number.isNaN(Number(montoSena))) {
+      return null;
+    }
+    return new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: 'ARS',
+      minimumFractionDigits: 2,
+    }).format(Number(montoSena));
+  })();
 
   // Cargar servicios disponibles y dirección del cliente al montar el componente
   useEffect(() => {
@@ -199,6 +272,20 @@ const SolicitarServicioPage = () => {
   }, []);
 
   useEffect(() => {
+    const fetchMontoSena = async () => {
+      try {
+        const data = await configuracionService.getConfig();
+        setMontoSena(data?.monto_sena ?? null);
+      } catch (err) {
+        console.error('Error al cargar monto de seña:', err);
+        setMontoSena(null);
+      }
+    };
+
+    fetchMontoSena();
+  }, []);
+
+  useEffect(() => {
     if (!formData.localidad_id) {
       return;
     }
@@ -225,7 +312,7 @@ const SolicitarServicioPage = () => {
 
       const options = {
         enableTime: false,
-        dateFormat: 'd/m/Y',
+        dateFormat: 'Y-m-d',
         locale: Spanish,
         minDate: 'today',
         disable: fechasBloqueadas || [],
@@ -323,6 +410,14 @@ const SolicitarServicioPage = () => {
       ...formData,
       [name]: value
     });
+  };
+
+  const handleMaintenanceTypesChange = (e) => {
+    const selectedValues = Array.from(e.target.selectedOptions).map((option) => option.value);
+    setFormData((prev) => ({
+      ...prev,
+      mantenimiento_tipos: selectedValues,
+    }));
   };
 
   const handleAddressLookup = async (forcedAddress) => {
@@ -500,16 +595,21 @@ const SolicitarServicioPage = () => {
             error('Por favor selecciona el nivel de intervención');
             return false;
           }
-          if (!formData.presupuesto_aproximado) {
-            error('Por favor selecciona un presupuesto aproximado');
+          if (!formData.escala_terreno) {
+            error('Por favor selecciona la escala de terreno');
             return false;
           }
           if (formData.imagenes_jardin.length === 0) {
             error('Para un diseño completo, necesitamos al menos una foto del jardín actual');
             return false;
           }
+        } else if (isMantenimientoIntegral()) {
+          if (formData.mantenimiento_tipos.length === 0) {
+            error('Por favor selecciona al menos un tipo de mantenimiento');
+            return false;
+          }
         } else {
-          // Validación estándar para Mantenimiento o Consulta Express
+          // Validación estándar para Consulta Express
           if (!formData.descripcion.trim()) {
             error('Por favor ingresa una descripción del servicio');
             return false;
@@ -566,7 +666,7 @@ const SolicitarServicioPage = () => {
 Superficie: ${formData.superficie_aproximada || 'A medir en visita'} m2
 Objetivo: ${objetivoLabel}
 Intervención: ${NIVEL_INTERVENCION_OPCIONES.find(o => o.value === formData.nivel_intervencion)?.label}
-Presupuesto: ${PRESUPUESTO_OPCIONES.find(o => o.value === formData.presupuesto_aproximado)?.label}
+Escala de terreno: ${ESCALA_TERRENO_OPCIONES.find(o => o.value === formData.escala_terreno)?.label}
 
 Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
 
@@ -575,10 +675,20 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
         formDataToSend.append('objetivo_diseno', formData.objetivo_diseno);
         // nivel_intervencion ahora es boolean
         formDataToSend.append('nivel_intervencion', formData.nivel_intervencion === 'true');
-        formDataToSend.append('presupuesto_aproximado', formData.presupuesto_aproximado);
+        formDataToSend.append('escala_terreno', formData.escala_terreno);
 
+      } else if (isMantenimientoIntegral()) {
+        const mantenimientoSeleccionado = MANTENIMIENTO_OPCIONES_CONFIG.filter((op) =>
+          formData.mantenimiento_tipos.includes(op.value)
+        ).map((op) => op.label);
+
+        observacionesCompletas = `MANTENIMIENTO INTEGRAL SOLICITADO\n${mantenimientoSeleccionado.map((item) => `- ${item}`).join('\n')}`;
+
+        if (formData.notas_adicionales) {
+          observacionesCompletas = `${observacionesCompletas}\n\nNotas adicionales: ${formData.notas_adicionales}`;
+        }
       } else {
-        // Consulta express o Mantenimiento
+        // Consulta express
         observacionesCompletas = formData.notas_adicionales
           ? `${formData.descripcion}\n\nNotas adicionales: ${formData.notas_adicionales}`
           : formData.descripcion;
@@ -597,9 +707,10 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
       formDataToSend.append('observaciones', observacionesCompletas);
       
       // Combinar fecha y hora si existe hora preferida
-      let fechaReserva = formData.fecha_preferida;
+      const fechaBase = normalizeDateForApi(formData.fecha_preferida);
+      let fechaReserva = fechaBase;
       if (formData.hora_preferida) {
-        fechaReserva = `${formData.fecha_preferida}T${formData.hora_preferida}:00`;
+        fechaReserva = `${fechaBase}T${formData.hora_preferida}:00`;
       }
       formDataToSend.append('fecha_cita', fechaReserva);
       // Compatibilidad (legacy)
@@ -758,26 +869,7 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
                   </div>
                 </div>
 
-                {/* Opción 2: Consulta Express */}
-                <div
-                  className="p-6 border-2 border-gray-600 rounded-lg cursor-pointer transition-all hover:scale-105 hover:border-blue-500 hover:bg-gray-700 group"
-                  onClick={() => handleSelectService('consulta_express')}
-                >
-                  <div className="text-center">
-                    <div className="w-16 h-16 mx-auto bg-blue-500/10 rounded-full flex items-center justify-center mb-4 group-hover:bg-blue-500/20 transition-colors">
-                      <Zap className="w-8 h-8 text-blue-400" />
-                    </div>
-                    <h3 className="text-xl font-bold text-white mb-2">Consulta Express</h3>
-                    <p className="text-sm text-gray-400 mb-4">
-                      Asesoramiento rápido e ideas preliminares. Ideal para dudas puntuales o pequeños cambios.
-                    </p>
-                    <ul className="text-xs text-gray-500 text-left space-y-1 list-disc list-inside">
-                      <li>Sin visita obligatoria</li>
-                      <li>Ideas rápidas</li>
-                      <li>Presupuesto estimativo</li>
-                    </ul>
-                  </div>
-                </div>
+                {/* Nota: 'Consulta Express' fue removida intencionalmente */}
 
                 {/* Opción 3: Mantenimiento */}
                 <div
@@ -872,28 +964,52 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
                         </select>
                       </div>
 
-                      {/* Presupuesto */}
+                      {/* Escala de terreno */}
                       <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
-                          <DollarSign className="w-4 h-4 inline mr-2" />
-                          Presupuesto aproximado *
+                          <Ruler className="w-4 h-4 inline mr-2" />
+                          Escala de terreno *
                         </label>
                         <select
-                          name="presupuesto_aproximado"
-                          value={formData.presupuesto_aproximado}
+                          name="escala_terreno"
+                          value={formData.escala_terreno}
                           onChange={handleChange}
                           className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
                         >
-                          <option value="">Seleccione rango...</option>
-                          {PRESUPUESTO_OPCIONES.map(op => (
+                          <option value="">Seleccione escala...</option>
+                          {ESCALA_TERRENO_OPCIONES.map(op => (
                             <option key={op.value} value={op.value}>{op.label}</option>
                           ))}
                         </select>
                       </div>
                     </div>
                   </div>
+                ) : isMantenimientoIntegral() ? (
+                  /* FORMULARIO DE MANTENIMIENTO INTEGRAL */
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      <Shovel className="w-4 h-4 inline mr-2" />
+                      ¿Qué tareas de mantenimiento necesita? *
+                    </label>
+                    <p className="text-xs text-gray-400 mb-2">
+                      Puede seleccionar varias opciones manteniendo presionada la tecla Ctrl o usando Shift.
+                    </p>
+                    <select
+                      multiple
+                      name="mantenimiento_tipos"
+                      value={formData.mantenimiento_tipos}
+                      onChange={handleMaintenanceTypesChange}
+                      className="w-full min-h-36 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    >
+                      {MANTENIMIENTO_OPCIONES_CONFIG.map((op) => (
+                        <option key={op.value} value={op.value}>
+                          {op.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 ) : (
-                  /* FORMULARIO ESTÁNDAR / CONSULTA EXPRESS / MANTENIMIENTO */
+                  /* FORMULARIO ESTÁNDAR / CONSULTA EXPRESS */
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       <FileText className="w-4 h-4 inline mr-2" />
@@ -1286,11 +1402,23 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
                           <li>Superficie: {formData.superficie_aproximada || 'A medir'} m²</li>
                           <li>Objetivo: {(referenceData.objetivos_diseno || []).find(o => String(o.id) === String(formData.objetivo_diseno))?.nombre}</li>
                           <li>Intervención: {NIVEL_INTERVENCION_OPCIONES.find(o => o.value === formData.nivel_intervencion)?.label}</li>
-                          <li>Presupuesto: {PRESUPUESTO_OPCIONES.find(o => o.value === formData.presupuesto_aproximado)?.label}</li>
+                          <li>Escala de terreno: {ESCALA_TERRENO_OPCIONES.find(o => o.value === formData.escala_terreno)?.label}</li>
                         </ul>
                       </div>
                     </div>
                   </>
+                ) : isMantenimientoIntegral() ? (
+                  <div className="flex items-start">
+                    <Shovel className="w-5 h-5 text-green-400 mr-3 mt-0.5" />
+                    <div>
+                      <span className="text-gray-300">Mantenimiento solicitado: </span>
+                      <ul className="text-white list-disc list-inside mt-1">
+                        {MANTENIMIENTO_OPCIONES_CONFIG.filter((op) => formData.mantenimiento_tipos.includes(op.value)).map((op) => (
+                          <li key={op.value}>{op.label}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
                 ) : (
                   <div className="flex items-start">
                     <FileText className="w-5 h-5 text-green-400 mr-3 mt-0.5" />
@@ -1340,6 +1468,18 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
                     <span className="text-gray-300">{isDisenoCompleto() ? 'Fecha de Revisión:' : 'Fecha del Servicio:'} </span>
                     <span className="text-white">{formData.fecha_preferida}</span>
                   </div>
+                </div>
+
+                <div className="rounded-lg border-2 border-yellow-500 bg-yellow-500/10 p-4">
+                  <p className="text-yellow-300 font-semibold uppercase tracking-wide text-xs mb-1">
+                    Aviso importante antes de pagar
+                  </p>
+                  <p className="text-white text-base font-medium">
+                    Costo de seña a pagar ahora:{' '}
+                    <span className="text-yellow-300 text-lg">
+                      {montoSenaFormateado || 'No disponible temporalmente'}
+                    </span>
+                  </p>
                 </div>
               </div>
 

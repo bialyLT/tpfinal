@@ -16,6 +16,7 @@ from .models import (
     ImagenZona,
     Jardin,
     OpcionNivelIntervencion,
+    OpcionMantenimientoIntegral,
     OpcionPresupuestoAproximado,
     ObjetivoDiseno,
     Reserva,
@@ -48,6 +49,12 @@ class OpcionPresupuestoAproximadoSerializer(serializers.ModelSerializer):
     class Meta:
         model = OpcionPresupuestoAproximado
         fields = ["id_opcion_presupuesto", "codigo", "nombre", "activo", "orden"]
+
+
+class OpcionMantenimientoIntegralSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OpcionMantenimientoIntegral
+        fields = ["id_opcion_mantenimiento", "codigo", "nombre", "activo", "orden"]
 
 
 class ObjetivoDisenoSerializer(serializers.ModelSerializer):

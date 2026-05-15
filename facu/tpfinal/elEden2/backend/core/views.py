@@ -87,8 +87,9 @@ class ReferenceDataView(APIView):
         from apps.users.models import Genero, Localidad, TipoDocumento
         from apps.servicios.models import (
             ObjetivoDiseno,
+            OpcionMantenimientoIntegral,
             OpcionNivelIntervencion,
-            OpcionPresupuestoAproximado,
+            Reserva,
         )
 
         generos = [{"id": g.id_genero, "nombre": g.genero} for g in Genero.objects.all()]
@@ -119,13 +120,21 @@ class ReferenceDataView(APIView):
             for o in OpcionNivelIntervencion.objects.filter(activo=True).order_by("orden", "nombre")
         ]
 
-        presupuestos_aproximados = [
+        escalas_terreno = [
             {
-                "id": o.id_opcion_presupuesto,
+                "codigo": codigo,
+                "nombre": nombre,
+            }
+            for codigo, nombre in Reserva.ESCALA_TERRENO_CHOICES
+        ]
+
+        mantenimientos_integrales = [
+            {
+                "id": o.id_opcion_mantenimiento,
                 "codigo": o.codigo,
                 "nombre": o.nombre,
             }
-            for o in OpcionPresupuestoAproximado.objects.filter(activo=True).order_by("orden", "nombre")
+            for o in OpcionMantenimientoIntegral.objects.filter(activo=True).order_by("orden", "nombre")
         ]
 
         return Response(
@@ -135,7 +144,8 @@ class ReferenceDataView(APIView):
                 "localidades": localidades,
                 "objetivos_diseno": objetivos_diseno,
                 "niveles_intervencion": niveles_intervencion,
-                "presupuestos_aproximados": presupuestos_aproximados,
+                "escalas_terreno": escalas_terreno,
+                "mantenimientos_integrales": mantenimientos_integrales,
             }
         )
 

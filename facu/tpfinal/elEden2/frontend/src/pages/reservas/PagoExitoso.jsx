@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { CheckCircle, Printer, FileText, Calendar, DollarSign, CreditCard, User, Mail, Phone, AlertCircle, Loader, Info, Ruler, Palette, Hammer, ArrowLeft } from 'lucide-react';
+import { CheckCircle, Printer, FileText, Calendar, CreditCard, User, Mail, Phone, AlertCircle, Loader, Info, Ruler, Palette, Hammer, ArrowLeft } from 'lucide-react';
 import api from '../../services/api';
 import { serviciosService } from '../../services';
 import { error as showError, success as showSuccess } from '../../utils/notifications';
@@ -9,7 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 const PagoExitoso = () => {
   const [referenceData, setReferenceData] = useState({
     niveles_intervencion: [],
-    presupuestos_aproximados: [],
+    escalas_terreno: [],
   });
 
   const getNivelIntervencionLabel = (value) => {
@@ -20,9 +20,26 @@ const PagoExitoso = () => {
     return match?.nombre || 'No especificado';
   };
 
-  const PRESUPUESTO_OPCIONES = (referenceData.presupuestos_aproximados || []).map((op) => ({
-    value: op.codigo,
-    label: op.nombre,
+  const escalaTerrenoBase = referenceData.escalas_terreno.length > 0
+    ? referenceData.escalas_terreno
+    : [
+        {
+          value: 'balcones_patios_pequenos',
+          label: 'Balcones o patios pequeños (menos de 20 m2)',
+        },
+        {
+          value: 'jardines_residenciales',
+          label: 'Jardines residenciales (entre 20 y 100 m2)',
+        },
+        {
+          value: 'grandes_superficies_quintas',
+          label: 'Grandes superficies o quintas (más de 100 m2)',
+        },
+      ];
+
+  const ESCALA_TERRENO_OPCIONES = escalaTerrenoBase.map((op) => ({
+    value: op.value || op.codigo,
+    label: op.label || op.nombre,
   }));
 
   const [searchParams] = useSearchParams();
@@ -71,7 +88,7 @@ const PagoExitoso = () => {
         const response = await api.get('/reference-data/');
         setReferenceData({
           niveles_intervencion: response.data?.niveles_intervencion || [],
-          presupuestos_aproximados: response.data?.presupuestos_aproximados || [],
+          escalas_terreno: response.data?.escalas_terreno || [],
         });
       } catch (err) {
         console.error('Error al cargar referencia de configuraciones:', err);
@@ -451,10 +468,10 @@ const PagoExitoso = () => {
                   </div>
                 </div>
                 <div className="flex items-start">
-                  <DollarSign className="w-4 h-4 text-green-600 mr-2 mt-0.5" />
+                  <Ruler className="w-4 h-4 text-green-600 mr-2 mt-0.5" />
                   <div>
-                    <span className="font-semibold">Presupuesto:</span>{' '}
-                    {PRESUPUESTO_OPCIONES.find(o => o.value === comprobante.presupuesto_aproximado)?.label || comprobante.presupuesto_aproximado || 'No especificado'}
+                    <span className="font-semibold">Escala de terreno:</span>{' '}
+                    {ESCALA_TERRENO_OPCIONES.find(o => o.value === comprobante.escala_terreno)?.label || comprobante.escala_terreno || 'No especificado'}
                   </div>
                 </div>
               </div>

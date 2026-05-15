@@ -129,8 +129,43 @@ class OpcionPresupuestoAproximado(SoftDeleteBehaviorMixin, models.Model):
         return self.nombre
 
 
+class OpcionMantenimientoIntegral(SoftDeleteBehaviorMixin, models.Model):
+    """Opciones configurables para mantenimiento integral de jardines."""
+
+    id_opcion_mantenimiento = models.AutoField(primary_key=True)
+    codigo = models.CharField(max_length=50, unique=True)
+    nombre = models.CharField(max_length=120)
+    activo = models.BooleanField(default=True)
+    fecha_baja = models.DateTimeField(null=True, blank=True)
+    orden = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        verbose_name = "Opción de Mantenimiento Integral"
+        verbose_name_plural = "Opciones de Mantenimiento Integral"
+        db_table = "opcion_mantenimiento_integral"
+        ordering = ["orden", "nombre"]
+
+    def __str__(self):
+        return self.nombre
+
+
 class Reserva(models.Model):
     """Modelo para reservas de servicios"""
+
+    ESCALA_TERRENO_CHOICES = [
+        (
+            "balcones_patios_pequenos",
+            "Balcones o patios pequeños (menos de 20 m2)",
+        ),
+        (
+            "jardines_residenciales",
+            "Jardines residenciales (entre 20 y 100 m2)",
+        ),
+        (
+            "grandes_superficies_quintas",
+            "Grandes superficies o quintas (más de 100 m2)",
+        ),
+    ]
 
     ESTADO_CHOICES = [
         ("pendiente", "Pendiente"),
@@ -195,17 +230,19 @@ class Reserva(models.Model):
         blank=True,
         help_text="Superficie aproximada en m2",
     )
+
+    escala_terreno = models.CharField(
+        max_length=50,
+        choices=ESCALA_TERRENO_CHOICES,
+        null=True,
+        blank=True,
+        help_text="Escala de terreno para el diseño",
+    )
     
     nivel_intervencion = models.BooleanField(
         null=True,
         blank=True,
         help_text="Nivel de intervención requerido (True=desde cero, False=remodelación)",
-    )
-    presupuesto_aproximado = models.CharField(
-        max_length=50,
-        null=True,
-        blank=True,
-        help_text="Rango de presupuesto estimado por el cliente",
     )
 
     objetivo_diseno = models.ForeignKey(

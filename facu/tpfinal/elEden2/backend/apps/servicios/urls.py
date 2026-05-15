@@ -11,6 +11,7 @@ router.register(r"formas-terreno", views.FormaTerrenoViewSet)
 router.register(r"objetivos-diseno", views.ObjetivoDisenoViewSet)
 router.register(r"niveles-intervencion", views.OpcionNivelIntervencionViewSet)
 router.register(r"presupuestos-aproximados", views.OpcionPresupuestoAproximadoViewSet)
+router.register(r"mantenimientos-integrales", views.OpcionMantenimientoIntegralViewSet)
 
 urlpatterns = [
     path("servicios/configuracion-pagos/", views.ConfiguracionPagoAPIView.as_view(), name="configuracion-pagos"),

@@ -9,6 +9,7 @@ from .models import (
     ImagenReserva,
     ImagenZona,
     Jardin,
+    OpcionMantenimientoIntegral,
     OpcionNivelIntervencion,
     OpcionPresupuestoAproximado,
     ObjetivoDiseno,
@@ -60,6 +61,14 @@ class OpcionNivelIntervencionAdmin(admin.ModelAdmin):
 @admin.register(OpcionPresupuestoAproximado)
 class OpcionPresupuestoAproximadoAdmin(admin.ModelAdmin):
     list_display = ("id_opcion_presupuesto", "codigo", "nombre", "activo", "orden")
+    list_filter = ("activo",)
+    search_fields = ("codigo", "nombre")
+    ordering = ("orden", "nombre")
+
+
+@admin.register(OpcionMantenimientoIntegral)
+class OpcionMantenimientoIntegralAdmin(admin.ModelAdmin):
+    list_display = ("id_opcion_mantenimiento", "codigo", "nombre", "activo", "orden")
     list_filter = ("activo",)
     search_fields = ("codigo", "nombre")
     ordering = ("orden", "nombre")

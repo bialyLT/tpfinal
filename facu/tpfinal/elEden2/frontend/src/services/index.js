@@ -885,6 +885,32 @@ export const presupuestosAproximadosService = {
   }
 };
 
+export const mantenimientosIntegralesService = {
+  getAll: async (params = {}) => {
+    const response = await api.get('/servicios/mantenimientos-integrales/', { params });
+    return response.data;
+  },
+
+  create: async (data) => {
+    const response = await api.post('/servicios/mantenimientos-integrales/', data);
+    return response.data;
+  },
+
+  update: async (id, data) => {
+    const response = await api.put(`/servicios/mantenimientos-integrales/${id}/`, data);
+    return response.data;
+  },
+
+  patch: async (id, data) => {
+    const response = await api.patch(`/servicios/mantenimientos-integrales/${id}/`, data);
+    return response.data;
+  },
+
+  delete: async (id) => {
+    await api.delete(`/servicios/mantenimientos-integrales/${id}/`);
+  }
+};
+
 export const formasTerrenoService = {
   getAll: async (params = {}) => {
     const response = await api.get('/servicios/formas-terreno/', { params });

@@ -41,6 +41,7 @@ from .models import (
     ImagenReserva,
     Jardin,
     OpcionNivelIntervencion,
+    OpcionMantenimientoIntegral,
     OpcionPresupuestoAproximado,
     ObjetivoDiseno,
     Pago,
@@ -58,6 +59,7 @@ from .serializers import (
     JardinSerializer,
     ObjetivoDisenoSerializer,
     OpcionNivelIntervencionSerializer,
+    OpcionMantenimientoIntegralSerializer,
     OpcionPresupuestoAproximadoSerializer,
     EditarEmpleadosReservaSerializer,
     ReservaSerializer,
@@ -69,7 +71,12 @@ logger = logging.getLogger(__name__)
 
 
 class ConfiguracionPagoAPIView(APIView):
-    permission_classes = [SoloAdministrador]
+    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.request.method in ["PUT", "PATCH"]:
+            return [SoloAdministrador()]
+        return [IsAuthenticated()]
 
     def get(self, request):
         config, created = ConfiguracionPago.objects.get_or_create(
@@ -172,6 +179,20 @@ class OpcionNivelIntervencionViewSet(viewsets.ModelViewSet):
 class OpcionPresupuestoAproximadoViewSet(viewsets.ModelViewSet):
     queryset = OpcionPresupuestoAproximado.objects.filter(activo=True)
     serializer_class = OpcionPresupuestoAproximadoSerializer
+    permission_classes = [SoloAdministrador]
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ["codigo", "nombre"]
+    ordering = ["orden", "nombre"]
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class OpcionMantenimientoIntegralViewSet(viewsets.ModelViewSet):
+    queryset = OpcionMantenimientoIntegral.objects.filter(activo=True)
+    serializer_class = OpcionMantenimientoIntegralSerializer
     permission_classes = [SoloAdministrador]
     filter_backends = [SearchFilter, OrderingFilter]
     search_fields = ["codigo", "nombre"]
@@ -526,6 +547,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
 
         # Campos legacy (normalización): si el frontend los manda, los ignoramos
         data.pop("tipo_servicio_solicitado", None)
+        data.pop("presupuesto_aproximado", None)
 
         # Obtener el cliente actual basado en el email del usuario autenticado
         try:
@@ -547,13 +569,25 @@ class ReservaViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Normalización/seguridad: si el usuario envía un servicio de tipo "consulta/express",
+        # lo mapeamos al servicio de Diseño (si existe) porque la UI considera consulta == diseño.
         try:
-            servicio = Servicio.objects.get(id_servicio=servicio_id, activo=True)
+            posible = Servicio.objects.get(id_servicio=servicio_id)
         except Servicio.DoesNotExist:
-            return Response(
-                {"error": "El servicio seleccionado no existe o no está disponible"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"error": "El servicio seleccionado no existe."}, status=status.HTTP_400_BAD_REQUEST)
+
+        nombre_lower = (posible.nombre or '').lower()
+        if 'consulta' in nombre_lower or 'express' in nombre_lower:
+            # Buscar servicio de diseño disponible
+            diseno_svc = Servicio.objects.filter(nombre__icontains='diseño', activo=True).first()
+            if diseno_svc:
+                servicio = diseno_svc
+            else:
+                return Response({"error": "Servicio de diseño no disponible para mapear la consulta."}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            if not posible.activo:
+                return Response({"error": "El servicio seleccionado no está disponible"}, status=status.HTTP_400_BAD_REQUEST)
+            servicio = posible
 
         # Asignar automáticamente el cliente autenticado
         data["cliente"] = cliente.id_cliente
@@ -1489,7 +1523,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
                 if reserva.objetivo_diseno_id
                 else None,
                 "nivel_intervencion": reserva.nivel_intervencion,
-                "presupuesto_aproximado": reserva.presupuesto_aproximado,
+                "escala_terreno": reserva.escala_terreno,
             }
         )
 
