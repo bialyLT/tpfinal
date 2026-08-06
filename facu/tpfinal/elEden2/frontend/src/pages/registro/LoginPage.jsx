@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-do
 import { useAuth } from '../../context/AuthContext';
 import { Leaf, Mail, Lock, ArrowLeft } from 'lucide-react';
 import GoogleLoginButton from '../../components/GoogleLoginButton';
+import portadaLogin from '../../assets/portada-login.jpeg';
 
 const LoginPage = () => {
   const [formData, setFormData] = useState({
@@ -174,7 +175,7 @@ const LoginPage = () => {
       {/* Columna Derecha: Imagen */}
       <div 
         className="hidden lg:block lg:w-1/2 bg-cover bg-center"
-        style={{ backgroundImage: "url('https://images.unsplash.com/photo-1558591710-4b4a1ae0f04d?q=80&w=1887&auto=format&fit=crop')" }}
+        style={{ backgroundImage: `url(${portadaLogin})` }}
       >
         <div className="w-full h-full bg-gray-900/30"></div>
       </div>

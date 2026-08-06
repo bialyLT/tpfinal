@@ -1,0 +1,43 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div class="module">
+  <h1>{{ title }}</h1>
+  <p><strong>Empleado:</strong> {{ empleado.persona.nombre }} {{ empleado.persona.apellido }}</p>
+  <p><strong>Calificación promedio:</strong> {{ empleado.puntuacion_promedio }}</p>
+  <p><strong>Cantidad de calificaciones:</strong> {{ empleado.puntuacion_cantidad }}</p>
+  <p><a href="{{ detalle_url }}">Volver al empleado</a></p>
+</div>
+
+<div class="module">
+  <h2>Calificaciones menores a 10</h2>
+  <table class="adminlist">
+    <thead>
+      <tr>
+        <th>Fecha</th>
+        <th>Reserva</th>
+        <th>Encuesta</th>
+        <th>Pregunta</th>
+        <th>Calificación</th>
+        <th>Observación del cliente</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for respuesta in respuestas %}
+      <tr>
+        <td>{{ respuesta.encuesta_respuesta.fecha_realizacion|date:"d/m/Y H:i" }}</td>
+        <td>#{{ respuesta.encuesta_respuesta.reserva.id_reserva }}</td>
+        <td>{{ respuesta.encuesta_respuesta.encuesta.titulo }}</td>
+        <td>{{ respuesta.pregunta.texto }}</td>
+        <td>{{ respuesta.valor_numerico }}</td>
+        <td>{{ respuesta.valor_texto|default:"Sin observación" }}</td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="6">No hay calificaciones menores a 10 para este empleado.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

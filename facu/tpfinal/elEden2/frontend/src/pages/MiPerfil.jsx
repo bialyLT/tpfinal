@@ -62,6 +62,8 @@ const MiPerfil = () => {
   const employeeScoreAverage = Number(user?.empleado?.puntuacion_promedio || 0);
   const employeeScoreCount = Number(user?.empleado?.puntuacion_cantidad || 0);
   const employeeLastScoreAt = user?.empleado?.fecha_ultima_puntuacion || null;
+  const employeeScoreNeedsAttention = employeeScoreCount > 0 && employeeScoreCount < 50 && employeeScoreAverage < 6;
+  const employeeScoreColorClass = employeeScoreNeedsAttention ? 'text-red-400' : 'text-emerald-400';
 
   const formatImpactDate = (value) => {
     if (!value) return '-';
@@ -701,10 +703,10 @@ const MiPerfil = () => {
                   <div>
                     <h3 className="text-xl font-semibold text-white flex items-center">
                       <BarChart3 className="w-5 h-5 mr-2 text-emerald-400" />
-                      Impacto de Encuestas en tu Puntaje
+                      Detalles de calificacion
                     </h3>
-                    <p className="text-sm text-gray-400">
-                      Visualiza las respuestas de clientes que influyeron en tus evaluaciones recientes.
+                    <p className={`text-sm ${employeeScoreNeedsAttention ? 'text-red-300' : 'text-gray-400'}`}>
+                      Calificacion actual: {employeeScoreCount > 0 ? employeeScoreAverage.toFixed(2) : '—'}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -728,9 +730,14 @@ const MiPerfil = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                   <div className="bg-gray-900/60 border border-gray-700 rounded-lg p-4">
                     <p className="text-xs uppercase text-gray-500 mb-1">Calificación promedio</p>
-                    <p className="text-2xl font-bold text-emerald-400">
+                    <p className={`text-2xl font-bold ${employeeScoreColorClass}`}>
                       {employeeScoreCount > 0 ? employeeScoreAverage.toFixed(2) : '—'}
                     </p>
+                    {employeeScoreNeedsAttention && (
+                      <p className="mt-2 text-xs text-red-300">
+                        Calificación baja: revisá los detalles de las encuestas para corregir observaciones.
+                      </p>
+                    )}
                   </div>
                   <div className="bg-gray-900/60 border border-gray-700 rounded-lg p-4">
                     <p className="text-xs uppercase text-gray-500 mb-1">Evaluaciones consideradas</p>

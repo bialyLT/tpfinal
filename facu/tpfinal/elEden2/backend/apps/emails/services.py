@@ -528,7 +528,7 @@ Sistema de Notificaciones - El Edén
             return False
 
     @staticmethod
-    def send_employee_deactivation_alert(empleado, motivo, promedio_actual, evaluaciones_bajas):
+    def send_employee_deactivation_alert(empleado, motivo, promedio_actual, cantidad_calificaciones, evaluaciones_bajas=None):
         """Envía un correo al equipo administrativo cuando un empleado es dado de baja por puntuación."""
         subject = f"Empleado {empleado.persona.nombre} {empleado.persona.apellido} dado de baja"
         nombre_empleado = f"{empleado.persona.nombre} {empleado.persona.apellido}".strip()
@@ -537,6 +537,7 @@ Sistema de Notificaciones - El Edén
         except (TypeError, ValueError):
             promedio_str = str(promedio_actual)
         timestamp = timezone.now().strftime("%Y-%m-%d %H:%M:%S")
+        evaluaciones_bajas = evaluaciones_bajas if evaluaciones_bajas is not None else "N/D"
 
         message = f"""
 Hola equipo administrativo,
@@ -545,7 +546,8 @@ El empleado {nombre_empleado} ({empleado.persona.email}) ha sido desactivado aut
 
 Motivo: {motivo}
 Promedio actual: {promedio_str}
-Calificaciones consecutivas < 7: {evaluaciones_bajas}
+Cantidad de calificaciones: {cantidad_calificaciones}
+Calificaciones consecutivas < 6: {evaluaciones_bajas}
 Fecha de baja: {timestamp}
 
 Por favor, revisen el estado del empleado y tomen las acciones necesarias.
@@ -1249,6 +1251,18 @@ El equipo de El Edén
             if cantidad_items is not None:
                 items_line = f"\nÍtems considerados: {cantidad_items}"
 
+            warning_line = ""
+            if puntuacion_promedio_fmt < Decimal("6.00"):
+                warning_line = """
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AVISO IMPORTANTE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+La calificación recibida es baja.
+Prestá atención a los detalles de la observación del cliente para corregir lo necesario.
+"""
+
             message = f"""
 Se registró una nueva encuesta de satisfacción para una reserva en la que estás asignado/a.
 
@@ -1265,6 +1279,8 @@ PUNTAJE RECIBIDO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Puntuación promedio: {puntuacion_promedio_fmt} / 10{items_line}
+
+{warning_line}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

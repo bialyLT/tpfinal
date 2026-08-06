@@ -149,10 +149,11 @@ export const AuthProvider = ({ children }) => {
       return { success: true };
     } catch (err) {
       console.error('Error en registro:', err);
-      
-      const message = handleApiError(err, 'Error al registrar usuario');
-      dispatch({ type: 'LOGIN_FAILURE', payload: message });
-      return { success: false, error: message };
+
+      // Mantener el fallo silencioso para no mostrar toast al crear clientes.
+      // El error queda registrado en consola para diagnóstico.
+      dispatch({ type: 'LOGIN_FAILURE', payload: null });
+      return { success: false, error: null };
     }
   };
 

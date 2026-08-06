@@ -168,7 +168,7 @@ class Empleado(SoftDeleteBehaviorMixin, models.Model):
     )
     evaluaciones_bajas_consecutivas = models.PositiveIntegerField(
         default=0,
-        help_text="Cantidad de evaluaciones consecutivas con puntaje menor a 7",
+        help_text="Cantidad de evaluaciones consecutivas con puntaje menor a 6",
     )
     fecha_baja_automatica = models.DateTimeField(
         null=True,
@@ -206,7 +206,6 @@ class Empleado(SoftDeleteBehaviorMixin, models.Model):
         else:
             promedio_encuesta = Decimal("0.00")
 
-        promedio_anterior = self.puntuacion_promedio or Decimal("0.00")
         timestamp = timestamp or timezone.now()
 
         self.puntuacion_acumulada = (self.puntuacion_acumulada or Decimal("0")) + puntuacion_total
@@ -218,7 +217,7 @@ class Empleado(SoftDeleteBehaviorMixin, models.Model):
         else:
             self.puntuacion_promedio = Decimal("0.00")
 
-        if promedio_encuesta < Decimal("7.00"):
+        if promedio_encuesta < Decimal("6.00"):
             self.evaluaciones_bajas_consecutivas = (self.evaluaciones_bajas_consecutivas or 0) + 1
         else:
             self.evaluaciones_bajas_consecutivas = 0
@@ -227,17 +226,13 @@ class Empleado(SoftDeleteBehaviorMixin, models.Model):
 
         alert_triggered = False
         motivo_baja = None
-        motivo_promedio = "Promedio general descendió por debajo de 7"
-        motivo_consecutivas = "Recibió 3 calificaciones consecutivas menores a 7"
-        umbral = Decimal("7.00")
+        motivo_promedio = "Promedio general inferior a 6 con más de 50 calificaciones"
+        umbral = Decimal("6.00")
 
         if self.activo:
-            if promedio_anterior >= umbral and self.puntuacion_promedio < umbral:
+            if self.puntuacion_cantidad > 50 and self.puntuacion_promedio < umbral:
                 alert_triggered = True
                 motivo_baja = motivo_promedio
-            elif self.evaluaciones_bajas_consecutivas >= 3:
-                alert_triggered = True
-                motivo_baja = motivo_consecutivas
 
         fields_to_update = [
             "puntuacion_acumulada",
@@ -265,6 +260,7 @@ class Empleado(SoftDeleteBehaviorMixin, models.Model):
                 empleado=self,
                 motivo=motivo_baja,
                 promedio_actual=self.puntuacion_promedio,
+                cantidad_calificaciones=self.puntuacion_cantidad,
                 evaluaciones_bajas=self.evaluaciones_bajas_consecutivas,
             )
 

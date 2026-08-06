@@ -21,6 +21,7 @@ const ServiciosPage = () => {
   const [dateFromFilter, setDateFromFilter] = useState('');
   const [dateToFilter, setDateToFilter] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('');
+  const [onlyAssignedFilter, setOnlyAssignedFilter] = useState(false);
   const [isDisenoModalOpen, setIsDisenoModalOpen] = useState(false);
   const [isJardinModalOpen, setIsJardinModalOpen] = useState(false);
   const [servicioParaJardin, setServicioParaJardin] = useState(null);
@@ -66,7 +67,8 @@ const ServiciosPage = () => {
           fecha_solicitud_after: dateFromFilter || undefined,
           fecha_solicitud_before: dateToFilter || undefined,
           ...pagosParams,
-          search: searchTerm || undefined
+          search: searchTerm || undefined,
+          solo_asignadas: onlyAssignedFilter ? '1' : undefined,
         })
       ];
 
@@ -123,7 +125,8 @@ const ServiciosPage = () => {
     dateFromFilter,
     dateToFilter,
     paymentFilter,
-    searchTerm
+    searchTerm,
+    onlyAssignedFilter,
   ]);
 
   useEffect(() => {
@@ -377,6 +380,24 @@ const ServiciosPage = () => {
               </div>
             </div>
 
+            {isEmpleado && !isAdmin && (
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOnlyAssignedFilter((prev) => !prev);
+                    setSolicitudesPagination((prev) => ({ ...prev, currentPage: 1 }));
+                  }}
+                  className={`px-4 py-2 rounded-lg border transition-colors ${onlyAssignedFilter
+                    ? 'bg-emerald-600 border-emerald-500 text-white'
+                    : 'bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600'
+                  }`}
+                >
+                  {onlyAssignedFilter ? 'Mostrando mis reservas' : 'Ver mis reservas asignadas'}
+                </button>
+              </div>
+            )}
+
             {/* Clear Filters */}
             <div className="flex items-end">
               <button
@@ -387,6 +408,8 @@ const ServiciosPage = () => {
                   setDateFromFilter('');
                   setDateToFilter('');
                   setPaymentFilter('');
+                  setOnlyAssignedFilter(false);
+                  setSolicitudesPagination((prev) => ({ ...prev, currentPage: 1 }));
                 }}
                 className="px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white hover:bg-gray-600 transition-colors"
               >

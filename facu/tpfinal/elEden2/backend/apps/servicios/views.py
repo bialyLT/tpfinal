@@ -307,6 +307,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
         self._auto_finalize_due_reservas(user=self.request.user)
         user = self.request.user
         include_all = str(self.request.query_params.get("include_all", "")).lower() in {"1", "true", "yes"}
+        only_assigned = str(self.request.query_params.get("solo_asignadas", "")).lower() in {"1", "true", "yes"}
         base_queryset = self.queryset
 
         es_admin = user.is_staff or user.is_superuser
@@ -326,13 +327,16 @@ class ReservaViewSet(viewsets.ModelViewSet):
 
         # Verificar si es empleado
         try:
-            Empleado.objects.get(persona__email=user.email)
+            empleado = Empleado.objects.get(persona__email=user.email)
             # Empleados también solo ven reservas con seña pagada
-            if include_all:
-                return base_queryset
-            return Reserva.objects.select_related("cliente__persona", "servicio", "localidad_servicio", "pago").filter(
+            queryset = Reserva.objects.select_related("cliente__persona", "servicio", "localidad_servicio", "pago").filter(
                 pago__estado_pago_sena__in=["sena_pagada", "aprobado"]
             )
+            if only_assigned:
+                queryset = queryset.filter(asignaciones__empleado=empleado, asignaciones__rol="operador").distinct()
+            if include_all:
+                return queryset
+            return queryset
         except Empleado.DoesNotExist:
             pass
 

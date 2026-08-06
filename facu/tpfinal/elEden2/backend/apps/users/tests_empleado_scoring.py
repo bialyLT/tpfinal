@@ -58,28 +58,32 @@ class EmpleadoScoringAlertsTests(TestCase):
         self.empleado.refresh_from_db()
 
     @patch("apps.users.models.EmailService.send_employee_deactivation_alert")
-    def test_promedio_general_cruza_umbral_desactiva_y_envia_alerta(self, mock_alert):
-        """Si el promedio general cae de >=7 a <7 se desactiva y se notifica."""
-        self._registrar_encuesta(puntuacion_total="25", cantidad_items=5)
+    def test_promedio_bajo_con_menos_de_50_no_desactiva(self, mock_alert):
+        """Con menos de 50 calificaciones, un promedio bajo solo deja al empleado activo."""
+        self.empleado.puntuacion_acumulada = Decimal("280.00")
+        self.empleado.puntuacion_cantidad = 48
+        self.empleado.puntuacion_promedio = Decimal("5.83")
+        self.empleado.save(
+            update_fields=["puntuacion_acumulada", "puntuacion_cantidad", "puntuacion_promedio"]
+        )
+
+        self._registrar_encuesta(puntuacion_total="4", cantidad_items=1)
 
         self.empleado.refresh_from_db()
         self.user.refresh_from_db()
-        self.assertFalse(self.empleado.activo)
-        self.assertIsNotNone(self.empleado.fecha_baja_automatica)
-        self.assertIn("Promedio general", self.empleado.motivo_baja_automatica)
-        self.assertEqual(self.empleado.evaluaciones_bajas_consecutivas, 1)
-        self.assertFalse(self.user.is_active)
-        mock_alert.assert_called_once()
-        args, kwargs = mock_alert.call_args
-        self.assertEqual(kwargs["empleado"], self.empleado)
-        self.assertIn("Promedio general", kwargs["motivo"])
+        self.assertTrue(self.empleado.activo)
+        self.assertIsNone(self.empleado.fecha_baja_automatica)
+        self.assertEqual(self.empleado.puntuacion_cantidad, 49)
+        self.assertLess(self.empleado.puntuacion_promedio, Decimal("6.00"))
+        self.assertFalse(mock_alert.called)
+        self.assertTrue(self.user.is_active)
 
     @patch("apps.users.models.EmailService.send_employee_deactivation_alert")
-    def test_tres_calificaciones_bajas_consecutivas_generan_baja(self, mock_alert):
-        """Tres calificaciones <7 consecutivas disparan la baja aunque el promedio global siga >=7."""
-        self.empleado.puntuacion_acumulada = Decimal("300.00")
-        self.empleado.puntuacion_cantidad = 30
-        self.empleado.puntuacion_promedio = Decimal("10.00")
+    def test_mas_de_50_calificaciones_y_promedio_bajo_generan_baja(self, mock_alert):
+        """Más de 50 calificaciones con promedio menor a 6 disparan la baja automática."""
+        self.empleado.puntuacion_acumulada = Decimal("280.00")
+        self.empleado.puntuacion_cantidad = 48
+        self.empleado.puntuacion_promedio = Decimal("5.83")
         self.empleado.save(
             update_fields=[
                 "puntuacion_acumulada",
@@ -88,20 +92,20 @@ class EmpleadoScoringAlertsTests(TestCase):
             ]
         )
 
-        for _ in range(3):
-            self._registrar_encuesta(puntuacion_total="18", cantidad_items=3)
+        self._registrar_encuesta(puntuacion_total="12", cantidad_items=3)
 
         self.empleado.refresh_from_db()
         self.user.refresh_from_db()
         self.assertFalse(self.empleado.activo)
-        self.assertEqual(self.empleado.evaluaciones_bajas_consecutivas, 3)
-        self.assertIn("consecutivas", self.empleado.motivo_baja_automatica)
+        self.assertEqual(self.empleado.puntuacion_cantidad, 51)
+        self.assertLess(self.empleado.puntuacion_promedio, Decimal("6.00"))
+        self.assertIn("más de 50", self.empleado.motivo_baja_automatica)
         self.assertFalse(self.user.is_active)
         mock_alert.assert_called_once()
 
     @patch("apps.users.models.EmailService.send_employee_deactivation_alert")
     def test_calificacion_alta_resetea_contador_de_bajas(self, mock_alert):
-        """Cuando recibe una calificación >=7 se reinicia el contador de bajas consecutivas."""
+        """Cuando recibe una calificación alta se reinicia el contador de bajas consecutivas."""
         self.empleado.puntuacion_acumulada = Decimal("300.00")
         self.empleado.puntuacion_cantidad = 30
         self.empleado.puntuacion_promedio = Decimal("10.00")
@@ -117,7 +121,7 @@ class EmpleadoScoringAlertsTests(TestCase):
             ]
         )
 
-        self._registrar_encuesta(puntuacion_total="18", cantidad_items=3)  # promedio 6 -> contador 1
+        self._registrar_encuesta(puntuacion_total="15", cantidad_items=3)  # promedio 5 -> contador 1
         self.empleado.refresh_from_db()
         self.assertEqual(self.empleado.evaluaciones_bajas_consecutivas, 1)
         self.assertTrue(self.empleado.activo)

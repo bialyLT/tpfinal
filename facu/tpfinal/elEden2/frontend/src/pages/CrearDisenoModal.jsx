@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import flatpickr from 'flatpickr';
 import { Spanish } from 'flatpickr/dist/l10n/es.js';
-import { X, Upload, Plus, Trash2, Palette, DollarSign, Calendar, Image as ImageIcon, Package, Search } from 'lucide-react';
+import { X, Upload, Plus, Trash2, Palette, DollarSign, Calendar, Image as ImageIcon, Package, Search, Copy, ChevronDown } from 'lucide-react';
 import { serviciosService, productosService, tareasService } from '../services';
 import { useAuth } from '../context/AuthContext';
 import ProductSelector from '../components/ProductSelector';
@@ -216,6 +216,12 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
   const [searchReservaLoading, setSearchReservaLoading] = useState(false);
   const [searchReservaError, setSearchReservaError] = useState('');
   const [reservaBuscada, setReservaBuscada] = useState(null);
+
+  // Diseños rechazados de la reserva seleccionada (para copiar contenido)
+  const [disenosRechazados, setDisenosRechazados] = useState([]);
+  const [cargandoRechazados, setCargandoRechazados] = useState(false);
+  const [copiandoDisenoId, setCopiandoDisenoId] = useState(null);
+  const [mostrarPanelCopiar, setMostrarPanelCopiar] = useState(false);
 
   const getStockForProduct = (productId, inventario = null) => {
     if (!productId && productId !== 0) return 0;
@@ -529,6 +535,48 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
     }
   }, [isOpen]);
 
+  // Cargar diseños rechazados de la reserva seleccionada (con modificación solicitada)
+  useEffect(() => {
+    if (!isOpen || modoEdicion) {
+      setDisenosRechazados([]);
+      setMostrarPanelCopiar(false);
+      return;
+    }
+
+    const reservaActualId = reserva?.id_reserva || reserva?.id || reservaBuscada?.id_reserva || reservaSeleccionadaId;
+    if (!reservaActualId) {
+      setDisenosRechazados([]);
+      setMostrarPanelCopiar(false);
+      return;
+    }
+
+    let active = true;
+    setCargandoRechazados(true);
+    setMostrarPanelCopiar(false);
+
+    serviciosService.getDisenos({ estado: 'rechazado', reserva: reservaActualId, page_size: 100 })
+      .then((data) => {
+        if (!active) return;
+        const allRechazados = data.results || data || [];
+        const conModificacion = allRechazados.filter((d) => d && d.observaciones_cliente && String(d.observaciones_cliente).trim());
+        setDisenosRechazados(conModificacion);
+        if (conModificacion.length > 0) {
+          setMostrarPanelCopiar(true);
+        }
+      })
+      .catch((err) => {
+        console.error('Error al cargar diseños rechazados:', err);
+        if (active) setDisenosRechazados([]);
+      })
+      .finally(() => {
+        if (active) setCargandoRechazados(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isOpen, modoEdicion, reserva?.id_reserva, reserva?.id, reservaBuscada?.id_reserva, reservaSeleccionadaId]);
+
   // Watch fechaPropuesta and fechasBloqueadas to show validation state if necessary
   useEffect(() => {
     if (!fechaPropuesta) {
@@ -676,6 +724,82 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
       }
     } catch {
       setSearchReservaError('No se pudo leer el portapapeles. Pegá el ID manualmente.');
+    }
+  };
+
+  const copiarDisenoRechazado = async (disenoId) => {
+    if (!disenoId || copiandoDisenoId) return;
+    setCopiandoDisenoId(disenoId);
+    try {
+      const disenoData = await serviciosService.getDiseno(disenoId);
+
+      // Descripción técnica
+      setFormData({
+        descripcion_tecnica: disenoData.descripcion || '',
+        presupuesto: '',
+        presupuesto_final: disenoData.presupuesto || ''
+      });
+
+      // Productos
+      const productosCopiados = (disenoData.productos || []).map(p => ({
+        producto_id: p.producto,
+        cantidad: parseInt(p.cantidad, 10) || 0,
+        precio_unitario: parseFloat(p.precio_unitario) || 0,
+        notas: p.notas || ''
+      }));
+      setProductosSeleccionados(productosCopiados);
+
+      // Costo mano de obra = presupuesto total - subtotal de productos
+      const subtotal = productosCopiados.reduce((acc, prod) => acc + (prod.cantidad * prod.precio_unitario), 0);
+      const manoObra = Math.max(0, (parseFloat(disenoData.presupuesto) || 0) - subtotal);
+      setFormData(prev => ({ ...prev, presupuesto: manoObra.toFixed(2) }));
+
+      // Tareas del diseño
+      const tareaIds = (disenoData.tareas_diseno_items || [])
+        .map(t => Number(t?.tarea_id))
+        .filter(id => Number.isFinite(id));
+      setTareasDisenoSeleccionadas(tareaIds);
+
+      // Fecha propuesta
+      if (disenoData.fecha_propuesta) {
+        const d = new Date(disenoData.fecha_propuesta);
+        if (!Number.isNaN(d.getTime())) {
+          setFechaPropuesta(d);
+          setFechaPropuestaDatePart(new Date(d.getFullYear(), d.getMonth(), d.getDate()));
+          setFechaPropuestaTimePart(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
+        }
+      }
+
+      // Imágenes: descargar y re-adjuntar como archivos para la nueva propuesta
+      const archivosNuevos = [];
+      const previewsNuevos = [];
+      if (Array.isArray(disenoData.imagenes) && disenoData.imagenes.length > 0) {
+        for (const img of disenoData.imagenes) {
+          const url = img.imagen_url || img.imagen;
+          if (!url) continue;
+          try {
+            const res = await fetch(url);
+            const blob = await res.blob();
+            const ext = (blob.type && blob.type.split('/')[1]) || 'jpg';
+            const archivo = new File([blob], `imagen-copiada-${img.id_imagen_diseno || Date.now()}.${ext}`, { type: blob.type });
+            archivosNuevos.push(archivo);
+            previewsNuevos.push({ file: archivo, url: URL.createObjectURL(archivo) });
+          } catch (e) {
+            console.warn('No se pudo descargar una imagen del diseño anterior:', e);
+          }
+        }
+      }
+      setImagenesDiseno(archivosNuevos);
+      setImagenesExistentes([]);
+      setPreviewImages(previewsNuevos);
+
+      setMostrarPanelCopiar(false);
+      success('Diseño anterior cargado. Realizá la modificación solicitada y guardá la nueva propuesta.');
+    } catch (err) {
+      console.error('Error al copiar diseño rechazado:', err);
+      showError('No se pudo copiar el diseño anterior');
+    } finally {
+      setCopiandoDisenoId(null);
     }
   };
 
@@ -1148,7 +1272,76 @@ const CrearDisenoModal = ({ servicio: reserva, diseno, isOpen, onClose, onDiseno
               </div>
             )}
 
-            
+            {/* Copiar diseños rechazados anteriores (solo al crear y si hay rechazo con modificación) */}
+            {!modoEdicion && mode === 'diseno' && disenosRechazados.length > 0 && (
+              <div className="bg-gray-900 rounded-xl border border-red-800 p-4">
+                <button
+                  type="button"
+                  onClick={() => setMostrarPanelCopiar((prev) => !prev)}
+                  className="flex items-center justify-between w-full text-left"
+                >
+                  <span className="flex items-center text-white font-semibold">
+                    <Copy className="w-5 h-5 mr-2 text-red-400" />
+                    Copiar diseños rechazados anteriores
+                  </span>
+                  <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${mostrarPanelCopiar ? 'rotate-180' : ''}`} />
+                </button>
+
+                {cargandoRechazados && (
+                  <p className="text-sm text-gray-400 mt-3">Buscando diseños rechazados...</p>
+                )}
+
+                {!cargandoRechazados && mostrarPanelCopiar && (
+                  <div className="mt-3 space-y-3">
+                    {disenosRechazados.map((d) => {
+                          let feedback = d.observaciones_cliente;
+                          try {
+                            const parsed = JSON.parse(feedback);
+                            feedback = parsed.feedback || feedback;
+                          } catch (e) {
+                            // no es JSON, usar texto directo
+                          }
+                          return (
+                            <div key={d.id_diseno} className="bg-gray-800 rounded-lg p-3 border border-gray-700">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold text-white truncate">
+                                    {d.titulo} <span className="text-gray-500 font-normal">#{d.id_diseno}</span>
+                                  </p>
+                                  <p className="text-xs text-gray-400 mt-1">
+                                    Creado: {d.fecha_creacion ? new Date(d.fecha_creacion).toLocaleString('es-AR') : 'N/A'}
+                                  </p>
+                                  {feedback && (
+                                    <div className="mt-2 bg-red-900 bg-opacity-30 border border-red-800 rounded p-2">
+                                      <p className="text-xs font-semibold text-red-300">Modificación solicitada por el cliente:</p>
+                                      <p className="text-sm text-gray-200 whitespace-pre-wrap mt-1">{feedback}</p>
+                                    </div>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => copiarDisenoRechazado(d.id_diseno)}
+                                  disabled={copiandoDisenoId !== null}
+                                  className="flex items-center px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 text-sm whitespace-nowrap"
+                                >
+                                  {copiandoDisenoId === d.id_diseno ? (
+                                    <>
+                                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                      Copiando...
+                                    </>
+                                  ) : (
+                                    'Copiar'
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                )}
+              </div>
+            )}
+
             {/* Preview del Título (según descripción o reserva) */}
             <div className="mb-2">
               <p className="text-xs text-gray-400">Título: <span className="text-white font-semibold">{computedTitulo}</span></p>

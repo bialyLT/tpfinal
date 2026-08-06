@@ -183,6 +183,11 @@ class EncuestaViewSet(viewsets.ModelViewSet):
                     reserva=reserva,
                 )
 
+                respuestas_existentes = {
+                    respuesta.pregunta_id: respuesta
+                    for respuesta in encuesta_respuesta.respuestas.select_related("pregunta").all()
+                }
+
                 # Validar que todas las preguntas obligatorias estén respondidas
                 preguntas_obligatorias = encuesta_activa.preguntas.filter(obligatoria=True)
                 preguntas_respondidas = [r.get("pregunta_id") for r in respuestas_data]
@@ -195,7 +200,8 @@ class EncuestaViewSet(viewsets.ModelViewSet):
                             status=status.HTTP_400_BAD_REQUEST,
                         )
 
-                respuestas_preparadas = []
+                respuestas_validadas = []
+                preguntas_payload = set()
 
                 # Validar y preparar las respuestas
                 for respuesta_data in respuestas_data:
@@ -208,6 +214,8 @@ class EncuestaViewSet(viewsets.ModelViewSet):
                         pregunta = encuesta_activa.preguntas.get(id_pregunta=pregunta_id)
                     except Pregunta.DoesNotExist:
                         continue
+
+                    preguntas_payload.add(pregunta.id_pregunta)
 
                     # Solo se permiten preguntas de tipo escala
                     if pregunta.tipo != "escala":
@@ -259,20 +267,32 @@ class EncuestaViewSet(viewsets.ModelViewSet):
                                 status=status.HTTP_400_BAD_REQUEST,
                             )
 
-                    respuestas_preparadas.append(
-                        Respuesta(
-                            encuesta_respuesta=encuesta_respuesta,
-                            pregunta=pregunta,
-                            valor_texto=valor_texto,
-                            valor_numerico=valor_numerico_int,
-                            valor_boolean=None,
-                        )
+                    respuestas_validadas.append(
+                        {
+                            "pregunta": pregunta,
+                            "valor_texto": valor_texto,
+                            "valor_numerico": valor_numerico_int,
+                        }
                     )
 
-                # Reemplazar respuestas solo cuando todo el payload es válido
-                encuesta_respuesta.respuestas.all().delete()
-                if respuestas_preparadas:
-                    Respuesta.objects.bulk_create(respuestas_preparadas)
+                # Reemplazar respuestas sin borrar físicamente: actualizamos o creamos cada registro.
+                for respuesta_valida in respuestas_validadas:
+                    Respuesta.objects.update_or_create(
+                        encuesta_respuesta=encuesta_respuesta,
+                        pregunta=respuesta_valida["pregunta"],
+                        defaults={
+                            "valor_texto": respuesta_valida["valor_texto"],
+                            "valor_numerico": respuesta_valida["valor_numerico"],
+                            "valor_boolean": None,
+                        },
+                    )
+
+                preguntas_sobrantes = set(respuestas_existentes.keys()) - preguntas_payload
+                if preguntas_sobrantes:
+                    Respuesta.objects.filter(
+                        encuesta_respuesta=encuesta_respuesta,
+                        pregunta_id__in=preguntas_sobrantes,
+                    ).update(valor_texto=None, valor_numerico=None, valor_boolean=None)
 
                 # Marcar como completada
                 encuesta_respuesta.estado = "completada"

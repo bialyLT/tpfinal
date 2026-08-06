@@ -6,6 +6,7 @@ import logging
 
 from django.conf import settings
 from django.contrib.auth.models import Group, User
+from django.db import connection
 from google.auth.transport import requests
 from google.oauth2 import id_token
 from rest_framework import status
@@ -21,6 +22,27 @@ from apps.users.services.address_service import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _sync_sequence_for_model(model):
+    """Alinea la secuencia serial con el máximo ID real de la tabla."""
+    table_name = model._meta.db_table
+    pk_column = model._meta.pk.column
+
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_get_serial_sequence(%s, %s)", [table_name, pk_column])
+        sequence_name = cursor.fetchone()[0]
+
+        if not sequence_name:
+            return
+
+        cursor.execute(f'SELECT COALESCE(MAX({pk_column}), 0) FROM "{table_name}"')
+        max_id = cursor.fetchone()[0] or 0
+
+        if max_id == 0:
+            cursor.execute("SELECT setval(%s, 1, false)", [sequence_name])
+        else:
+            cursor.execute("SELECT setval(%s, %s, true)", [sequence_name, max_id])
 
 
 @api_view(["POST"])
@@ -165,6 +187,9 @@ def google_login(request):
                 # Generar un nro_documento único usando el google_id (máximo 20 chars)
                 # Formato: GGL-{últimos 13 dígitos del google_id}
                 nro_documento_unico = f"GGL-{google_id[-13:]}"
+
+                _sync_sequence_for_model(Persona)
+                _sync_sequence_for_model(Cliente)
 
                 # Crear Persona relacionada con el User
                 persona = Persona.objects.create(

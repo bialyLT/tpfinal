@@ -560,6 +560,7 @@ class DisenoSerializer(serializers.ModelSerializer):
             "disenador",
             "disenador_id",
             "disenador_nombre",
+            "observaciones_cliente",
             "fecha_creacion",
             "fecha_presentacion",
             "fecha_respuesta",

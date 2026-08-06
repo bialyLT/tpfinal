@@ -52,7 +52,7 @@ export const handleApiError = (apiError, customMessage = null) => {
   const lowerMsg = (apiError?.message || '').toLowerCase();
   if (!apiError.response && (lowerMsg.includes('loopback') || lowerMsg.includes('private network') || lowerMsg.includes('permission was denied') || lowerMsg.includes('blocked by cors') || lowerMsg.includes('access to xmlhttprequest') || lowerMsg.includes('failed to fetch'))) {
     // No mostrar notificación al usuario, solo loguear para debug
-    console.warn('🔇 Ignorado error de red/CORS/PNA (no se mostrará notificación):', apiError?.message || apiError);
+    console.warn('🔇 Ignorado error de red/CORS/PNA: ', apiError?.message || apiError);
     return null;
   }
 
@@ -60,11 +60,13 @@ export const handleApiError = (apiError, customMessage = null) => {
   
   // Error de red (servidor caído, sin conexión, etc.)
   if (!apiError.response && (apiError.code === 'ERR_NETWORK' || apiError.message?.includes('Network Error'))) {
-    message = 'No se puede conectar al servidor. Verifica tu conexión o intenta más tarde.';
+    console.warn('🔇 Error de red sin notificación visible:', apiError?.message || apiError);
+    return null;
   }
   // Error de timeout
   else if (apiError.code === 'ECONNABORTED' || apiError.message?.includes('timeout')) {
-    message = 'La solicitud tardó demasiado. Intenta nuevamente.';
+    console.warn('🔇 Error de timeout sin notificación visible:', apiError?.message || apiError);
+    return null;
   }
   // Error con respuesta del servidor
   else if (apiError.response?.data) {

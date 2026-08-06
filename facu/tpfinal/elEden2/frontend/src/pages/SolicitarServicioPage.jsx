@@ -36,6 +36,16 @@ const OPERATIONAL_MESSAGE = 'Por el momento solo operamos en Corrientes y Mision
 
 const normalizeText = (value) => (value || '').toString().trim().toLowerCase();
 
+const pad2 = (n) => String(n).padStart(2, '0');
+
+// Ventanas horarias válidas: 08:00-12:00 y 16:00-20:00 (hora entera)
+const snapTrabajoA = (hh) => {
+  if (hh < 8) return 8;
+  if (hh >= 12 && hh < 16) return 16;
+  if (hh >= 20) return 20;
+  return hh;
+};
+
 const normalizeDateForApi = (dateValue) => {
   if (!dateValue) return '';
   const value = String(dateValue).trim();
@@ -347,12 +357,23 @@ const SolicitarServicioPage = () => {
         noCalendar: true,
         dateFormat: "H:i",
         time_24hr: true,
-        minuteIncrement: 15,
+        minuteIncrement: 60,
         defaultDate: formData.hora_preferida || null,
         minTime: "08:00",
         maxTime: "20:00",
         onChange: (selectedDates, dateStr) => {
-          setFormData(prev => ({ ...prev, hora_preferida: dateStr }));
+          const [hhRaw] = String(dateStr || '').split(':');
+          const hh = Number(hhRaw);
+          if (!Number.isFinite(hh)) return;
+
+          // Ventanas válidas: 08-12 y 16-20 (hora entera)
+          const nextH = snapTrabajoA(hh);
+          const snapped = `${pad2(nextH)}:00`;
+          setFormData(prev => ({ ...prev, hora_preferida: snapped }));
+
+          if (fpTimeInstanceRef.current && snapped !== dateStr) {
+            fpTimeInstanceRef.current.setDate(snapped, true, 'H:i');
+          }
         }
       };
 
@@ -943,6 +964,7 @@ Notas adicionales: ${formData.notas_adicionales || 'Ninguna'}`;
                             <option key={op.id} value={op.id}>{op.nombre}</option>
                           ))}
                         </select>
+                        <p className="text-xs text-gray-400 mt-1">Elige la opción que mejor describa tu objetivo</p>
                       </div>
 
                       {/* Nivel de Intervención */}

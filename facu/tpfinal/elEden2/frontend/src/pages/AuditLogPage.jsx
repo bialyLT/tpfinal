@@ -229,19 +229,40 @@ const AuditLogPage = () => {
     }
   };
 
+  const formatChangeValue = (value, method, side) => {
+    if (value === undefined || value === null) {
+      if (method === 'DELETE' && side === 'after') {
+        return 'Eliminado';
+      }
+      return 'Sin datos.';
+    }
+
+    return stringifyData(value);
+  };
+
   const extractChangeEntries = (log) => {
     const before = log?.before_state;
     const after = log?.after_state;
-    if (!before || !after || typeof before !== 'object' || typeof after !== 'object') {
+    if (!before || typeof before !== 'object') {
       return null;
     }
 
-    const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+    const normalizedAfter = after && typeof after === 'object'
+      ? after
+      : log?.method === 'DELETE'
+        ? {}
+        : null;
+
+    if (!normalizedAfter || typeof normalizedAfter !== 'object') {
+      return null;
+    }
+
+    const keys = new Set([...Object.keys(before), ...Object.keys(normalizedAfter)]);
     const changes = [];
 
     keys.forEach((key) => {
       const beforeValue = before[key];
-      const afterValue = after[key];
+      const afterValue = normalizedAfter[key];
       if (JSON.stringify(beforeValue) !== JSON.stringify(afterValue)) {
         changes.push({ key, before: beforeValue, after: afterValue });
       }
@@ -470,11 +491,11 @@ const AuditLogPage = () => {
                                     <div className="text-xs text-gray-400 uppercase tracking-wide">{change.key}</div>
                                     <div>
                                       <p className="text-xs text-gray-400">Antes</p>
-                                      <pre className="mt-1 text-xs whitespace-pre-wrap break-words">{stringifyData(change.before)}</pre>
+                                      <pre className="mt-1 text-xs whitespace-pre-wrap break-words">{formatChangeValue(change.before, log.method, 'before')}</pre>
                                     </div>
                                     <div>
                                       <p className="text-xs text-gray-400">Después</p>
-                                      <pre className="mt-1 text-xs whitespace-pre-wrap break-words">{stringifyData(change.after)}</pre>
+                                      <pre className="mt-1 text-xs whitespace-pre-wrap break-words">{formatChangeValue(change.after, log.method, 'after')}</pre>
                                     </div>
                                   </div>
                                 ))}

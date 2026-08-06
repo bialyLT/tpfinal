@@ -533,7 +533,7 @@ const ReservaDetallePage = () => {
 
         {requiereFeedback && (
           <div className="space-y-2 border border-amber-500/50 rounded-lg p-3 bg-amber-900/30">
-            <p className="text-sm text-amber-100">Cuéntanos qué mejorar cuando la puntuación es menor a 10.</p>
+            <p className="text-sm text-amber-100">Cuéntanos qué mejorar para llegar al 10.</p>
             <div className="flex flex-wrap gap-2">
               {FEEDBACK_PRESETS.map((preset) => (
                 <button
@@ -688,7 +688,14 @@ const ReservaDetallePage = () => {
                     <div className="flex items-center space-x-2">
                       <Calendar className="w-4 h-4 text-gray-400" />
                       <span className="text-gray-300">
-                        Fecha de realización: {new Date(reserva.fecha_realizacion).toLocaleString('es-AR')}
+                        Fecha de realización: {new Date(reserva.fecha_realizacion).toLocaleString('es-AR', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true,
+                        })}
                       </span>
                     </div>
                   )}

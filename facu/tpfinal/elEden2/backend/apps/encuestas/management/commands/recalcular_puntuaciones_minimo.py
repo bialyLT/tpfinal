@@ -151,7 +151,7 @@ class Command(BaseCommand):
             cantidad_total += cantidad
 
             promedio_encuesta = (total / Decimal(cantidad)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            if promedio_encuesta < Decimal("7.00"):
+            if promedio_encuesta < Decimal("6.00"):
                 bajas_consecutivas += 1
             else:
                 bajas_consecutivas = 0
