@@ -199,6 +199,25 @@ const RegisterPage = () => {
            </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Google Login Button */}
+            <div className="relative my-2">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-700"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-gray-900 text-gray-400">Regístrate con</span>
+              </div>
+            </div>
+            <GoogleLoginButton isRegister={true} />
+            <div className="relative my-2">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-700"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-gray-900 text-gray-400">O completa el formulario manual</span>
+              </div>
+            </div>
+
             {/* SECCIÓN: DATOS PERSONALES */}
             <div className="bg-gray-800 bg-opacity-50 p-6 rounded-lg space-y-4">
               <h3 className="text-xl font-semibold text-emerald-400 mb-4">Datos Personales</h3>
@@ -548,19 +567,6 @@ const RegisterPage = () => {
                 {isLoading ? 'Creando cuenta...' : 'Crear Cuenta'}
               </button>
             </div>
-
-            {/* Divider */}
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-700"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-gray-900 text-gray-400">O regístrate con</span>
-              </div>
-            </div>
-
-            {/* Google Login Button */}
-            <GoogleLoginButton isRegister={true} />
           </form>
           
           <div className="text-center mt-6 lg:hidden">

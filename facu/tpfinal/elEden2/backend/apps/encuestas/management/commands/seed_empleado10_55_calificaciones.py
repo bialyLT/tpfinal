@@ -22,10 +22,8 @@ class Command(BaseCommand):
 
     total_calificaciones = 55
     default_cliente_id = 1
-    default_empleado_id = 11
+    default_empleado_id = 8
     reservation_marker_prefix = "seed-emp11-55-"
-
-    DELETE_GUARDED_TABLES = ["respuesta", "encuesta_respuesta", "reserva_empleado", "reserva"]
 
     def add_arguments(self, parser):
         parser.add_argument(

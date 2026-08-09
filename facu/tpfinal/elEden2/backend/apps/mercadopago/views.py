@@ -182,9 +182,40 @@ def crear_preferencia_pago_final(request, reserva_id):
 
         # Verificar que tenga un monto final
         if pago.monto_final <= 0:
+            # La seña pagada ya cubre (o supera) el monto total del diseño:
+            # el pago final queda cubierto automáticamente sin pasar por MercadoPago.
+            pago.estado_pago_final = "pagado"
+            pago.estado_pago = "pagado"
+            pago.payment_id_final = f"AUTO-CUBIERTO-SENA-{reserva.id_reserva}"
+            pago.fecha_pago_final = timezone.now()
+            pago.save(
+                update_fields=[
+                    "estado_pago_final",
+                    "estado_pago",
+                    "payment_id_final",
+                    "fecha_pago_final",
+                ]
+            )
+
+            logger.info(
+                f"✅ Pago final auto-cubierto por seña para reserva {reserva_id} "
+                f"(total={pago.monto_total}, seña={pago.monto_sena})"
+            )
+
             return Response(
-                {"error": "La reserva no tiene un monto final asignado. Contacte al administrador."},
-                status=status.HTTP_400_BAD_REQUEST,
+                {
+                    "cubierto_por_sena": True,
+                    "reserva_id": reserva.id_reserva,
+                    "monto_total": float(pago.monto_total),
+                    "monto_sena_pagada": float(pago.monto_sena),
+                    "monto_final": float(pago.monto_final),
+                    "tipo_pago": "final",
+                    "mensaje": (
+                        "El monto de la seña ya cubre el total del servicio, "
+                        "por lo que el pago final se consideró pagado automáticamente."
+                    ),
+                },
+                status=status.HTTP_200_OK,
             )
 
         # Crear preferencia de pago final usando SDK de MercadoPago
@@ -567,6 +598,26 @@ def confirmar_pago_final(request, reserva_id):
                 pago.save()
 
                 logger.info(f"✅ Pago final confirmado para reserva {reserva_id}")
+
+                # Evaluación climática automática al pagar: si hay riesgo de lluvia el día de
+                # realización, se genera la alerta con reprogramación sugerida (misma
+                # automatización que activa la simulación de lluvia).
+                try:
+                    from apps.weather.services import ServicioAlertasClimaticas
+
+                    evaluador = ServicioAlertasClimaticas()
+                    resultado_clima = evaluador.evaluate_reserva(reserva, auto_create_alert=True)
+                    if resultado_clima.get("rain_expected"):
+                        logger.info(
+                            f"🌧️ Riesgo de lluvia detectado en pago de reserva {reserva_id}: "
+                            f"{resultado_clima.get('precipitation_mm')} mm, "
+                            f"alerta #{resultado_clima.get('alert_id')}"
+                        )
+                except Exception as e:
+                    logger.error(f"❌ Error al evaluar clima tras pago final de reserva {reserva_id}: {str(e)}")
+                    import traceback
+
+                    logger.error(traceback.format_exc())
 
                 # Enviar emails de confirmación
                 try:

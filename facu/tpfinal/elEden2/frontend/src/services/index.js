@@ -410,6 +410,11 @@ export const encuestasService = {
   getImpactoRespuestasEmpleado: async (params = {}) => {
     const response = await api.get('/encuestas/empleados/impacto-respuestas/', { params });
     return response.data;
+  },
+
+  getCalificacionesBajas: async (params = {}) => {
+    const response = await api.get('/encuestas/empleados/calificaciones-bajas/', { params });
+    return response.data;
   }
 };
 

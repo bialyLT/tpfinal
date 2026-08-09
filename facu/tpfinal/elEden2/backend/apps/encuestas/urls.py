@@ -2,6 +2,7 @@
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    EmpleadoCalificacionesBajasAPIView,
     EmpleadoImpactoEncuestaAPIView,
     EncuestaRespuestaViewSet,
     EncuestaViewSet,
@@ -21,5 +22,10 @@ urlpatterns = [
         "encuestas/empleados/impacto-respuestas/",
         EmpleadoImpactoEncuestaAPIView.as_view(),
         name="empleado-impacto-respuestas",
+    ),
+    path(
+        "encuestas/empleados/calificaciones-bajas/",
+        EmpleadoCalificacionesBajasAPIView.as_view(),
+        name="empleado-calificaciones-bajas",
     ),
 ]

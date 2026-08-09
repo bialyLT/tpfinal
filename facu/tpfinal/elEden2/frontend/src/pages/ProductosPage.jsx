@@ -352,7 +352,7 @@ const ProductosPage = () => {
         {viewMode === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredProductos.map(producto => (
-              <div key={producto.id} className="bg-gray-800 rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
+              <div key={producto.id_producto} className="bg-gray-800 rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
                 {/* Product Image */}
                 <div className="h-48 bg-gray-700 relative">
                   {producto.imagen ? (
@@ -446,7 +446,7 @@ const ProductosPage = () => {
               </thead>
               <tbody>
                 {filteredProductos.map(producto => (
-                  <tr key={producto.id} className="bg-gray-800 border-b border-gray-700 hover:bg-gray-750">
+                  <tr key={producto.id_producto} className="bg-gray-800 border-b border-gray-700 hover:bg-gray-750">
                     <td className="px-6 py-4">
                       <div className="flex items-center">
                         <div className="w-10 h-10 bg-gray-700 rounded-lg flex items-center justify-center mr-3">

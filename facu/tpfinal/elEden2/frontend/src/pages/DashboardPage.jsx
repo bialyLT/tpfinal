@@ -308,6 +308,7 @@ const DashboardPage = () => {
       setWeatherSuccess('Reserva reprogramada correctamente.');
       setReprogramModalOpen(false);
       await refreshWeatherData();
+      await fetchCityForecasts();
     } catch (error) {
       console.error('reprogram error', error);
       setWeatherError('No se pudo reprogramar la reserva.');
@@ -328,6 +329,35 @@ const DashboardPage = () => {
     } catch (error) {
       console.error('dismiss alert error', error);
       setWeatherError('No se pudo descartar la alerta.');
+    } finally {
+      setDismissingAlertId(null);
+    }
+  };
+
+  const handleReprogramFromForecast = (reserva, weather) => {
+    if (!reserva?.id_reserva) return;
+    const fechaBase = reserva?.fecha_reprogramada_sugerida || reserva?.fecha_realizacion || reserva?.fecha_reserva || weather?.date;
+    setReprogramReservaId(reserva.id_reserva);
+    setReprogramDate(formatDatetimeLocal(fechaBase));
+    setReprogramMessage('Reprogramación por alerta climática');
+    setWeatherError('');
+    setWeatherSuccess('');
+    setReprogramModalOpen(true);
+  };
+
+  const handleKeepDateFromForecast = async (reserva) => {
+    if (!reserva?.weather_alert_id) return;
+    setWeatherError('');
+    setWeatherSuccess('');
+    setDismissingAlertId(reserva.weather_alert_id);
+    try {
+      await weatherService.dismissAlert(reserva.weather_alert_id, { comentario: 'Se mantiene la fecha original.' });
+      setWeatherSuccess(`Reserva #${reserva.id_reserva} mantiene su fecha.`);
+      await refreshWeatherData();
+      await fetchCityForecasts();
+    } catch (error) {
+      console.error('dismiss forecast alert error', error);
+      setWeatherError('No se pudo mantener la fecha de la reserva.');
     } finally {
       setDismissingAlertId(null);
     }
@@ -544,6 +574,38 @@ const DashboardPage = () => {
                                         </span>
                                       ))}
                                     </div>
+                                    {getRiskLevel(item.weather).label === 'Alto' && (
+                                      <ul className="mt-2 divide-y divide-gray-700 rounded-md border border-red-900/50 bg-gray-900/60">
+                                        {item.reservas.map((reserva) => (
+                                          <li key={`${reserva.id_reserva}-action`} className="p-2 flex flex-wrap items-center justify-between gap-2">
+                                            <div className="min-w-0">
+                                              <p className="text-sm text-red-300 font-medium">Reserva #{reserva.id_reserva}</p>
+                                              <p className="text-xs text-gray-400 truncate">
+                                                {[reserva.cliente, reserva.servicio].filter(Boolean).join(' · ') || 'Sin detalle'}
+                                              </p>
+                                            </div>
+                                            <div className="flex gap-2">
+                                              <button
+                                                onClick={() => handleKeepDateFromForecast(reserva)}
+                                                disabled={
+                                                  dismissingAlertId === reserva.weather_alert_id || !reserva.weather_alert_id
+                                                }
+                                                title={reserva.weather_alert_id ? 'Mantener la fecha original de la reserva' : 'No hay alerta pendiente para esta reserva'}
+                                                className="px-3 py-1.5 rounded-md text-xs font-semibold transition bg-gray-700 hover:bg-gray-600 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                                              >
+                                                Mantener fecha
+                                              </button>
+                                              <button
+                                                onClick={() => handleReprogramFromForecast(reserva, item.weather)}
+                                                className="px-3 py-1.5 rounded-md text-xs font-semibold transition bg-emerald-600 hover:bg-emerald-500 text-white"
+                                              >
+                                                Reprogramar
+                                              </button>
+                                            </div>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    )}
                                   </div>
                                   <div className="text-xs text-gray-300 md:text-right">
                                     <p>

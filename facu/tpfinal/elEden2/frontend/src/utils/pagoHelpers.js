@@ -44,7 +44,13 @@ export const handlePagarSena = async (servicioId, setProcesandoPago = null) => {
       // Llamar al servicio correspondiente según el tipo de pago
       let response;
       response = await serviciosService.crearPreferenciaFinal(servicioId);
-      if (response && response.init_point) {
+
+      if (response && response.cubierto_por_sena) {
+        // La seña ya cubrió el total: no hay nada que pagar en MercadoPago.
+        // Se redirige al comprobante de pago final.
+        showSuccess(response.mensaje || 'El pago final quedó cubierto por la seña.');
+        window.location.href = `/reservas/pago-exitoso?tipo=final&reserva_id=${servicioId}`;
+      } else if (response && response.init_point) {
         // Redirigir a MercadoPago
         window.location.href = response.init_point;
       } else {

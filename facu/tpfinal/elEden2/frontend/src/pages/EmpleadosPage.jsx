@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { usersService } from '../services';
+import { usersService, encuestasService } from '../services';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { handleApiError, success } from '../utils/notifications';
@@ -25,6 +25,10 @@ const EmpleadosPage = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedEmpleado, setSelectedEmpleado] = useState(null);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [selectedRatingEmpleado, setSelectedRatingEmpleado] = useState(null);
+  const [calificacionesBajas, setCalificacionesBajas] = useState([]);
+  const [loadingCalificaciones, setLoadingCalificaciones] = useState(false);
   const { user } = useAuth();
   
   // Reference data
@@ -190,6 +194,25 @@ const EmpleadosPage = () => {
       groups: empleado.groups || ['Empleados']
     });
     setShowEditModal(true);
+  };
+
+  const openCalificacionesBajas = async (empleado) => {
+    const idEmpleado = empleado.empleado_metricas?.id_empleado;
+    if (!idEmpleado) {
+      return;
+    }
+    setSelectedRatingEmpleado(empleado);
+    setCalificacionesBajas([]);
+    setShowRatingModal(true);
+    try {
+      setLoadingCalificaciones(true);
+      const data = await encuestasService.getCalificacionesBajas({ empleado_id: idEmpleado });
+      setCalificacionesBajas(data.results || []);
+    } catch (error) {
+      handleApiError(error, 'Error al cargar las calificaciones menores a 9');
+    } finally {
+      setLoadingCalificaciones(false);
+    }
   };
 
   const filteredEmpleados = empleados.filter(empleado => {
@@ -429,8 +452,19 @@ const EmpleadosPage = () => {
                         </td>
                         <td className="py-3 px-4">
                           <div className="text-gray-300">
-                            <div className="text-white font-semibold">
-                              {formatPromedio(empleado.empleado_metricas)}
+                            <div className="flex items-center gap-2">
+                              <div className="text-white font-semibold">
+                                {formatPromedio(empleado.empleado_metricas)}
+                              </div>
+                              {(empleado.empleado_metricas?.puntuacion_cantidad ?? 0) > 0 && (
+                                <button
+                                  onClick={() => openCalificacionesBajas(empleado)}
+                                  className="p-1.5 text-yellow-400 hover:text-yellow-300 hover:bg-gray-600 rounded-lg transition-colors"
+                                  title="Ver calificaciones menores a 9"
+                                >
+                                  <StarIcon className="w-4 h-4" />
+                                </button>
+                              )}
                             </div>
                             <div className="text-xs text-gray-500 mt-1">
                               {(empleado.empleado_metricas?.puntuacion_cantidad ?? 0)} respuestas impacto
@@ -784,6 +818,92 @@ const EmpleadosPage = () => {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Calificaciones Bajas Modal */}
+        {showRatingModal && selectedRatingEmpleado && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-gray-800 rounded-lg w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-start justify-between p-6 pb-0">
+                <div className="flex items-center gap-3">
+                  <StarIcon className="w-7 h-7 text-yellow-400" />
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-1">Calificaciones menores a 9</h3>
+                    <p className="text-sm text-gray-400">
+                      {selectedRatingEmpleado.first_name && selectedRatingEmpleado.last_name
+                        ? `${selectedRatingEmpleado.first_name} ${selectedRatingEmpleado.last_name}`
+                        : selectedRatingEmpleado.username}
+                      {calificacionesBajas.length > 0 && (
+                        <span className="ml-2 text-gray-500">({calificacionesBajas.length})</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowRatingModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors p-2"
+                  title="Cerrar"
+                >
+                  <XCircleIcon className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="p-6">
+                {loadingCalificaciones ? (
+                  <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-yellow-400 mx-auto"></div>
+                    <p className="text-gray-400 mt-4">Cargando calificaciones...</p>
+                  </div>
+                ) : calificacionesBajas.length === 0 ? (
+                  <div className="text-center py-12">
+                    <StarIcon className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                    <p className="text-gray-400">
+                      No hay calificaciones menores a 9 para este empleado.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-gray-700">
+                          <th className="text-left py-3 px-4 font-medium text-gray-400">Fecha</th>
+                          <th className="text-left py-3 px-4 font-medium text-gray-400">Calificación</th>
+                          <th className="text-left py-3 px-4 font-medium text-gray-400">Cliente</th>
+                          <th className="text-left py-3 px-4 font-medium text-gray-400">Observación</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {calificacionesBajas.map(item => (
+                          <tr key={item.id_respuesta} className="border-b border-gray-700">
+                            <td className="py-3 px-4 text-gray-300 whitespace-nowrap">
+                              {item.fecha_encuesta
+                                ? new Date(item.fecha_encuesta).toLocaleDateString('es-ES', {
+                                    year: 'numeric',
+                                    month: '2-digit',
+                                    day: '2-digit'
+                                  })
+                                : '—'}
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-600 text-white">
+                                {item.valor_numerico ?? '—'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-gray-300">
+                              {item.cliente ? `${item.cliente.nombre} ${item.cliente.apellido}` : '—'}
+                            </td>
+                            <td className="py-3 px-4 text-gray-300">
+                              {item.valor_texto ? item.valor_texto : 'Sin observación'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

@@ -439,7 +439,24 @@ class EmpleadoImpactoEncuestaAPIView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        queryset = (
+        queryset = self._build_empleado_respuestas(empleado)
+
+        queryset = self._apply_date_filters(request, queryset)
+
+        total = queryset.count()
+
+        queryset = queryset.order_by("-encuesta_respuesta__fecha_realizacion", "pregunta__id_pregunta")
+
+        limit = self._resolve_limit(request.query_params.get("limit"))
+        if limit is not None:
+            queryset = queryset[:limit]
+
+        serializer = RespuestaImpactoSerializer(queryset, many=True)
+        return Response({"count": total, "results": serializer.data})
+
+    def _build_empleado_respuestas(self, empleado):
+        """Construye el queryset de respuestas de impacto asociadas a un empleado."""
+        return (
             Respuesta.objects.select_related(
                 "pregunta",
                 "encuesta_respuesta__encuesta",
@@ -455,19 +472,6 @@ class EmpleadoImpactoEncuestaAPIView(APIView):
             )
             .distinct()
         )
-
-        queryset = self._apply_date_filters(request, queryset)
-
-        total = queryset.count()
-
-        queryset = queryset.order_by("-encuesta_respuesta__fecha_realizacion", "pregunta__id_pregunta")
-
-        limit = self._resolve_limit(request.query_params.get("limit"))
-        if limit is not None:
-            queryset = queryset[:limit]
-
-        serializer = RespuestaImpactoSerializer(queryset, many=True)
-        return Response({"count": total, "results": serializer.data})
 
     def _apply_date_filters(self, request, queryset):
         start_date_str = request.query_params.get("start_date")
@@ -507,3 +511,46 @@ class EmpleadoImpactoEncuestaAPIView(APIView):
         if limit_value <= 0:
             return None
         return min(limit_value, 500)
+
+
+class EmpleadoCalificacionesBajasAPIView(EmpleadoImpactoEncuestaAPIView):
+    """
+    Lista las calificaciones menores a 9 (con su observación) de un empleado.
+    Uso: GET /encuestas/empleados/calificaciones-bajas/?empleado_id=<id_empleado>
+    """
+
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request):
+        empleado_id = request.query_params.get("empleado_id")
+        if not empleado_id:
+            return Response(
+                {"detail": "El parámetro 'empleado_id' es requerido."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            empleado = Empleado.objects.select_related("persona").get(pk=empleado_id)
+        except Empleado.DoesNotExist:
+            return Response(
+                {"detail": "Empleado no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        queryset = self._build_empleado_respuestas(empleado).filter(
+            valor_numerico__lt=9,
+            valor_numerico__isnull=False,
+        )
+
+        queryset = self._apply_date_filters(request, queryset)
+
+        total = queryset.count()
+
+        queryset = queryset.order_by("-encuesta_respuesta__fecha_realizacion", "pregunta__id_pregunta")
+
+        limit = self._resolve_limit(request.query_params.get("limit"))
+        if limit is not None:
+            queryset = queryset[:limit]
+
+        serializer = RespuestaImpactoSerializer(queryset, many=True)
+        return Response({"empleado_id": empleado.id_empleado, "count": total, "results": serializer.data})

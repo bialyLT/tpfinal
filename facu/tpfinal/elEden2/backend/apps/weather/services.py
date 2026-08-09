@@ -620,6 +620,17 @@ class ServicioAlertasClimaticas:
         return self.client.get_multi_day_forecast(latitude, longitude, start_datetime, days)
 
     def build_locality_forecasts(self, reservas, days: int = 7):
+        reservas = list(reservas)
+        alertas_pendientes = {}
+        if reservas:
+            reserva_ids = [r.id_reserva for r in reservas]
+            for alerta in (
+                AlertaClimatica.objects.filter(reserva_id__in=reserva_ids, estado="pending")
+                .order_by("creada_en")
+                .values("reserva_id", "id", "requiere_reprogramacion")
+            ):
+                alertas_pendientes.setdefault(alerta["reserva_id"], alerta)
+
         grouped = {}
         for reserva in reservas:
             localidad_info = self._resolve_localidad_info(reserva)
@@ -633,10 +644,12 @@ class ServicioAlertasClimaticas:
                     "reservas": [],
                 },
             )
+            alerta = alertas_pendientes.get(reserva.id_reserva)
             group["reservas"].append(
                 {
                     "id_reserva": reserva.id_reserva,
                     "fecha_reserva": reserva.fecha_cita,
+                    "fecha_realizacion": reserva.fecha_realizacion,
                     "servicio": getattr(reserva.servicio, "nombre", None),
                     "cliente": (
                         f"{reserva.cliente.persona.nombre} {reserva.cliente.persona.apellido}"
@@ -644,6 +657,11 @@ class ServicioAlertasClimaticas:
                         else None
                     ),
                     "direccion": reserva.direccion,
+                    "weather_alert_id": alerta["id"] if alerta else None,
+                    "requiere_reprogramacion": bool(
+                        alerta["requiere_reprogramacion"] if alerta else reserva.requiere_reprogramacion
+                    ),
+                    "fecha_reprogramada_sugerida": reserva.fecha_reprogramada_sugerida,
                 }
             )
 

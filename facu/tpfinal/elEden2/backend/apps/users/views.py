@@ -391,10 +391,14 @@ class EmpleadoViewSet(viewsets.ModelViewSet):
     ordering = ["-date_joined"]
 
     def get_queryset(self):
-        """Obtener solo usuarios que pertenecen al grupo 'Empleados'"""
+        """Obtener todos los usuarios que pertenecen al grupo 'Empleados' (activos e inactivos).
+
+        Incluye empleados inactivos para que coincidan con los que se asignan a
+        servicios (la asignación usa el modelo Empleado, no el estado del usuario).
+        """
         empleados_group = Group.objects.filter(name="Empleados").first()
         if empleados_group:
-            return User.objects.filter(groups=empleados_group, is_active=True).select_related(
+            return User.objects.filter(groups=empleados_group).select_related(
                 "persona",
                 "persona__empleado",
                 "persona__localidad",
@@ -497,9 +501,14 @@ class EmpleadoViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def activar(self, request, pk=None):
         """Activar un empleado desactivado"""
-        empleado = self.get_object()
-        empleado.is_active = True
-        empleado.save()
+        empleado_user = self.get_object()
+        empleado_user.is_active = True
+        empleado_user.save(update_fields=["is_active"])
+
+        empleado = getattr(getattr(empleado_user, "persona", None), "empleado", None)
+        if empleado and not empleado.activo:
+            empleado.restaurar()
+
         return Response({"detail": "Empleado activado exitosamente."}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"])

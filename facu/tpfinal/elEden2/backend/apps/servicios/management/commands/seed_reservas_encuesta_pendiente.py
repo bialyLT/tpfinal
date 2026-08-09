@@ -26,7 +26,7 @@ class Command(BaseCommand):
     )
 
     default_client_id = 1
-    default_employee_id = 11
+    default_employee_id = 8
 
     demo_reservas = [
         {
