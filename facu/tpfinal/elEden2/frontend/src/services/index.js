@@ -864,32 +864,6 @@ export const nivelesIntervencionService = {
   }
 };
 
-export const presupuestosAproximadosService = {
-  getAll: async (params = {}) => {
-    const response = await api.get('/servicios/presupuestos-aproximados/', { params });
-    return response.data;
-  },
-
-  create: async (data) => {
-    const response = await api.post('/servicios/presupuestos-aproximados/', data);
-    return response.data;
-  },
-
-  update: async (id, data) => {
-    const response = await api.put(`/servicios/presupuestos-aproximados/${id}/`, data);
-    return response.data;
-  },
-
-  patch: async (id, data) => {
-    const response = await api.patch(`/servicios/presupuestos-aproximados/${id}/`, data);
-    return response.data;
-  },
-
-  delete: async (id) => {
-    await api.delete(`/servicios/presupuestos-aproximados/${id}/`);
-  }
-};
-
 export const mantenimientosIntegralesService = {
   getAll: async (params = {}) => {
     const response = await api.get('/servicios/mantenimientos-integrales/', { params });

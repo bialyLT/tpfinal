@@ -870,7 +870,6 @@ const EmpleadosPage = () => {
                         <tr className="border-b border-gray-700">
                           <th className="text-left py-3 px-4 font-medium text-gray-400">Fecha</th>
                           <th className="text-left py-3 px-4 font-medium text-gray-400">Calificación</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-400">Cliente</th>
                           <th className="text-left py-3 px-4 font-medium text-gray-400">Observación</th>
                         </tr>
                       </thead>
@@ -890,9 +889,6 @@ const EmpleadosPage = () => {
                               <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-600 text-white">
                                 {item.valor_numerico ?? '—'}
                               </span>
-                            </td>
-                            <td className="py-3 px-4 text-gray-300">
-                              {item.cliente ? `${item.cliente.nombre} ${item.cliente.apellido}` : '—'}
                             </td>
                             <td className="py-3 px-4 text-gray-300">
                               {item.valor_texto ? item.valor_texto : 'Sin observación'}

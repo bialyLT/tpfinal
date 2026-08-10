@@ -4,7 +4,6 @@ import {
   configuracionService,
   objetivosDisenoService,
   nivelesIntervencionService,
-  presupuestosAproximadosService,
   mantenimientosIntegralesService,
   formasTerrenoService,
 } from '../services';
@@ -18,12 +17,10 @@ const ConfiguracionesPage = () => {
   });
   const [objetivos, setObjetivos] = useState([]);
   const [niveles, setNiveles] = useState([]);
-  const [presupuestos, setPresupuestos] = useState([]);
   const [mantenimientos, setMantenimientos] = useState([]);
   const [formasTerreno, setFormasTerreno] = useState([]);
   const [nuevoObjetivo, setNuevoObjetivo] = useState({ codigo: '', nombre: '', activo: true });
   const [nuevoNivel, setNuevoNivel] = useState({ codigo: '', nombre: '', valor: 'true', activo: true });
-  const [nuevoPresupuesto, setNuevoPresupuesto] = useState({ codigo: '', nombre: '', activo: true });
   const [nuevoMantenimiento, setNuevoMantenimiento] = useState({ codigo: '', nombre: '', activo: true });
   const [nuevaFormaTerreno, setNuevaFormaTerreno] = useState({ nombre: '' });
 
@@ -43,17 +40,15 @@ const ConfiguracionesPage = () => {
 
   const fetchCatalogos = async () => {
     try {
-      const [objetivosData, nivelesData, presupuestosData, mantenimientosData, formasTerrenoData] = await Promise.all([
+      const [objetivosData, nivelesData, mantenimientosData, formasTerrenoData] = await Promise.all([
         objetivosDisenoService.getAll(),
         nivelesIntervencionService.getAll(),
-        presupuestosAproximadosService.getAll(),
         mantenimientosIntegralesService.getAll(),
         formasTerrenoService.getAll(),
       ]);
 
       setObjetivos(Array.isArray(objetivosData) ? objetivosData : objetivosData.results || []);
       setNiveles(Array.isArray(nivelesData) ? nivelesData : nivelesData.results || []);
-      setPresupuestos(Array.isArray(presupuestosData) ? presupuestosData : presupuestosData.results || []);
       setMantenimientos(Array.isArray(mantenimientosData) ? mantenimientosData : mantenimientosData.results || []);
       setFormasTerreno(Array.isArray(formasTerrenoData) ? formasTerrenoData : formasTerrenoData.results || []);
     } catch (error) {
@@ -112,14 +107,6 @@ const ConfiguracionesPage = () => {
     );
   };
 
-  const handlePresupuestoChange = (id, field, value) => {
-    setPresupuestos((prev) =>
-      prev.map((item) =>
-        item.id_opcion_presupuesto === id ? { ...item, [field]: value } : item
-      )
-    );
-  };
-
   const handleMantenimientoChange = (id, field, value) => {
     setMantenimientos((prev) =>
       prev.map((item) =>
@@ -158,21 +145,6 @@ const ConfiguracionesPage = () => {
     }
   };
 
-  const guardarPresupuesto = async (item) => {
-    try {
-      await presupuestosAproximadosService.update(item.id_opcion_presupuesto, {
-        codigo: item.codigo,
-        nombre: item.nombre,
-        activo: item.activo,
-        orden: item.orden,
-      });
-      success('Presupuesto actualizado');
-      fetchCatalogos();
-    } catch (error) {
-      handleApiError(error, 'Error al guardar el presupuesto');
-    }
-  };
-
   const crearObjetivo = async () => {
     if (!nuevoObjetivo.codigo || !nuevoObjetivo.nombre) {
       handleApiError({ message: 'Completá código y nombre' }, 'Datos incompletos');
@@ -203,21 +175,6 @@ const ConfiguracionesPage = () => {
       fetchCatalogos();
     } catch (error) {
       handleApiError(error, 'Error al crear el nivel');
-    }
-  };
-
-  const crearPresupuesto = async () => {
-    if (!nuevoPresupuesto.codigo || !nuevoPresupuesto.nombre) {
-      handleApiError({ message: 'Completá código y nombre' }, 'Datos incompletos');
-      return;
-    }
-    try {
-      await presupuestosAproximadosService.create(nuevoPresupuesto);
-      setNuevoPresupuesto({ codigo: '', nombre: '', activo: true });
-      success('Presupuesto creado');
-      fetchCatalogos();
-    } catch (error) {
-      handleApiError(error, 'Error al crear el presupuesto');
     }
   };
 
@@ -281,17 +238,6 @@ const ConfiguracionesPage = () => {
       fetchCatalogos();
     } catch (error) {
       handleApiError(error, 'Error al eliminar el nivel');
-    }
-  };
-
-  const eliminarPresupuesto = async (id) => {
-    if (!window.confirm('¿Eliminar este presupuesto?')) return;
-    try {
-      await presupuestosAproximadosService.delete(id);
-      success('Presupuesto eliminado');
-      fetchCatalogos();
-    } catch (error) {
-      handleApiError(error, 'Error al eliminar el presupuesto');
     }
   };
 
@@ -393,7 +339,7 @@ const ConfiguracionesPage = () => {
         <div className="mt-10 space-y-10">
           <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
             <h2 className="text-xl font-semibold text-white">Catálogos de diseño</h2>
-            <p className="text-sm text-gray-400 mb-6">Configura objetivos, niveles de intervención, presupuestos y mantenimientos integrales.</p>
+            <p className="text-sm text-gray-400 mb-6">Configura objetivos, niveles de intervención y mantenimientos integrales.</p>
 
             <div className="space-y-8">
               <div>
@@ -560,83 +506,6 @@ const ConfiguracionesPage = () => {
               <button
                 type="button"
                 onClick={crearNivel}
-                className="flex items-center justify-center px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Agregar
-              </button>
-            </div>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-semibold text-white mb-4">Presupuesto aproximado</h3>
-            <div className="space-y-4">
-              {presupuestos.map((item) => (
-                <div key={item.id_opcion_presupuesto} className="grid grid-cols-1 md:grid-cols-6 gap-3 items-center">
-                  <input
-                    type="text"
-                    value={item.codigo}
-                    onChange={(e) => handlePresupuestoChange(item.id_opcion_presupuesto, 'codigo', e.target.value)}
-                    className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
-                  />
-                  <input
-                    type="text"
-                    value={item.nombre}
-                    onChange={(e) => handlePresupuestoChange(item.id_opcion_presupuesto, 'nombre', e.target.value)}
-                    className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white md:col-span-2"
-                  />
-                  <label className="flex items-center gap-2 text-sm text-gray-300">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(item.activo)}
-                      onChange={(e) => handlePresupuestoChange(item.id_opcion_presupuesto, 'activo', e.target.checked)}
-                    />
-                    Activo
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => guardarPresupuesto(item)}
-                    className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    Guardar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => eliminarPresupuesto(item.id_opcion_presupuesto)}
-                    className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-6 grid grid-cols-1 md:grid-cols-6 gap-3 items-center">
-              <input
-                type="text"
-                value={nuevoPresupuesto.codigo}
-                onChange={(e) => setNuevoPresupuesto((prev) => ({ ...prev, codigo: e.target.value }))}
-                className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
-                placeholder="codigo"
-              />
-              <input
-                type="text"
-                value={nuevoPresupuesto.nombre}
-                onChange={(e) => setNuevoPresupuesto((prev) => ({ ...prev, nombre: e.target.value }))}
-                className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white md:col-span-2"
-                placeholder="nombre"
-              />
-              <label className="flex items-center gap-2 text-sm text-gray-300">
-                <input
-                  type="checkbox"
-                  checked={nuevoPresupuesto.activo}
-                  onChange={(e) => setNuevoPresupuesto((prev) => ({ ...prev, activo: e.target.checked }))}
-                />
-                Activo
-              </label>
-              <button
-                type="button"
-                onClick={crearPresupuesto}
                 className="flex items-center justify-center px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
               >
                 <Plus className="w-4 h-4 mr-2" />

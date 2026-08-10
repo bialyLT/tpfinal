@@ -22,8 +22,8 @@ class Command(BaseCommand):
 
     total_calificaciones = 55
     default_cliente_id = 1
-    default_empleado_id = 8
-    reservation_marker_prefix = "seed-emp11-55-"
+    default_empleado_id = 16
+    reservation_marker_prefix = "seed-emp16-55-"
 
     def add_arguments(self, parser):
         parser.add_argument(
