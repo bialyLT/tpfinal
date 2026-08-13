@@ -22,8 +22,9 @@ class Command(BaseCommand):
 
     total_calificaciones = 55
     default_cliente_id = 1
-    default_empleado_id = 16
+    default_empleado_id = 15
     reservation_marker_prefix = "seed-emp16-55-"
+    DELETE_GUARDED_TABLES = ["reserva_empleado", "encuesta_respuesta", "respuesta", "reserva"]
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -79,7 +80,13 @@ class Command(BaseCommand):
                 empleado=empleado,
                 defaults={"rol": "responsable"},
             )
-            ReservaEmpleado.objects.filter(reserva=reserva).exclude(empleado=empleado).delete()
+            # El trigger global prevent_physical_delete bloquea el DELETE físico;
+            # se desactiva temporalmente y se recrea en el mismo bloque.
+            self._drop_delete_guards(["reserva_empleado"])
+            try:
+                ReservaEmpleado.objects.filter(reserva=reserva).exclude(empleado=empleado).delete()
+            finally:
+                self._attach_delete_guards(["reserva_empleado"])
 
             encuesta_respuesta, _ = EncuestaRespuesta.objects.get_or_create(
                 cliente=cliente,
@@ -216,7 +223,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("No se encontraron calificaciones previas para resetear."))
             return
 
-        self._drop_delete_guards()
+        self._drop_all_delete_guards()
         try:
             Respuesta.objects.filter(encuesta_respuesta__reserva_id__in=reserva_ids).delete()
             EncuestaRespuesta.objects.filter(reserva_id__in=reserva_ids).delete()
@@ -224,16 +231,37 @@ class Command(BaseCommand):
             Reserva.objects.filter(id_reserva__in=reserva_ids).delete()
             self.stdout.write(self.style.WARNING(f"Dataset previo eliminado: {len(reserva_ids)} reservas."))
         finally:
-            self._attach_delete_guards()
+            self._attach_all_delete_guards()
 
-    def _drop_delete_guards(self):
+    def _drop_delete_guards(self, tablas=None):
         with connection.cursor() as cursor:
-            for table_name in self.DELETE_GUARDED_TABLES:
+            for table_name in (tablas or self.DELETE_GUARDED_TABLES):
                 cursor.execute(f'DROP TRIGGER IF EXISTS prevent_physical_delete ON "{table_name}";')
 
-    def _attach_delete_guards(self):
+    def _attach_delete_guards(self, tablas=None):
         with connection.cursor() as cursor:
-            for table_name in self.DELETE_GUARDED_TABLES:
+            for table_name in (tablas or self.DELETE_GUARDED_TABLES):
+                cursor.execute(
+                    f'CREATE TRIGGER prevent_physical_delete BEFORE DELETE ON "{table_name}" '
+                    'FOR EACH ROW EXECUTE FUNCTION prevent_physical_delete_guard();'
+                )
+
+    def _drop_all_delete_guards(self):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT tablename FROM pg_catalog.pg_tables "
+                "WHERE schemaname = 'public' AND tablename <> 'django_migrations'"
+            )
+            for (table_name,) in cursor.fetchall():
+                cursor.execute(f'DROP TRIGGER IF EXISTS prevent_physical_delete ON "{table_name}";')
+
+    def _attach_all_delete_guards(self):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT tablename FROM pg_catalog.pg_tables "
+                "WHERE schemaname = 'public' AND tablename <> 'django_migrations'"
+            )
+            for (table_name,) in cursor.fetchall():
                 cursor.execute(
                     f'CREATE TRIGGER prevent_physical_delete BEFORE DELETE ON "{table_name}" '
                     'FOR EACH ROW EXECUTE FUNCTION prevent_physical_delete_guard();'
